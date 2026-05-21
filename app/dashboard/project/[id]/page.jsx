@@ -28,7 +28,7 @@ export default function ProjectPage() {
   return (
     <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#fff', fontFamily: 'sans-serif' }}>
       <div style={{ background: '#111', borderBottom: '1px solid #222', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <button onClick={() => router.push('/dashboard')} style={{ background: 'transparent', border: 'none', color: '#888', fontSize: '20px', cursor: 'pointer' }}>←</button>
+        <button onClick={() => router.push('/dashboard')} style={{ background: 'transparent', border: 'none', color: '#888', fontSize: '24px', cursor: 'pointer', padding: '8px 12px', minWidth: '44px', minHeight: '44px' }}>←</button>
         <div>
           <div style={{ fontSize: '17px', fontWeight: '700' }}>{project?.name}</div>
           <div style={{ fontSize: '12px', color: '#666' }}>{project?.client_name} · {project?.address}</div>
