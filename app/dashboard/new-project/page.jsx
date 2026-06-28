@@ -7,7 +7,6 @@ import { labelStyle, inputStyle } from '@/lib/premium-ui'
 
 export default function NewProject() {
   const [name, setName] = useState('')
-  const [address, setAddress] = useState('')
   const [client, setClient] = useState('')
   const [siteAddress, setSiteAddress] = useState('')
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
@@ -24,7 +23,6 @@ export default function NewProject() {
     const { data: { user } } = await supabase.auth.getUser()
     const { error } = await supabase.from('projects').insert({
       name: name.trim(),
-      address: address.trim(),
       client_name: client.trim() || null,
       site_address: siteAddress.trim() || null,
       start_date: startDate || null,
@@ -52,21 +50,17 @@ export default function NewProject() {
         <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. 14 High Street Extension"
           style={{ width: '100%', padding: '14px', background: '#111', border: '1px solid #333', borderRadius: '8px', color: '#fff', fontSize: '15px', marginBottom: '20px', boxSizing: 'border-box' }} />
 
-        <label style={{ display: 'block', color: '#888', fontSize: '12px', marginBottom: '6px' }}>SITE ADDRESS</label>
-        <input value={address} onChange={e => setAddress(e.target.value)} placeholder="e.g. 14 High Street, Manchester"
-          style={{ width: '100%', padding: '14px', background: '#111', border: '1px solid #333', borderRadius: '8px', color: '#fff', fontSize: '15px', marginBottom: '20px', boxSizing: 'border-box' }} />
+        <label style={labelStyle}>Address</label>
+        <input
+          value={siteAddress}
+          onChange={e => setSiteAddress(e.target.value)}
+          placeholder="e.g. 14 High Street, Manchester"
+          style={inputStyle}
+        />
 
         <label style={{ display: 'block', color: '#888', fontSize: '12px', marginBottom: '6px' }}>CLIENT NAME</label>
         <input value={client} onChange={e => setClient(e.target.value)} placeholder="e.g. Mr J Smith"
           style={{ width: '100%', padding: '14px', background: '#111', border: '1px solid #333', borderRadius: '8px', color: '#fff', fontSize: '15px', marginBottom: '20px', boxSizing: 'border-box' }} />
-
-        <label style={labelStyle}>Site address</label>
-        <input
-          value={siteAddress}
-          onChange={e => setSiteAddress(e.target.value)}
-          placeholder="e.g. Site entrance on Back Lane"
-          style={inputStyle}
-        />
 
         <label style={labelStyle}>Start date</label>
         <input
