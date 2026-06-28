@@ -64,11 +64,11 @@ const pageBackground = {
 }
 
 const DASHBOARD_CARDS = [
-  { path: 'diary', icon: '📋', title: 'Daily Diary / Report', description: 'Voice-led daily progress, labour, plant, visitors, delays and issues.', accent: '255,140,66' },
-  { path: 'snags', icon: '⚠️', title: 'Snag List', description: 'Voice-led defect capture, photos, actions and close-out tracking.', accent: '255,59,48' },
-  { path: 'site-survey', icon: '📐', title: 'Site Survey', description: 'Voice-led site observations, measurements, photos and condition notes.', accent: '59,130,246' },
-  { path: 'weekly-hs', icon: '🦺', title: 'Weekly Site H&S Report', description: 'Voice-led hazards, inspections, toolbox talks, incidents and compliance checks.', accent: '255, 210, 72' },
-  { path: 'weekly-report', icon: '📊', title: 'Weekly Site Report', description: 'Voice-led weekly progress, risks, delays, photos and next-week priorities.', accent: '139,92,246' },
+  { path: 'site-survey', icon: '📐', title: 'Site Survey Report', description: 'Voice-led site observations, measurements, photos and condition notes.', accent: '59,130,246' },
+  { path: 'diary', icon: '📋', title: 'Site Diary Report', description: 'Voice-led daily progress, labour, plant, visitors, delays and issues.', accent: '255,140,66' },
+  { path: 'weekly-report', icon: '📊', title: 'Site Progress Report', description: 'Voice-led weekly progress, risks, delays, photos and next-week priorities.', accent: '34,197,94' },
+  { path: 'snags', icon: '⚠️', title: 'Site Snag List', description: 'Voice-led defect capture, photos, actions and close-out tracking.', accent: '255, 210, 72' },
+  { path: 'weekly-hs', icon: '🦺', title: 'Site H&S Report', description: 'Voice-led hazards, inspections, toolbox talks, incidents and compliance checks.', accent: '255,59,48' },
 ]
 
 export default function ProjectPage() {
@@ -91,6 +91,28 @@ export default function ProjectPage() {
   }, [id])
 
   if (loading) return <div className="dashboard-premium-bg" style={{ ...pageBackground, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>
+
+  const mainCards = DASHBOARD_CARDS.slice(0, 4)
+  const hsCard = DASHBOARD_CARDS[4]
+
+  const renderCard = (card, index, wrapClassName = 'premium-dash-card-wrap', wrapStyle = {}) => (
+    <div
+      key={card.path}
+      className={wrapClassName}
+      style={{ animationDelay: `${index * 70}ms`, ...wrapStyle }}
+    >
+      <button
+        className="premium-dash-card"
+        onClick={() => router.push(`/dashboard/project/${project.id}/${card.path}`)}
+        style={{ ...cardStyle, '--accent': card.accent }}
+      >
+        <div className="premium-dash-accent" style={accentBar(card.accent)} />
+        <div className="premium-dash-icon" style={iconBox(card.accent)}>{card.icon}</div>
+        <div style={{ ...cardTitle, ...(card.path === 'diary' || card.path === 'snags' ? { color: '#fff' } : {}) }}>{card.title}</div>
+        <div style={{ ...cardDesc, ...(card.path === 'diary' || card.path === 'snags' ? { color: '#8ea2b5' } : {}) }}>{card.description}</div>
+      </button>
+    </div>
+  )
 
   return (
     <div className="dashboard-premium-bg" style={pageBackground}>
@@ -175,6 +197,21 @@ export default function ProjectPage() {
           filter: brightness(1.08);
           transition-duration: 120ms;
         }
+        .premium-dash-cards-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 20px;
+        }
+        .premium-dash-cards-grid > .premium-dash-card-wrap,
+        .premium-dash-card-wrap--solo {
+          display: flex;
+        }
+        .premium-dash-cards-grid > .premium-dash-card-wrap > .premium-dash-card,
+        .premium-dash-card-wrap--solo > .premium-dash-card {
+          flex: 1;
+          width: 100%;
+          min-height: 188px;
+        }
       `}</style>
       <div style={{ background: '#111', borderBottom: '1px solid #222', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
         <button onClick={() => router.push('/dashboard')} style={{ background: 'transparent', border: 'none', color: '#888', fontSize: '20px', cursor: 'pointer' }}>←</button>
@@ -184,30 +221,21 @@ export default function ProjectPage() {
         </div>
       </div>
 
-      <div style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '32px' }}>
-          {DASHBOARD_CARDS.map((card, index) => (
-            <div key={card.path} className="premium-dash-card-wrap" style={{ animationDelay: `${index * 70}ms` }}>
-            <button
-              className="premium-dash-card"
-              onClick={() => router.push(`/dashboard/project/${project.id}/${card.path}`)}
-              style={{ ...cardStyle, '--accent': card.accent }}
-            >
-              <div className="premium-dash-accent" style={accentBar(card.accent)} />
-              <div className="premium-dash-icon" style={iconBox(card.accent)}>{card.icon}</div>
-              <div style={{ ...cardTitle, ...(card.path === 'diary' || card.path === 'snags' ? { color: '#fff' } : {}) }}>{card.title}</div>
-              <div style={{ ...cardDesc, ...(card.path === 'diary' || card.path === 'snags' ? { color: '#8ea2b5' } : {}) }}>{card.description}</div>
-            </button>
-            </div>
-          ))}
+      <div style={{ padding: '20px 24px 24px', maxWidth: '600px', margin: '0 auto' }}>
+        <div className="premium-dash-cards-grid" style={{ marginBottom: '16px' }}>
+          {mainCards.map((card, index) => renderCard(card, index))}
         </div>
 
-        <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#888' }}>RECENT DIARY ENTRIES</h2>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '4px' }}>
+          {renderCard(hsCard, 4, 'premium-dash-card-wrap premium-dash-card-wrap--solo', { width: 'calc(50% - 10px)' })}
+        </div>
+
+        <h2 style={{ fontSize: '16px', fontWeight: '600', marginTop: '48px', marginBottom: '16px', color: '#888' }}>RECENT DIARY ENTRIES</h2>
 
         {diaries.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px', color: '#555' }}>
             <p>No entries yet</p>
-            <p style={{ fontSize: '13px' }}>Tap Site Diary to add your first entry</p>
+            <p style={{ fontSize: '13px' }}>Tap Site Diary Report to add your first entry</p>
           </div>
         ) : (
           diaries.map(d => (
