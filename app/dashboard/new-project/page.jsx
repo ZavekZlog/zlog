@@ -3,11 +3,15 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { labelStyle, inputStyle } from '@/lib/premium-ui'
 
 export default function NewProject() {
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
   const [client, setClient] = useState('')
+  const [siteAddress, setSiteAddress] = useState('')
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
+  const [status, setStatus] = useState('active')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const supabase = createClient()
@@ -21,8 +25,10 @@ export default function NewProject() {
     const { error } = await supabase.from('projects').insert({
       name: name.trim(),
       address: address.trim(),
-      client_name: client.trim(),
-      user_id: user.id
+      client_name: client.trim() || null,
+      site_address: siteAddress.trim() || null,
+      start_date: startDate || null,
+      status,
     })
     if (error) {
       setError(error.message)
@@ -52,7 +58,34 @@ export default function NewProject() {
 
         <label style={{ display: 'block', color: '#888', fontSize: '12px', marginBottom: '6px' }}>CLIENT NAME</label>
         <input value={client} onChange={e => setClient(e.target.value)} placeholder="e.g. Mr J Smith"
-          style={{ width: '100%', padding: '14px', background: '#111', border: '1px solid #333', borderRadius: '8px', color: '#fff', fontSize: '15px', marginBottom: '32px', boxSizing: 'border-box' }} />
+          style={{ width: '100%', padding: '14px', background: '#111', border: '1px solid #333', borderRadius: '8px', color: '#fff', fontSize: '15px', marginBottom: '20px', boxSizing: 'border-box' }} />
+
+        <label style={labelStyle}>Site address</label>
+        <input
+          value={siteAddress}
+          onChange={e => setSiteAddress(e.target.value)}
+          placeholder="e.g. Site entrance on Back Lane"
+          style={inputStyle}
+        />
+
+        <label style={labelStyle}>Start date</label>
+        <input
+          type="date"
+          value={startDate}
+          onChange={e => setStartDate(e.target.value)}
+          style={inputStyle}
+        />
+
+        <label style={labelStyle}>Status</label>
+        <select
+          value={status}
+          onChange={e => setStatus(e.target.value)}
+          style={{ ...inputStyle, marginBottom: '32px' }}
+        >
+          <option value="active">Active</option>
+          <option value="on-hold">On hold</option>
+          <option value="complete">Complete</option>
+        </select>
 
         <button onClick={handleCreate} disabled={loading}
           style={{ width: '100%', padding: '16px', background: '#3b82f6', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: '700', fontSize: '15px', cursor: 'pointer' }}>
