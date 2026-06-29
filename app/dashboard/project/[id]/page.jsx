@@ -15,7 +15,7 @@ export default function ProjectPage() {
   useEffect(() => {
     const load = async () => {
       const { data: proj } = await supabase.from('projects').select('*').eq('id', id).single()
-      const { data: logs } = await supabase.from('diary_entries').select('*').eq('project_id', id).order('entry_date', { ascending: false })
+      const { data: logs } = await supabase.from('daily_reports').select('*').eq('project_id', id).order('report_date', { ascending: false })
       setProject(proj)
       setDiaries(logs || [])
       setLoading(false)
@@ -37,7 +37,7 @@ export default function ProjectPage() {
 
       <div style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '32px' }}>
-          <button onClick={() => router.push(`/dashboard/project/${id}/diary/new`)}
+          <button onClick={() => router.push(`/dashboard/project/${id}/diary`)}
             style={{ padding: '20px', background: '#111', border: '1px solid #222', borderRadius: '10px', color: '#fff', cursor: 'pointer', textAlign: 'left' }}>
             <div style={{ fontSize: '24px', marginBottom: '8px' }}>📋</div>
             <div style={{ fontWeight: '600' }}>Site Diary</div>
@@ -61,7 +61,7 @@ export default function ProjectPage() {
         ) : (
           diaries.map(d => (
             <div key={d.id} style={{ background: '#111', border: '1px solid #222', borderRadius: '10px', padding: '16px', marginBottom: '12px' }}>
-              <div style={{ fontWeight: '600' }}>{d.entry_date}</div>
+              <div style={{ fontWeight: '600' }}>{d.report_date}</div>
               <div style={{ color: '#888', fontSize: '13px', marginTop: '4px' }}>{d.notes?.slice(0, 100)}...</div>
             </div>
           ))
