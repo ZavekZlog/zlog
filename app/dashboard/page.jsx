@@ -235,7 +235,7 @@ export default function ProjectPage() {
       </div>
 
       <div style={{ padding: '20px 24px 24px', maxWidth: '600px', margin: '0 auto' }}>
-        {!project && (
+        {true && (
           <div style={{ textAlign: 'center', padding: '24px 20px', marginBottom: '20px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}>
             <p style={{ margin: '0 0 12px', color: '#F0EDE8', fontWeight: 600 }}>Create your first project</p>
             <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#7a92a8' }}>Add a site before opening reports.</p>
