@@ -204,11 +204,11 @@ export default function SiteDiaryPage() {
         project_id: projectId,
         report_date: reportDate,
         weather: weather.trim() || null,
-        shift_type: shiftType || null,
+        shift: shiftType || null,
         site_summary: siteSummary.trim(),
         visitors: visitors.trim() || null,
         delays_issues: delaysIssues.trim() || null,
-        actions_required: actionsRequired.trim() || null,
+        actions: actionsRequired.trim() || null,
       })
       .select('id')
       .single()
@@ -225,10 +225,10 @@ export default function SiteDiaryPage() {
         report_id: report.id,
         trade: row.trade.trim() || null,
         company: row.company.trim() || null,
-        headcount: row.headcount ? parseInt(row.headcount, 10) : null,
+        count: row.headcount ? parseInt(row.headcount, 10) : null,
         hours: row.hours ? parseFloat(row.hours) : null,
         notes: row.notes.trim() || null,
-        sort_order: index,
+        sequence: index,
       }))
 
     if (labourPayload.length > 0) {
@@ -244,11 +244,11 @@ export default function SiteDiaryPage() {
       .filter(plantHasData)
       .map((row, index) => ({
         report_id: report.id,
-        plant_type: row.plant_type.trim() || null,
-        quantity: row.quantity ? parseInt(row.quantity, 10) : null,
-        hours: row.hours ? parseFloat(row.hours) : null,
+        item: row.plant_type.trim() || null,
+        ref: row.quantity ? parseInt(row.quantity, 10) : null,
+        status: row.hours ? parseFloat(row.hours) : null,
         notes: row.notes.trim() || null,
-        sort_order: index,
+        sequence: index,
       }))
 
     if (plantPayload.length > 0) {
@@ -279,9 +279,9 @@ export default function SiteDiaryPage() {
 
       photoRecords.push({
         report_id: report.id,
-        storage_path: storagePath,
+        url: storagePath,
         caption: photo.caption.trim() || null,
-        sequence_number: photo.sequence_number,
+        sequence: photo.sequence_number,
       })
     }
 

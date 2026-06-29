@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 
 const cardStyle = {
   position: 'relative',
@@ -77,34 +77,46 @@ export default function ProjectPage() {
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
   const router = useRouter()
-  const { id } = useParams()
 
   useEffect(() => {
     const load = async () => {
-      const { data: proj } = await supabase.from('projects').select('*').eq('id', id).single()
-      const { data: logs } = await supabase.from('diary_entries').select('*').eq('project_id', id).order('entry_date', { ascending: false })
+      const { data: proj } = await supabase
+        .from('projects')
+        .select('id')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
       setProject(proj)
-      setDiaries(logs || [])
+      if (proj?.id) {
+        const { data: logs } = await supabase.from('diary_entries').select('*').eq('project_id', proj.id).order('entry_date', { ascending: false })
+        setDiaries(logs || [])
+      }
       setLoading(false)
     }
     load()
-  }, [id])
+  }, [])
 
   if (loading) return <div className="dashboard-premium-bg" style={{ ...pageBackground, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>
 
   const mainCards = DASHBOARD_CARDS.slice(0, 4)
   const hsCard = DASHBOARD_CARDS[4]
 
-  const renderCard = (card, index, wrapClassName = 'premium-dash-card-wrap', wrapStyle = {}) => (
+  const renderCard = (card, index, wrapClassName = 'premium-dash-card-wrap', wrapStyle = {}) => {
+    const disabled = !project
+    return (
     <div
       key={card.path}
       className={wrapClassName}
       style={{ animationDelay: `${index * 70}ms`, ...wrapStyle }}
     >
       <button
+        type="button"
         className="premium-dash-card"
-        onClick={() => router.push(`/dashboard/project/${project.id}/${card.path}`)}
-        style={{ ...cardStyle, '--accent': card.accent }}
+        disabled={disabled}
+        onClick={() => {
+          if (project?.id) router.push(`/dashboard/project/${project.id}/${card.path}`)
+        }}
+        style={{ ...cardStyle, '--accent': card.accent, ...(disabled ? { cursor: 'default', opacity: 0.45 } : {}) }}
       >
         <div className="premium-dash-accent" style={accentBar(card.accent)} />
         <div className="premium-dash-icon" style={iconBox(card.accent)}>{card.icon}</div>
@@ -112,7 +124,8 @@ export default function ProjectPage() {
         <div style={{ ...cardDesc, ...(card.path === 'diary' || card.path === 'snags' ? { color: '#8ea2b5' } : {}) }}>{card.description}</div>
       </button>
     </div>
-  )
+    )
+  }
 
   return (
     <div className="dashboard-premium-bg" style={pageBackground}>
@@ -222,6 +235,19 @@ export default function ProjectPage() {
       </div>
 
       <div style={{ padding: '20px 24px 24px', maxWidth: '600px', margin: '0 auto' }}>
+        {!project && (
+          <div style={{ textAlign: 'center', padding: '24px 20px', marginBottom: '20px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}>
+            <p style={{ margin: '0 0 12px', color: '#F0EDE8', fontWeight: 600 }}>Create your first project</p>
+            <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#7a92a8' }}>Add a site before opening reports.</p>
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard/new-project')}
+              style={{ padding: '12px 20px', background: 'rgb(255,140,66)', color: '#0b0d12', border: 'none', borderRadius: '10px', fontWeight: 700, fontSize: '13px', letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer' }}
+            >
+              New project
+            </button>
+          </div>
+        )}
         <div className="premium-dash-cards-grid" style={{ marginBottom: '16px' }}>
           {mainCards.map((card, index) => renderCard(card, index))}
         </div>
