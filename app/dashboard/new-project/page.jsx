@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { labelStyle, inputStyle } from '@/lib/premium-ui'
+import { PremiumBackButton, pageBackground, labelStyle } from '@/lib/premium-ui'
 
 export default function NewProject() {
   const [name, setName] = useState('')
@@ -37,10 +37,20 @@ export default function NewProject() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#fff', fontFamily: 'sans-serif' }}>
-      <div style={{ background: '#111', borderBottom: '1px solid #222', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <button onClick={() => router.back()} style={{ background: 'transparent', border: 'none', color: '#888', fontSize: '20px', cursor: 'pointer' }}>←</button>
-        <div style={{ fontSize: '18px', fontWeight: '700' }}>New Project</div>
+    <div className="dashboard-premium-bg" style={{ ...pageBackground, color: '#fff' }}>
+      <div
+        className="premium-shell-header"
+        style={{
+          background: 'transparent',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          padding: '16px 24px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+        }}
+      >
+        <PremiumBackButton onClick={() => router.back()} />
+        <div style={{ fontSize: '18px', fontWeight: '700', color: '#FAFAF8' }}>New Project</div>
       </div>
 
       <div style={{ padding: '24px', maxWidth: '500px', margin: '0 auto' }}>
