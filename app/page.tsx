@@ -1,7 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { Space_Grotesk, Barlow } from 'next/font/google'
-import { LandingFeatureStrip } from './landing-feature-strip'
+import { LandingFeatureStrip, LandingMicIcon } from './landing-feature-strip'
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
@@ -12,41 +12,6 @@ const barlow = Barlow({
   subsets: ['latin'],
   weight: ['400', '500', '600'],
 })
-
-function MicIcon({ size = 20 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z"
-        fill="currentColor"
-      />
-      <path
-        d="M19 11a1 1 0 1 0-2 0 5 5 0 0 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-3.08A7 7 0 0 0 19 11Z"
-        fill="currentColor"
-      />
-    </svg>
-  )
-}
-
-function ShieldIcon({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M12 3l7 3v5.5c0 4.5-2.9 7.8-7 9.5-4.1-1.7-7-5-7-9.5V6l7-3Z"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M9.5 12.2l1.8 1.8 3.4-3.6"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
 
 export default function Home() {
   return (
@@ -65,7 +30,7 @@ export default function Home() {
           width: '100%',
           maxWidth: '420px',
           margin: '0 auto',
-          padding: '56px 24px 40px',
+          padding: '105px 24px 40px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -78,31 +43,33 @@ export default function Home() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            marginBottom: '28px',
+            marginBottom: '10px',
+            width: '100%',
           }}
         >
           <div
             aria-hidden
             style={{
               position: 'absolute',
-              width: '220px',
-              height: '220px',
+              width: '100%',
+              aspectRatio: '1',
+              maxWidth: '100%',
               borderRadius: '50%',
               background:
-                'radial-gradient(circle, color-mix(in srgb, var(--rust), transparent 65%) 0%, color-mix(in srgb, var(--rust), transparent 88%) 45%, transparent 70%)',
+                'radial-gradient(circle, color-mix(in srgb, var(--rust), transparent 88%) 0%, color-mix(in srgb, var(--rust), transparent 96%) 40%, transparent 68%)',
               pointerEvents: 'none',
             }}
           />
           <Image
             src="/riveted-z.png"
             alt=""
-            width={200}
-            height={200}
+            width={420}
+            height={420}
             priority
             style={{
               position: 'relative',
-              width: 'auto',
-              height: '190px',
+              width: '100%',
+              height: 'auto',
               objectFit: 'contain',
             }}
           />
@@ -110,11 +77,11 @@ export default function Home() {
 
         <h1
           style={{
-            margin: '0 0 20px',
+            margin: '0 0 10px',
             fontFamily: spaceGrotesk.style.fontFamily,
-            fontSize: '42px',
+            fontSize: '104px',
             fontWeight: 700,
-            letterSpacing: '-0.02em',
+            letterSpacing: '-0.03em',
             color: 'var(--text)',
             lineHeight: 1,
           }}
@@ -124,7 +91,7 @@ export default function Home() {
 
         <p
           style={{
-            margin: '0 0 32px',
+            margin: '0 0 14px',
             fontFamily: barlow.style.fontFamily,
             fontSize: '17px',
             fontWeight: 500,
@@ -133,18 +100,20 @@ export default function Home() {
             lineHeight: 1.5,
           }}
         >
-          See it <span style={{ color: 'var(--rust)' }}>|</span> Say it{' '}
-          <span style={{ color: 'var(--rust)' }}>|</span>{' '}
+          See it{' '}
+          <span style={{ color: 'color-mix(in srgb, var(--rust), var(--ink) 10%)' }}>|</span>{' '}
+          Say it{' '}
+          <span style={{ color: 'color-mix(in srgb, var(--rust), var(--ink) 10%)' }}>|</span>{' '}
           <span style={{ color: 'var(--rust)' }}>Logged.</span>
         </p>
 
         <h2
           style={{
-            margin: '0 0 48px',
+            margin: '0 0 24px',
             fontFamily: spaceGrotesk.style.fontFamily,
-            fontSize: '26px',
+            fontSize: '25px',
             fontWeight: 600,
-            lineHeight: 1.35,
+            lineHeight: 1.28,
             color: 'var(--text)',
             maxWidth: '320px',
           }}
@@ -164,15 +133,20 @@ export default function Home() {
           <Link
             href="/signup"
             style={{
-              display: 'inline-flex',
+              position: 'relative',
+              overflow: 'hidden',
+              display: 'grid',
+              gridTemplateColumns: '1fr auto 1fr',
               alignItems: 'center',
-              justifyContent: 'center',
-              gap: '10px',
               width: '100%',
-              minHeight: '56px',
-              padding: '14px 20px',
+              minHeight: '53px',
+              padding: '12px 18px',
               borderRadius: '12px',
-              background: 'var(--rust)',
+              border: '1px solid color-mix(in srgb, var(--rust), var(--ink) 58%)',
+              background:
+                'linear-gradient(180deg, color-mix(in srgb, var(--rust), var(--text) 16%) 0%, color-mix(in srgb, var(--rust), var(--text) 6%) 18%, var(--rust) 42%, var(--rust) 62%, color-mix(in srgb, var(--rust), var(--ink) 29%) 88%, color-mix(in srgb, var(--rust), var(--ink) 45%) 100%)',
+              boxShadow:
+                'inset 0 1px 0 color-mix(in srgb, var(--text), transparent 75%), inset 0 16px 28px color-mix(in srgb, var(--text), transparent 94%), inset 0 -14px 20px color-mix(in srgb, var(--ink), transparent 48%), 0 0 22px color-mix(in srgb, var(--rust), transparent 75%)',
               color: 'var(--text)',
               fontFamily: barlow.style.fontFamily,
               fontSize: '16px',
@@ -181,8 +155,47 @@ export default function Home() {
               boxSizing: 'border-box',
             }}
           >
-            <MicIcon />
-            Get Started
+            <span
+              aria-hidden
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: 0,
+                height: '46%',
+                pointerEvents: 'none',
+                background:
+                  'linear-gradient(180deg, color-mix(in srgb, var(--text), transparent 90%) 0%, color-mix(in srgb, var(--text), transparent 97%) 55%, transparent 100%)',
+              }}
+            />
+            <span
+              aria-hidden
+              style={{
+                position: 'absolute',
+                inset: 0,
+                pointerEvents: 'none',
+                opacity: 0.12,
+                mixBlendMode: 'soft-light',
+                backgroundImage:
+                  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+                backgroundSize: '160px 160px',
+              }}
+            />
+            <span style={{ position: 'relative', zIndex: 1, justifySelf: 'start', display: 'inline-flex', color: 'var(--text)', paddingLeft: 10 }}>
+              <LandingMicIcon size={28} strokeWidth={1.75} />
+            </span>
+            <span style={{ position: 'relative', zIndex: 1 }}>Get Started</span>
+            <span style={{ position: 'relative', zIndex: 1, justifySelf: 'end', display: 'inline-flex', color: 'var(--text)' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path
+                  d="M5 12h12M13 6l6 6-6 6"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </span>
           </Link>
 
           <Link
@@ -208,23 +221,6 @@ export default function Home() {
             Log in
           </Link>
         </div>
-
-        <p
-          style={{
-            margin: 0,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            fontFamily: barlow.style.fontFamily,
-            fontSize: '13px',
-            fontWeight: 500,
-            letterSpacing: '0.02em',
-            color: 'var(--text-dim)',
-          }}
-        >
-          <ShieldIcon />
-          Secure & backed up
-        </p>
       </main>
 
       <div
@@ -241,6 +237,7 @@ export default function Home() {
           style={{
             overflow: 'hidden',
             lineHeight: 0,
+            position: 'relative',
             maskImage:
               'linear-gradient(to bottom, transparent 0%, black 18%, black 70%, transparent 100%)',
             WebkitMaskImage:
@@ -252,7 +249,7 @@ export default function Home() {
           }}
         >
           <Image
-            src="/zlog-footer-silhouette.png"
+            src="/hero-silhouette.png"
             alt=""
             width={1200}
             height={300}
@@ -263,6 +260,19 @@ export default function Home() {
               objectFit: 'cover',
               objectPosition: 'center bottom',
               marginTop: -52,
+              opacity: 0.82,
+            }}
+          />
+          <div
+            aria-hidden
+            style={{
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              background:
+                'linear-gradient(180deg, color-mix(in srgb, var(--ink), var(--rust) 22%) 0%, color-mix(in srgb, var(--ink), var(--rust) 12%) 40%, var(--ink) 100%)',
+              mixBlendMode: 'multiply',
+              opacity: 0.72,
             }}
           />
         </div>
