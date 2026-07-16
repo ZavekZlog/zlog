@@ -58,6 +58,7 @@ export default function Home() {
               background:
                 'radial-gradient(circle, color-mix(in srgb, var(--rust), transparent 37%) 0%, color-mix(in srgb, var(--rust), transparent 72%) 52%, color-mix(in srgb, var(--rust), transparent 90%) 68%, transparent 84%)',
               pointerEvents: 'none',
+              filter: 'blur(60px)',
             }}
           />
           <Image
