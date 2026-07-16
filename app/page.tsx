@@ -56,13 +56,12 @@ export default function Home() {
               maxWidth: '100%',
               borderRadius: '50%',
               background:
-              'radial-gradient(circle, color-mix(in srgb, var(--rust), transparent 37%) 0%, color-mix(in srgb, var(--rust), transparent 72%) 52%, color-mix(in srgb, var(--rust), transparent 90%) 68%, transparent 84%)',
-  
+                'radial-gradient(circle, color-mix(in srgb, var(--rust), transparent 88%) 0%, color-mix(in srgb, var(--rust), transparent 96%) 40%, transparent 68%)',
               pointerEvents: 'none',
             }}
           />
           <Image
-            src="/z-medium.png"
+            src="/riveted-z.png"
             alt=""
             width={420}
             height={420}
@@ -95,10 +94,9 @@ export default function Home() {
             margin: '0 0 14px',
             fontFamily: barlow.style.fontFamily,
             fontSize: '17px',
-            fontWeight: 600,
+            fontWeight: 500,
             letterSpacing: '0.04em',
-            color: 'color-mix(in srgb, var(--text) 92%, var(--rust))',
-
+            color: 'var(--text)',
             lineHeight: 1.5,
           }}
         >
@@ -106,9 +104,8 @@ export default function Home() {
           <span style={{ color: 'color-mix(in srgb, var(--rust), var(--ink) 10%)' }}>|</span>{' '}
           Say it{' '}
           <span style={{ color: 'color-mix(in srgb, var(--rust), var(--ink) 10%)' }}>|</span>{' '}
-          <span style={{ color: 'color-mix(in srgb, var(--rust) 94%, white)' }}>Logged.</span>
-
-
+          <span style={{ color: 'var(--rust)' }}>Logged.</span>
+        </p>
 
         <h2
           style={{
@@ -263,7 +260,7 @@ export default function Home() {
               objectFit: 'cover',
               objectPosition: 'center bottom',
               marginTop: -52,
-              opacity: 0.8,
+              opacity: 0.82,
             }}
           />
           <div
