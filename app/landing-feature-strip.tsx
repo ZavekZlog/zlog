@@ -69,8 +69,8 @@ export function LandingFeatureStrip() {
             <span
               style={{
                 fontFamily: barlow.style.fontFamily,
-                fontSize: 13,
-                fontWeight: 500,
+                fontSize: 14,
+                fontWeight: 600,
                 color: 'var(--text)',
                 lineHeight: 1.3,
                 textAlign: 'center',

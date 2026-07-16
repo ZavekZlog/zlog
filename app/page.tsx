@@ -102,10 +102,10 @@ export default function Home() {
           }}
         >
           See it{' '}
-          <span style={{ color: 'color-mix(in srgb, var(--rust), var(--ink) 10%)' }}>|</span>{' '}
+          <span style={{ color: 'var(--text-dim)' }}>|</span>{' '}
           Say it{' '}
-          <span style={{ color: 'color-mix(in srgb, var(--rust), var(--ink) 10%)' }}>|</span>{' '}
-          <span style={{ color: 'color-mix(in srgb, var(--rust) 94%, white)' }}>Logged.</span>
+          <span style={{ color: 'var(--text-dim)' }}>|</span>{' '}
+          <span style={{ color: 'color-mix(in srgb, var(--rust) 94%, white)', fontWeight: 700 }}>Logged.</span>
         </p>
 
         <h2
