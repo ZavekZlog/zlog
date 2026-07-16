@@ -86,3 +86,13 @@ export function LandingFeatureStrip() {
     </div>
   )
 }
+
+export function LandingMicIcon({
+  size = 30,
+  strokeWidth = 1.75,
+}: {
+  size?: number
+  strokeWidth?: number
+}) {
+  return <Mic size={size} strokeWidth={strokeWidth} aria-hidden />
+}
