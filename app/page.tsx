@@ -240,9 +240,9 @@ export default function Home() {
             lineHeight: 0,
             position: 'relative',
             maskImage:
-              'linear-gradient(to bottom, transparent 0%, black 18%, black 70%, transparent 100%)',
+              'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.2) 10%, rgba(0,0,0,0.45) 22%, rgba(0,0,0,0.75) 34%, black 48%, black 72%, rgba(0,0,0,0.55) 88%, transparent 100%)',
             WebkitMaskImage:
-              'linear-gradient(to bottom, transparent 0%, black 18%, black 70%, transparent 100%)',
+              'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.2) 10%, rgba(0,0,0,0.45) 22%, rgba(0,0,0,0.75) 34%, black 48%, black 72%, rgba(0,0,0,0.55) 88%, transparent 100%)',
             maskSize: '100% 100%',
             WebkitMaskSize: '100% 100%',
             maskRepeat: 'no-repeat',
