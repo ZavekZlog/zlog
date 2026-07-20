@@ -9,10 +9,10 @@ const barlow = Barlow({
 })
 
 const FEATURES: { Icon: LucideIcon; label: string }[] = [
-  { Icon: Mic, label: 'Voice-led\nreporting' },
-  { Icon: Camera, label: 'Photos\nauto-numbered' },
-  { Icon: ClipboardList, label: 'Diaries, snags\n& surveys' },
-  { Icon: ShieldCheck, label: 'Secure &\nbacked up' },
+  { Icon: Mic, label: 'Voice reports' },
+  { Icon: Camera, label: 'Annotated photos' },
+  { Icon: ClipboardList, label: 'Diaries & surveys' },
+  { Icon: ShieldCheck, label: 'Secure backup' },
 ]
 
 export function LandingFeatureStrip() {
@@ -22,15 +22,18 @@ export function LandingFeatureStrip() {
         position: 'absolute',
         left: 0,
         right: 0,
-        bottom: 0,
+        bottom: 16,
         display: 'grid',
         gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+        justifyItems: 'stretch',
         alignItems: 'stretch',
         width: '100%',
         minHeight: 120,
-        padding: '18px 12px 28px',
+        margin: '0 auto',
+        padding: '28px 20px 28px',
         background: 'transparent',
         boxSizing: 'border-box',
+        overflow: 'hidden',
       }}
     >
       {FEATURES.map((feature, index) => {
@@ -45,12 +48,20 @@ export function LandingFeatureStrip() {
               justifyContent: 'center',
               gap: 8,
               width: '100%',
+              height: '100%',
               minWidth: 0,
               minHeight: '100%',
               padding: '0 8px',
               boxSizing: 'border-box',
               textAlign: 'center',
-              borderLeft: index > 0 ? '1px solid var(--rust)' : 'none',
+              ...(index > 0
+                ? {
+                    backgroundImage: 'linear-gradient(var(--edge), var(--edge))',
+                    backgroundSize: '1px calc(100% - 24px)',
+                    backgroundPosition: 'left center',
+                    backgroundRepeat: 'no-repeat',
+                  }
+                : {}),
             }}
           >
             <span
@@ -59,6 +70,9 @@ export function LandingFeatureStrip() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                width: 30,
+                height: 30,
+                flexShrink: 0,
                 lineHeight: 1,
                 filter:
                   'drop-shadow(0 1px 2px color-mix(in srgb, var(--ink), transparent 25%)) drop-shadow(0 0 6px color-mix(in srgb, var(--ink), transparent 40%))',
@@ -75,10 +89,15 @@ export function LandingFeatureStrip() {
                 lineHeight: 1.3,
                 textAlign: 'center',
                 width: '100%',
-                whiteSpace: 'pre-line',
+                maxWidth: '100%',
+                minWidth: 0,
+                height: '2.6em',
+                flexShrink: 0,
+                display: 'block',
+                overflow: 'hidden',
               }}
             >
-              {feature.label}
+              {feature.label.replace(/\n/g, ' ')}
             </span>
           </div>
         )
