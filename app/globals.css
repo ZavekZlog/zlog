@@ -28,6 +28,8 @@ body {
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --dur: 120ms;
   --edge-highlight: rgba(255, 255, 255, 0.06);
+  --edge: rgba(255, 255, 255, 0.17);
+  --plate: color-mix(in srgb, var(--ink), var(--text) 6%);
   --premium-bg-base: #0b0d12;
   --premium-card-border: rgba(255, 255, 255, 0.17);
   --premium-card-bg: linear-gradient(160deg, rgba(15, 33, 53, 0.94) 0%, rgba(11, 25, 41, 0.92) 100%);
