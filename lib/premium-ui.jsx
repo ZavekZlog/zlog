@@ -354,7 +354,7 @@ export const dashboardCardInteractionCss = `
     }
 
     .premium-dash-accent {
-      height: 3.6px !important;
+      height: 5px !important;
       transition: filter 100ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 100ms cubic-bezier(0.22, 1, 0.36, 1);
     }
 
