@@ -100,15 +100,15 @@ export default function DashboardPage() {
         className="premium-shell-header"
         style={{
           background: 'transparent',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          borderBottom: '1px solid var(--edge-highlight)',
           padding: '16px 24px',
         }}
       >
-        <div style={{ fontSize: '20px', fontWeight: 700, color: '#FAFAF8', letterSpacing: '0.04em' }}>
+        <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text)', letterSpacing: '0.04em' }}>
           Z<span style={{ color: CTA_ORANGE }}>log</span>
         </div>
         {project && (
-          <div className="premium-shell-subtitle" style={{ fontSize: '12px', color: '#8ea2b5', marginTop: 4 }}>
+          <div className="premium-shell-subtitle" style={{ fontSize: '12px', color: 'var(--text-2)', marginTop: 4 }}>
             {project.name}
             {project.client_name ? ` · ${project.client_name}` : ''}
           </div>
@@ -117,14 +117,14 @@ export default function DashboardPage() {
 
       <div style={{ padding: '20px 24px 24px', maxWidth: '600px', margin: '0 auto' }}>
         {!project && (
-          <div style={{ textAlign: 'center', padding: '24px 20px', marginBottom: '20px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}>
-            <p style={{ margin: '0 0 12px', color: '#F0EDE8', fontWeight: 600 }}>Create your first project</p>
-            <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#7a92a8' }}>Add a site before opening reports.</p>
+          <div style={{ textAlign: 'center', padding: '24px 20px', marginBottom: '20px', background: 'var(--plate)', border: '1px solid var(--edge)', borderRadius: '12px' }}>
+            <p style={{ margin: '0 0 12px', color: 'var(--text)', fontWeight: 600 }}>Create your first project</p>
+            <p style={{ margin: '0 0 16px', fontSize: '13px', color: 'var(--text-2)' }}>Add a site before opening reports.</p>
             <button
               type="button"
               className="premium-primary-btn"
               onClick={() => router.push('/dashboard/new-project')}
-              style={{ padding: '12px 20px', background: CTA_ORANGE, color: '#0b0d12', border: 'none', borderRadius: '10px', fontWeight: 700, fontSize: '13px', letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer', boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.1)' }}
+              style={{ padding: '12px 20px', background: CTA_ORANGE, color: 'var(--ink)', border: 'none', borderRadius: '10px', fontWeight: 700, fontSize: '13px', letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer', boxShadow: 'inset 0 1px 0 var(--edge-highlight)' }}
             >
               New project
             </button>
@@ -141,7 +141,7 @@ export default function DashboardPage() {
 
         {project && (
           <>
-            <h2 style={{ fontSize: '16px', fontWeight: '600', marginTop: '48px', marginBottom: '16px', color: '#888' }}>RECENT DIARY ENTRIES</h2>
+            <h2 style={{ fontSize: '16px', fontWeight: '600', marginTop: '48px', marginBottom: '16px', color: 'var(--text-2)' }}>RECENT DIARY ENTRIES</h2>
 
             {diaries.length === 0 ? (
               <div className={premiumDiaryEmptyClass}>
@@ -150,9 +150,9 @@ export default function DashboardPage() {
               </div>
             ) : (
               diaries.map((d) => (
-                <div key={d.id} style={{ background: 'linear-gradient(160deg, rgba(15, 33, 53, 0.94) 0%, rgba(11, 25, 41, 0.92) 100%)', border: '1px solid rgba(255, 255, 255, 0.12)', borderRadius: '12px', padding: '16px', marginBottom: '12px' }}>
-                  <div style={{ fontWeight: '600', color: '#FAFAF8' }}>{d.report_date}</div>
-                  <div style={{ color: '#8ea2b5', fontSize: '13px', marginTop: '4px' }}>{d.site_summary?.slice(0, 100)}{(d.site_summary?.length || 0) > 100 ? '...' : ''}</div>
+                <div key={d.id} style={{ background: 'var(--plate)', border: '1px solid var(--edge)', borderRadius: '12px', padding: '16px', marginBottom: '12px' }}>
+                  <div style={{ fontWeight: '600', color: 'var(--text)' }}>{d.report_date}</div>
+                  <div style={{ color: 'var(--text-2)', fontSize: '13px', marginTop: '4px' }}>{d.site_summary?.slice(0, 100)}{(d.site_summary?.length || 0) > 100 ? '...' : ''}</div>
                 </div>
               ))
             )}

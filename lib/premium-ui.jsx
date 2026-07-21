@@ -1,18 +1,18 @@
 'use client'
 
 export const DIARY_ACCENT = '255,140,66'
-export const CTA_ORANGE = '#F5762A'
+export const CTA_ORANGE = 'var(--action)'
 
 export const pageBackground = {
   minHeight: '100vh',
-  color: '#fff',
+  color: 'var(--text)',
   fontFamily: 'sans-serif',
-  backgroundColor: '#0b0d12',
+  backgroundColor: 'var(--ink)',
   backgroundImage: `
-    radial-gradient(ellipse 78% 58% at 50% 44%, rgba(90, 106, 126, 0.09) 0%, transparent 70%),
-    radial-gradient(ellipse 95% 72% at 50% 108%, rgba(58, 70, 86, 0.055) 0%, transparent 52%),
-    linear-gradient(180deg, rgba(74, 90, 110, 0.035) 0%, transparent 38%, rgba(74, 90, 110, 0.025) 100%),
-    linear-gradient(172deg, #0b0d12 0%, #0d1016 38%, #0f1219 68%, #11151c 100%)
+    radial-gradient(ellipse 78% 58% at 50% 44%, color-mix(in srgb, var(--text-2) 9%, transparent) 0%, transparent 70%),
+    radial-gradient(ellipse 95% 72% at 50% 108%, color-mix(in srgb, var(--text-2) 5.5%, transparent) 0%, transparent 52%),
+    linear-gradient(180deg, color-mix(in srgb, var(--text-2) 3.5%, transparent) 0%, transparent 38%, color-mix(in srgb, var(--text-2) 2.5%, transparent) 100%),
+    linear-gradient(172deg, var(--ink) 0%, var(--plate) 38%, var(--plate) 68%, var(--plate) 100%)
   `,
 }
 
@@ -41,7 +41,7 @@ export const labelStyle = {
   fontSize: 11,
   letterSpacing: '0.12em',
   textTransform: 'uppercase',
-  color: '#8ea2b5',
+  color: 'var(--text-2)',
   marginBottom: 8,
   fontWeight: 600,
 }
@@ -49,10 +49,10 @@ export const labelStyle = {
 export const inputStyle = {
   width: '100%',
   padding: '12px 14px',
-  background: 'rgba(11, 25, 41, 0.78)',
-  border: '1px solid rgba(255, 255, 255, 0.12)',
+  background: 'var(--plate)',
+  border: '1px solid var(--edge)',
   borderRadius: '10px',
-  color: '#FAFAF8',
+  color: 'var(--text)',
   fontSize: 15,
   outline: 'none',
   boxSizing: 'border-box',
@@ -67,13 +67,13 @@ export const textareaStyle = {
 }
 
 export const glassPanelStyle = {
-  background: 'linear-gradient(160deg, rgba(15, 33, 53, 0.93) 0%, rgba(11, 25, 41, 0.9) 100%)',
+  background: 'var(--plate)',
   backdropFilter: 'blur(16px)',
   WebkitBackdropFilter: 'blur(16px)',
-  border: '1px solid rgba(255, 255, 255, 0.16)',
+  border: '1px solid var(--edge)',
   borderRadius: '16px',
   padding: '22px',
-  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.09)',
+  boxShadow: '0 8px 32px color-mix(in srgb, var(--ink) 40%, transparent), inset 0 1px 0 var(--edge-highlight)',
   marginBottom: 16,
 }
 
@@ -82,7 +82,7 @@ export const sectionTitleStyle = {
   fontSize: 14,
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
-  color: '#FAFAF8',
+  color: 'var(--text)',
   marginBottom: 16,
 }
 
@@ -92,7 +92,7 @@ export const accentBarStyle = (accent) => ({
   left: 0,
   right: 0,
   height: '2.55px',
-  background: `linear-gradient(90deg, transparent 0%, rgba(${accent}, 0.95) 22%, rgba(255, 255, 255, 0.7) 50%, rgba(${accent}, 0.95) 78%, transparent 100%)`,
+  background: `linear-gradient(90deg, transparent 0%, rgba(${accent}, 0.95) 22%, color-mix(in srgb, var(--text) 70%, transparent) 50%, rgba(${accent}, 0.95) 78%, transparent 100%)`,
   boxShadow: `0 0 15px rgba(${accent}, 0.5), 0 2px 8px rgba(${accent}, 0.32)`,
   pointerEvents: 'none',
   borderRadius: '16px 16px 0 0',
@@ -103,7 +103,7 @@ export function primaryButtonStyle(accent = DIARY_ACCENT, disabled = false) {
     width: '100%',
     padding: '14px 16px',
     background: CTA_ORANGE,
-    color: '#0b0d12',
+    color: 'var(--ink)',
     border: 'none',
     borderRadius: '10px',
     fontWeight: 700,
@@ -112,7 +112,7 @@ export function primaryButtonStyle(accent = DIARY_ACCENT, disabled = false) {
     textTransform: 'uppercase',
     cursor: disabled ? 'wait' : 'pointer',
     opacity: disabled ? 0.7 : 1,
-    boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+    boxShadow: 'inset 0 1px 0 var(--edge-highlight)',
   }
 }
 
@@ -120,7 +120,7 @@ export function ghostButtonStyle() {
   return {
     background: 'transparent',
     border: 'none',
-    color: '#8ea2b5',
+    color: 'var(--text-2)',
     fontSize: 22,
     cursor: 'pointer',
     padding: '8px 12px',
@@ -140,12 +140,12 @@ export function premiumBackPillStyle() {
     gap: '8px',
     minHeight: 44,
     padding: '8px 16px',
-    background: 'linear-gradient(160deg, rgba(15, 33, 53, 0.72) 0%, rgba(11, 25, 41, 0.58) 100%)',
+    background: 'var(--plate)',
     backdropFilter: 'blur(12px)',
     WebkitBackdropFilter: 'blur(12px)',
-    border: '1px solid rgba(255, 255, 255, 0.14)',
+    border: '1px solid var(--edge)',
     borderRadius: 999,
-    color: '#FFFFFF',
+    color: 'var(--text)',
     fontWeight: 500,
     fontSize: 14,
     letterSpacing: '0.02em',
@@ -173,7 +173,7 @@ export function PremiumShell({ title, subtitle, onBack, accent = DIARY_ACCENT, c
         className="premium-shell-header"
         style={{
           background: 'transparent',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          borderBottom: '1px solid var(--edge-highlight)',
           padding: '16px 24px',
           display: 'flex',
           alignItems: 'center',
@@ -184,8 +184,8 @@ export function PremiumShell({ title, subtitle, onBack, accent = DIARY_ACCENT, c
           <PremiumBackButton onClick={onBack} />
         )}
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '17px', fontWeight: 700, color: '#FAFAF8' }}>{title}</div>
-          {subtitle && <div className="premium-shell-subtitle" style={{ fontSize: '12px', color: '#8ea2b5', marginTop: 2 }}>{subtitle}</div>}
+          <div style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text)' }}>{title}</div>
+          {subtitle && <div className="premium-shell-subtitle" style={{ fontSize: '12px', color: 'var(--text-2)', marginTop: 2 }}>{subtitle}</div>}
         </div>
         <div style={{ width: 28, height: 3, borderRadius: 999, background: `rgba(${accent}, 0.85)`, boxShadow: `0 0 12px rgba(${accent}, 0.45)` }} />
       </div>
@@ -213,7 +213,7 @@ export const dashboardCardStyle = {
   position: 'relative',
   width: '100%',
   padding: '28px',
-  background: 'linear-gradient(160deg, rgba(15, 33, 53, 0.94) 0%, rgba(11, 25, 41, 0.92) 100%)',
+  background: 'var(--plate)',
   backdropFilter: 'blur(16px)',
   WebkitBackdropFilter: 'blur(16px)',
   borderRadius: '16px',
@@ -221,22 +221,22 @@ export const dashboardCardStyle = {
   textAlign: 'left',
   overflow: 'hidden',
   fontFamily: 'inherit',
-  color: '#fff',
-  border: '1px solid rgba(255, 255, 255, 0.17)',
-  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+  color: 'var(--text)',
+  border: '1px solid var(--edge)',
+  boxShadow: '0 8px 32px color-mix(in srgb, var(--ink) 42%, transparent), inset 0 1px 0 var(--edge-highlight)',
 }
 
 export const dashboardCardTitleStyle = {
   fontWeight: 700,
   fontSize: '16px',
-  color: '#FAFAF8',
+  color: 'var(--text)',
   marginBottom: '10px',
   lineHeight: 1.35,
 }
 
 export const dashboardCardDescStyle = {
   fontSize: '13px',
-  color: '#93a7b9',
+  color: 'var(--text-2)',
   lineHeight: 1.6,
   margin: 0,
 }
@@ -255,7 +255,7 @@ export const dashboardIconBoxStyle = (accent) => ({
   border: `1px solid rgba(${accent}, 0.32)`,
   backdropFilter: 'blur(10px)',
   WebkitBackdropFilter: 'blur(10px)',
-  boxShadow: `inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 4px 18px rgba(${accent}, 0.2)`,
+  boxShadow: `inset 0 1px 0 var(--edge-highlight), 0 4px 18px rgba(${accent}, 0.2)`,
 })
 
 /** Card hover / stagger — pair with premiumScopedCss on dashboard pages */
@@ -270,8 +270,8 @@ export const dashboardCardInteractionCss = `
   }
   .premium-dash-card {
     transition: all 220ms cubic-bezier(0.22, 1, 0.36, 1);
-    border: 1px solid rgba(255, 255, 255, 0.17);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--edge);
+    box-shadow: 0 8px 32px color-mix(in srgb, var(--ink) 42%, transparent), inset 0 1px 0 var(--edge-highlight);
   }
   .premium-dash-accent,
   .premium-dash-icon {
@@ -282,27 +282,27 @@ export const dashboardCardInteractionCss = `
     filter: brightness(1.06);
     border-color: rgba(var(--accent), 0.48);
     box-shadow:
-      0 24px 64px rgba(0, 0, 0, 0.54),
+      0 24px 64px color-mix(in srgb, var(--ink) 54%, transparent),
       0 0 52px rgba(var(--accent), 0.32),
       0 0 2px rgba(var(--accent), 0.55),
-      inset 0 1px 0 rgba(255, 255, 255, 0.14);
+      inset 0 1px 0 var(--edge-highlight);
   }
   .premium-dash-card-wrap:hover .premium-dash-accent { filter: brightness(1.2); }
   .premium-dash-card-wrap:hover .premium-dash-icon { filter: brightness(1.15); }
   .premium-dash-card-wrap .premium-dash-card:active {
     transform: scale(0.985);
     transition-duration: 120ms;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    box-shadow: 0 4px 20px color-mix(in srgb, var(--ink) 32%, transparent), inset 0 1px 0 var(--edge-highlight);
   }
   .premium-dash-card-wrap:hover .premium-dash-card:active {
     transform: translateY(-6px) scale(0.985);
     filter: brightness(1.04);
     border-color: rgba(var(--accent), 0.38);
     box-shadow:
-      0 18px 48px rgba(0, 0, 0, 0.48),
+      0 18px 48px color-mix(in srgb, var(--ink) 48%, transparent),
       0 0 32px rgba(var(--accent), 0.2),
       0 0 1px rgba(var(--accent), 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      inset 0 1px 0 var(--edge-highlight);
     transition-duration: 120ms;
   }
   .premium-dash-cards-grid {
@@ -327,13 +327,13 @@ export const dashboardCardInteractionCss = `
     }
 
     .premium-dash-card {
-      background: linear-gradient(160deg, rgba(15, 33, 53, 0.94) 0%, rgba(11, 25, 41, 0.92) 100%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.17) !important;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+      background: var(--plate) !important;
+      border: 1px solid var(--edge) !important;
+      box-shadow: 0 8px 32px color-mix(in srgb, var(--ink) 42%, transparent), inset 0 1px 0 var(--edge-highlight) !important;
     }
 
     .premium-dash-card-title {
-      color: #FFFFFF !important;
+      color: var(--text) !important;
       font-size: 17px !important;
       font-weight: 700 !important;
       line-height: 1.32 !important;
@@ -341,7 +341,7 @@ export const dashboardCardInteractionCss = `
     }
 
     .premium-dash-card-desc {
-      color: #A3B5C4 !important;
+      color: var(--text-2) !important;
       font-size: 14px !important;
       line-height: 1.55 !important;
     }
@@ -349,7 +349,7 @@ export const dashboardCardInteractionCss = `
     .premium-dash-icon {
       margin-bottom: 14px !important;
       filter: brightness(1.1);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 4px 22px rgba(var(--accent), 0.26) !important;
+      box-shadow: inset 0 1px 0 var(--edge-highlight), 0 4px 22px rgba(var(--accent), 0.26) !important;
       border-color: rgba(var(--accent), 0.38) !important;
     }
 
@@ -364,10 +364,10 @@ export const dashboardCardInteractionCss = `
       filter: brightness(1.05);
       border-color: rgba(var(--accent), 0.62) !important;
       box-shadow:
-        0 20px 52px rgba(0, 0, 0, 0.5),
+        0 20px 52px color-mix(in srgb, var(--ink) 50%, transparent),
         0 0 44px rgba(var(--accent), 0.38),
         0 0 3px rgba(var(--accent), 0.62),
-        inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+        inset 0 1px 0 var(--edge-highlight) !important;
     }
 
     .premium-dash-card-wrap:active .premium-dash-accent {
@@ -377,7 +377,7 @@ export const dashboardCardInteractionCss = `
 
     .premium-dash-card-wrap:active .premium-dash-icon {
       filter: brightness(1.22);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 4px 26px rgba(var(--accent), 0.34) !important;
+      box-shadow: inset 0 1px 0 var(--edge-highlight), 0 4px 26px rgba(var(--accent), 0.34) !important;
     }
 
     .premium-dash-card-wrap .premium-dash-card:active,
@@ -387,10 +387,10 @@ export const dashboardCardInteractionCss = `
       filter: brightness(1.05);
       border-color: rgba(var(--accent), 0.62) !important;
       box-shadow:
-        0 20px 52px rgba(0, 0, 0, 0.5),
+        0 20px 52px color-mix(in srgb, var(--ink) 50%, transparent),
         0 0 44px rgba(var(--accent), 0.38),
         0 0 3px rgba(var(--accent), 0.62),
-        inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+        inset 0 1px 0 var(--edge-highlight) !important;
     }
 
     .premium-back-btn__arrow {
