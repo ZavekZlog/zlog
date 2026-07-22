@@ -85,6 +85,7 @@ export default function Home() {
             letterSpacing: '-0.03em',
             color: 'var(--text)',
             lineHeight: 1,
+            transform: 'translateY(-2px)',
           }}
         >
           Zlog
@@ -126,11 +127,11 @@ export default function Home() {
           style={{
             margin: '0 0 4px',
             fontFamily: barlow.style.fontFamily,
-            fontSize: '17px',
+            fontSize: '18px',
             fontWeight: 600,
-            lineHeight: 1.5,
-            color: 'var(--text)',
-            maxWidth: '320px',
+            lineHeight: 1.25,
+            color: '#F2F2F2',
+            maxWidth: '380px',
           }}
         >
           Professional, company-branded reports that reflect your standards.
@@ -140,10 +141,10 @@ export default function Home() {
           style={{
             margin: '0 0 10px',
             fontFamily: barlow.style.fontFamily,
-            fontSize: '17px',
+            fontSize: '16px',
             fontWeight: 400,
-            lineHeight: 1.5,
-            color: 'color-mix(in srgb, var(--text) 80%, transparent)',
+            lineHeight: 1.35,
+            color: 'color-mix(in srgb, #ffffff 74%, transparent)',
             maxWidth: '320px',
           }}
         >
@@ -213,7 +214,7 @@ export default function Home() {
             <span style={{ position: 'relative', zIndex: 1, justifySelf: 'start', display: 'inline-flex', color: 'var(--text)', paddingLeft: 10 }}>
               <LandingMicIcon size={28} strokeWidth={1.75} />
             </span>
-            <span style={{ position: 'relative', zIndex: 1 }}>Start Free</span>
+            <span style={{ position: 'relative', zIndex: 1 }}>Start 7-Day Free Trial</span>
             <span style={{ position: 'relative', zIndex: 1, justifySelf: 'end', display: 'inline-flex', color: 'var(--text)' }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
                 <path
