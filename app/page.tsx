@@ -30,7 +30,7 @@ export default function Home() {
           width: '100%',
           maxWidth: '420px',
           margin: '0 auto',
-          padding: '105px 24px 40px',
+          padding: '32px 24px 28px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -69,7 +69,7 @@ export default function Home() {
             priority
             style={{
               position: 'relative',
-              width: '100%',
+              width: '91%',
               height: 'auto',
               objectFit: 'contain',
             }}
@@ -110,7 +110,7 @@ export default function Home() {
 
         <h2
           style={{
-            margin: '0 0 24px',
+            margin: '0 0 4px',
             fontFamily: spaceGrotesk.style.fontFamily,
             fontSize: '25px',
             fontWeight: 600,
@@ -121,6 +121,34 @@ export default function Home() {
         >
           Built for the people who run the site.
         </h2>
+
+        <p
+          style={{
+            margin: '0 0 4px',
+            fontFamily: barlow.style.fontFamily,
+            fontSize: '17px',
+            fontWeight: 600,
+            lineHeight: 1.5,
+            color: 'var(--text)',
+            maxWidth: '320px',
+          }}
+        >
+          Professional, company-branded reports that reflect your standards.
+        </p>
+
+        <p
+          style={{
+            margin: '0 0 10px',
+            fontFamily: barlow.style.fontFamily,
+            fontSize: '17px',
+            fontWeight: 400,
+            lineHeight: 1.5,
+            color: 'color-mix(in srgb, var(--text) 80%, transparent)',
+            maxWidth: '320px',
+          }}
+        >
+          Type or use your voice to create reports.
+        </p>
 
         <div
           style={{
@@ -140,8 +168,8 @@ export default function Home() {
               gridTemplateColumns: '1fr auto 1fr',
               alignItems: 'center',
               width: '100%',
-              minHeight: '53px',
-              padding: '12px 18px',
+              minHeight: '40px',
+              padding: '8px 18px',
               borderRadius: '12px',
               border: '1px solid color-mix(in srgb, var(--rust), var(--ink) 58%)',
               background:
@@ -185,7 +213,7 @@ export default function Home() {
             <span style={{ position: 'relative', zIndex: 1, justifySelf: 'start', display: 'inline-flex', color: 'var(--text)', paddingLeft: 10 }}>
               <LandingMicIcon size={28} strokeWidth={1.75} />
             </span>
-            <span style={{ position: 'relative', zIndex: 1 }}>Get Started</span>
+            <span style={{ position: 'relative', zIndex: 1 }}>Start Free</span>
             <span style={{ position: 'relative', zIndex: 1, justifySelf: 'end', display: 'inline-flex', color: 'var(--text)' }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
                 <path
@@ -206,8 +234,9 @@ export default function Home() {
               alignItems: 'center',
               justifyContent: 'center',
               width: '100%',
-              minHeight: '56px',
-              padding: '14px 20px',
+              minHeight: '46px',
+              height: '46px',
+              padding: '8px 20px',
               borderRadius: '12px',
               background: 'transparent',
               border: '1px solid var(--text-dim)',

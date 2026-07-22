@@ -1,18 +1,45 @@
 'use client'
 
 import { Barlow } from 'next/font/google'
-import { Mic, Camera, ClipboardList, ShieldCheck, type LucideIcon } from 'lucide-react'
+import { Mic, ClipboardList, Check, type LucideIcon, type LucideProps } from 'lucide-react'
 
 const barlow = Barlow({
   subsets: ['latin'],
   weight: ['500'],
 })
 
+/** Folded site plan with location pin — matches Lucide size/stroke of sibling icons */
+function SiteSurveyIcon({ size = 30, strokeWidth = 1.75, ...props }: LucideProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      {...props}
+    >
+      {/* Folded site-plan panels */}
+      <path d="M9 3.236v15" />
+      <path d="M15 5.764v15" />
+      <path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z" />
+      {/* Location pin on the plan */}
+      <path d="M12 8.4a1.85 1.85 0 0 1 1.85 1.85c0 1.35-1.85 3.05-1.85 3.05S10.15 11.6 10.15 10.25A1.85 1.85 0 0 1 12 8.4Z" />
+      <circle cx="12" cy="10.25" r="0.65" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
 const FEATURES: { Icon: LucideIcon; label: string }[] = [
-  { Icon: Mic, label: 'Voice reports' },
-  { Icon: Camera, label: 'Annotated photos' },
-  { Icon: ClipboardList, label: 'Diaries & surveys' },
-  { Icon: ShieldCheck, label: 'Secure backup' },
+  { Icon: Mic, label: 'Voice input' },
+  { Icon: ClipboardList, label: 'Site diaries' },
+  { Icon: SiteSurveyIcon as LucideIcon, label: 'Site surveys' },
+  { Icon: Check, label: 'Snag lists' },
 ]
 
 export function LandingFeatureStrip() {
