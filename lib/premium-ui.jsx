@@ -92,8 +92,8 @@ export const accentBarStyle = (accent) => ({
   left: 0,
   right: 0,
   height: '2.55px',
-  background: `linear-gradient(90deg, transparent 0%, rgba(${accent}, 0.95) 22%, color-mix(in srgb, var(--text) 70%, transparent) 50%, rgba(${accent}, 0.95) 78%, transparent 100%)`,
-  boxShadow: `0 0 15px rgba(${accent}, 0.5), 0 2px 8px rgba(${accent}, 0.32)`,
+  background: `linear-gradient(90deg, transparent 0%, rgba(${accent}, 0.95) 22%, color-mix(in srgb, var(--text) 55%, transparent) 50%, rgba(${accent}, 0.95) 78%, transparent 100%)`,
+  boxShadow: `0 0 12px rgba(${accent}, 0.32), 0 2px 6px rgba(${accent}, 0.2)`,
   pointerEvents: 'none',
   borderRadius: '16px 16px 0 0',
 })
