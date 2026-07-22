@@ -86,8 +86,8 @@ function labourFromDbRow(row) {
     trade: row.trade ?? '',
     company: row.company ?? '',
     headcount: row.count != null ? String(row.count) : '',
-    hours: '',
-    notes: '',
+    hours: row.hours != null ? String(row.hours) : '',
+    notes: row.notes ?? '',
   }
 }
 
@@ -97,7 +97,7 @@ function plantFromDbRow(row) {
     plant_type: row.item ?? '',
     quantity: row.ref != null ? String(row.ref) : '',
     hours: row.status != null ? String(row.status) : '',
-    notes: '',
+    notes: row.notes ?? '',
   }
 }
 
@@ -191,8 +191,8 @@ export default function SiteDiaryPage() {
 
         if (lastReport) {
           const [{ data: labour }, { data: plant }] = await Promise.all([
-            supabase.from('report_labour').select('trade, company, count').eq('report_id', lastReport.id).order('sequence'),
-            supabase.from('report_plant').select('item, ref, status').eq('report_id', lastReport.id).order('sequence'),
+            supabase.from('report_labour').select('trade, company, count, hours, notes').eq('report_id', lastReport.id).order('sequence'),
+            supabase.from('report_plant').select('item, ref, status, notes').eq('report_id', lastReport.id).order('sequence'),
           ])
 
           setShiftType(lastReport.shift || 'Day')
@@ -857,7 +857,7 @@ export default function SiteDiaryPage() {
                     <img
                       src={photo.preview}
                       alt={`Photo ${photo.sequence_number}`}
-                      style={{ width: 88, height: 88, objectFit: 'cover', borderRadius: 8, display: 'block' }}
+                      style={{ width: 88, height: 88, objectFit: 'contain', borderRadius: 8, display: 'block' }}
                     />
                     <span
                       style={{
