@@ -72,9 +72,24 @@ export default function ProjectPage() {
           </div>
         ) : (
           diaries.map(d => (
-            <div key={d.id} style={{ background: '#111', border: '1px solid #222', borderRadius: '10px', padding: '16px', marginBottom: '12px' }}>
+            <div
+              key={d.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => router.push(`/dashboard/project/${id}/diary?report=${d.id}`)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  router.push(`/dashboard/project/${id}/diary?report=${d.id}`)
+                }
+              }}
+              style={{ background: '#111', border: '1px solid #222', borderRadius: '10px', padding: '16px', marginBottom: '12px', cursor: 'pointer' }}
+            >
               <div style={{ fontWeight: '600' }}>{d.report_date}</div>
-              <div style={{ color: '#888', fontSize: '13px', marginTop: '4px' }}>{d.notes?.slice(0, 100)}...</div>
+              <div style={{ color: '#888', fontSize: '13px', marginTop: '4px' }}>
+                {(d.site_summary || d.notes || '')?.slice(0, 100)}
+                {((d.site_summary || d.notes || '').length > 100) ? '...' : ''}
+              </div>
             </div>
           ))
         )}

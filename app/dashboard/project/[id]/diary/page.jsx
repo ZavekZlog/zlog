@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
+import SignaturePad from 'signature_pad'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import {
@@ -132,6 +133,7 @@ const carriedFieldNoteStyle = {
 }
 
 async function signedUrlForPath(supabase, path) {
+  if (!path) return null
   const { data } = await supabase.storage.from('site-photos').createSignedUrl(path, 3600)
   return data?.signedUrl ?? null
 }
@@ -140,6 +142,7 @@ export default function SiteDiaryPage() {
   const { id: projectId } = useParams()
   const searchParams = useSearchParams()
   const prefillLast = searchParams.get('prefill') === 'last'
+  const editingReportId = searchParams.get('report') || searchParams.get('diaryId') || null
   const router = useRouter()
   const supabase = createClient()
 
@@ -167,12 +170,14 @@ export default function SiteDiaryPage() {
   const [creatorRole, setCreatorRole] = useState('')
   const [coverPhoto, setCoverPhoto] = useState(null)
   const [signature, setSignature] = useState(null)
+  const [signatureMode, setSignatureMode] = useState('draw') // 'carried' | 'accepted' | 'draw'
   const [carriedVisitors, setCarriedVisitors] = useState(false)
   const [carriedDelaysIssues, setCarriedDelaysIssues] = useState(false)
 
   useEffect(() => {
     const load = async () => {
       setLoading(true)
+      setError('')
       setPrefilledFromLast(false)
       setCarriedVisitors(false)
       setCarriedDelaysIssues(false)
@@ -191,8 +196,92 @@ export default function SiteDiaryPage() {
       setPhotos([])
       setCoverPhoto(null)
       setSignature(null)
+      setSignatureMode('draw')
+      setWeather('')
+      setShiftType('Day')
+      setVisitors('')
+      setDelaysIssues('')
+      setCompanyReportingFor('')
+      setCreatorName('')
+      setCreatorRole('')
+      setLabourRows([emptyLabour()])
+      setPlantRows([emptyPlant()])
 
-      if (prefillLast) {
+      const applyCover = async (storagePath) => {
+        if (!storagePath) return
+        const preview = await signedUrlForPath(supabase, storagePath)
+        if (!preview) return
+        setCoverPhoto({ file: null, preview, storagePath })
+      }
+
+      const applySignature = async (storagePath) => {
+        if (!storagePath) {
+          setSignature(null)
+          setSignatureMode('draw')
+          return
+        }
+        const preview = await signedUrlForPath(supabase, storagePath)
+        if (!preview) {
+          setSignature(null)
+          setSignatureMode('draw')
+          return
+        }
+        setSignature({ file: null, preview, storagePath })
+        setSignatureMode('carried')
+      }
+
+      if (editingReportId) {
+        const { data: existing, error: existingError } = await supabase
+          .from('daily_reports')
+          .select('*')
+          .eq('id', editingReportId)
+          .eq('project_id', projectId)
+          .maybeSingle()
+
+        if (existingError || !existing) {
+          setError(existingError?.message || 'Diary entry not found')
+          setLoading(false)
+          return
+        }
+
+        const [{ data: labour }, { data: plant }, { data: reportPhotos }] = await Promise.all([
+          supabase.from('report_labour').select('trade, company, count, hours, notes').eq('report_id', existing.id).order('sequence'),
+          supabase.from('report_plant').select('item, ref, status, notes').eq('report_id', existing.id).order('sequence'),
+          supabase.from('report_photos').select('url, caption, sequence').eq('report_id', existing.id).order('sequence'),
+        ])
+
+        setReportDate(existing.report_date || today)
+        setWeather(existing.weather ?? '')
+        setShiftType(existing.shift || 'Day')
+        setSiteSummary(existing.site_summary ?? '')
+        setVisitors(existing.visitors ?? '')
+        setDelaysIssues(existing.delays_issues ?? '')
+        setActionsRequired(existing.actions ?? '')
+        setCompanyReportingFor(existing.company_reporting_for ?? '')
+        setCreatorName(existing.creator_name ?? '')
+        setCreatorRole(existing.creator_role ?? '')
+        setLabourRows(labour?.length ? labour.map(labourFromDbRow) : [emptyLabour()])
+        setPlantRows(plant?.length ? plant.map(plantFromDbRow) : [emptyPlant()])
+
+        await applyCover(existing.cover_photo_url)
+        await applySignature(existing.signature_url)
+
+        const loadedPhotos = []
+        for (const p of reportPhotos || []) {
+          if (!p?.url) continue
+          const preview = await signedUrlForPath(supabase, p.url)
+          if (!preview) continue
+          loadedPhotos.push({
+            key: makeUuid(),
+            file: null,
+            preview,
+            storagePath: p.url,
+            caption: p.caption ?? '',
+            sequence_number: p.sequence ?? 0,
+          })
+        }
+        setPhotos(resequencePhotos(loadedPhotos))
+      } else if (prefillLast) {
         const { data: lastReport } = await supabase
           .from('daily_reports')
           .select('id, shift, weather, visitors, delays_issues, company_reporting_for, creator_name, creator_role, cover_photo_url, signature_url')
@@ -221,41 +310,15 @@ export default function SiteDiaryPage() {
           setPlantRows(plant?.length ? plant.map(plantFromDbRow) : [emptyPlant()])
           setPrefilledFromLast(true)
 
-          if (lastReport.cover_photo_url) {
-            const preview = await signedUrlForPath(supabase, lastReport.cover_photo_url)
-            setCoverPhoto({ file: null, preview, storagePath: lastReport.cover_photo_url })
-          }
-          if (lastReport.signature_url) {
-            const preview = await signedUrlForPath(supabase, lastReport.signature_url)
-            setSignature({ file: null, preview, storagePath: lastReport.signature_url })
-          }
-        } else {
-          setShiftType('Day')
-          setWeather('')
-          setVisitors('')
-          setDelaysIssues('')
-          setCompanyReportingFor('')
-          setCreatorName('')
-          setCreatorRole('')
-          setLabourRows([emptyLabour()])
-          setPlantRows([emptyPlant()])
+          await applyCover(lastReport.cover_photo_url)
+          await applySignature(lastReport.signature_url)
         }
-      } else {
-        setShiftType('Day')
-        setWeather('')
-        setVisitors('')
-        setDelaysIssues('')
-        setCompanyReportingFor('')
-        setCreatorName('')
-        setCreatorRole('')
-        setLabourRows([emptyLabour()])
-        setPlantRows([emptyPlant()])
       }
 
       setLoading(false)
     }
     load()
-  }, [projectId, prefillLast])
+  }, [projectId, prefillLast, editingReportId])
 
   const onDrop = useCallback((accepted) => {
     const next = accepted.map((file) => ({
@@ -272,19 +335,6 @@ export default function SiteDiaryPage() {
     const file = accepted[0]
     if (!file) return
     setCoverPhoto((prev) => {
-      if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
-      return {
-        file,
-        preview: URL.createObjectURL(file),
-        storagePath: null,
-      }
-    })
-  }, [])
-
-  const onSignatureDrop = useCallback((accepted) => {
-    const file = accepted[0]
-    if (!file) return
-    setSignature((prev) => {
       if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
       return {
         file,
@@ -311,16 +361,140 @@ export default function SiteDiaryPage() {
     multiple: false,
   })
 
-  const {
-    getRootProps: getSignatureRootProps,
-    getInputProps: getSignatureInputProps,
-    isDragActive: isSignatureDragActive,
-  } = useDropzone({
-    onDrop: onSignatureDrop,
-    accept: { 'image/png': ['.png'] },
-    maxFiles: 1,
-    multiple: false,
-  })
+  const canvasRef = useRef(null)
+  const signaturePadRef = useRef(null)
+  const endStrokeHandlerRef = useRef(null)
+  const touchBlockerRef = useRef(null)
+  const originalReleasePointerCaptureRef = useRef(null)
+
+  const teardownSignaturePad = useCallback(() => {
+    const canvas = canvasRef.current
+    if (canvas && touchBlockerRef.current) {
+      canvas.removeEventListener('touchstart', touchBlockerRef.current)
+      canvas.removeEventListener('touchmove', touchBlockerRef.current)
+      canvas.removeEventListener('touchend', touchBlockerRef.current)
+      touchBlockerRef.current = null
+    }
+    if (canvas && originalReleasePointerCaptureRef.current) {
+      try {
+        delete canvas.releasePointerCapture
+      } catch {
+        canvas.releasePointerCapture = originalReleasePointerCaptureRef.current
+      }
+      originalReleasePointerCaptureRef.current = null
+    }
+    const pad = signaturePadRef.current
+    if (!pad) return
+    if (endStrokeHandlerRef.current) {
+      pad.removeEventListener('endStroke', endStrokeHandlerRef.current)
+      endStrokeHandlerRef.current = null
+    }
+    pad.off()
+    signaturePadRef.current = null
+  }, [])
+
+  const attachSignatureCanvas = useCallback((canvas) => {
+    if (canvasRef.current === canvas) return
+    teardownSignaturePad()
+    canvasRef.current = canvas
+    if (!canvas) return
+
+    canvas.style.touchAction = 'none'
+    canvas.style.userSelect = 'none'
+    canvas.style.webkitUserSelect = 'none'
+
+    // Guard releasePointerCapture — browsers throw NotFoundError if the
+    // pointer is already gone (common on mobile touch-up / pointercancel).
+    originalReleasePointerCaptureRef.current =
+      Object.getOwnPropertyDescriptor(Element.prototype, 'releasePointerCapture')?.value ||
+      canvas.releasePointerCapture
+    const originalRelease = originalReleasePointerCaptureRef.current
+    canvas.releasePointerCapture = function releasePointerCaptureSafe(pointerId) {
+      try {
+        if (
+          typeof this.hasPointerCapture === 'function' &&
+          !this.hasPointerCapture(pointerId)
+        ) {
+          return
+        }
+        originalRelease.call(this, pointerId)
+      } catch {
+        // Ignore NotFoundError when no active pointer remains
+      }
+    }
+
+    // Only block scroll on move. preventDefault on touchstart/touchend can
+    // cancel the pointer before capture is released and trigger the error above.
+    const blockTouchScroll = (e) => {
+      try {
+        if (e.cancelable) e.preventDefault()
+      } catch {
+        // Ignore — never let touch handlers throw into the console
+      }
+    }
+    touchBlockerRef.current = blockTouchScroll
+    canvas.addEventListener('touchmove', blockTouchScroll, { passive: false })
+
+    const ratio = Math.max(window.devicePixelRatio || 1, 1)
+    const rect = canvas.getBoundingClientRect()
+    canvas.width = rect.width * ratio
+    canvas.height = rect.height * ratio
+    canvas.getContext('2d').scale(ratio, ratio)
+
+    const pad = new SignaturePad(canvas, {
+      backgroundColor: 'rgb(255, 255, 255)',
+    })
+    signaturePadRef.current = pad
+
+    // SignaturePad.on() may reset touch-action — keep scroll locked while drawing
+    canvas.style.touchAction = 'none'
+
+    const onEndStroke = () => {
+      if (pad.isEmpty()) {
+        setSignature(null)
+        return
+      }
+      canvas.toBlob((blob) => {
+        if (!blob) return
+        const file = new File([blob], 'signature.png', { type: 'image/png' })
+        setSignature((prev) => {
+          if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
+          return {
+            file,
+            preview: URL.createObjectURL(file),
+            storagePath: null,
+          }
+        })
+      }, 'image/png')
+    }
+
+    endStrokeHandlerRef.current = onEndStroke
+    pad.addEventListener('endStroke', onEndStroke)
+  }, [teardownSignaturePad])
+
+  useEffect(() => () => {
+    teardownSignaturePad()
+  }, [teardownSignaturePad])
+
+  const clearSignaturePad = () => {
+    signaturePadRef.current?.clear()
+    setSignature((prev) => {
+      if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
+      return null
+    })
+  }
+
+  const useExistingSignature = () => {
+    setSignatureMode('accepted')
+  }
+
+  const resignSignature = () => {
+    setSignature((prev) => {
+      if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
+      return null
+    })
+    setSignatureMode('draw')
+  }
 
   const photosRef = useRef(photos)
   photosRef.current = photos
@@ -357,7 +531,7 @@ export default function SiteDiaryPage() {
   const removePhoto = (key) => {
     setPhotos((prev) => {
       const removed = prev.find((p) => p.key === key)
-      if (removed?.preview) URL.revokeObjectURL(removed.preview)
+      if (removed?.file && removed.preview) URL.revokeObjectURL(removed.preview)
       return resequencePhotos(prev.filter((p) => p.key !== key))
     })
   }
@@ -368,7 +542,9 @@ export default function SiteDiaryPage() {
 
   const handleProjectChange = (newId) => {
     if (newId && newId !== projectId) {
-      const query = prefillLast ? '?prefill=last' : ''
+      const query = editingReportId
+        ? ''
+        : (prefillLast ? '?prefill=last' : '')
       router.push(`/dashboard/project/${newId}/diary${query}`)
     }
   }
@@ -376,11 +552,6 @@ export default function SiteDiaryPage() {
   const removeCoverPhoto = () => {
     if (coverPhoto?.file && coverPhoto.preview) URL.revokeObjectURL(coverPhoto.preview)
     setCoverPhoto(null)
-  }
-
-  const removeSignature = () => {
-    if (signature?.file && signature.preview) URL.revokeObjectURL(signature.preview)
-    setSignature(null)
   }
 
   const labourHasData = (row) =>
@@ -438,30 +609,54 @@ export default function SiteDiaryPage() {
       signatureUrl = signaturePath
     }
 
-    const { data: report, error: reportError } = await supabase
-      .from('daily_reports')
-      .insert({
-        project_id: projectId,
-        report_date: reportDate,
-        weather: weather.trim() || null,
-        shift: shiftType || null,
-        site_summary: siteSummary.trim(),
-        visitors: visitors.trim() || null,
-        delays_issues: delaysIssues.trim() || null,
-        actions: actionsRequired.trim() || null,
-        company_reporting_for: companyReportingFor.trim() || null,
-        creator_name: creatorName.trim() || null,
-        creator_role: creatorRole.trim() || null,
-        cover_photo_url: coverPhotoUrl,
-        signature_url: signatureUrl,
-      })
-      .select('id')
-      .single()
+    const reportPayload = {
+      project_id: projectId,
+      report_date: reportDate,
+      weather: weather.trim() || null,
+      shift: shiftType || null,
+      site_summary: siteSummary.trim(),
+      visitors: visitors.trim() || null,
+      delays_issues: delaysIssues.trim() || null,
+      actions: actionsRequired.trim() || null,
+      company_reporting_for: companyReportingFor.trim() || null,
+      creator_name: creatorName.trim() || null,
+      creator_role: creatorRole.trim() || null,
+      cover_photo_url: coverPhotoUrl,
+      signature_url: signatureUrl,
+    }
 
-    if (reportError || !report) {
-      setError(reportError?.message || 'Failed to create report')
-      setSaving(false)
-      return
+    let report = null
+    if (editingReportId) {
+      const { data, error: reportError } = await supabase
+        .from('daily_reports')
+        .update(reportPayload)
+        .eq('id', editingReportId)
+        .eq('project_id', projectId)
+        .select('id')
+        .single()
+
+      if (reportError || !data) {
+        setError(reportError?.message || 'Failed to update report')
+        setSaving(false)
+        return
+      }
+      report = data
+
+      await supabase.from('report_labour').delete().eq('report_id', report.id)
+      await supabase.from('report_plant').delete().eq('report_id', report.id)
+    } else {
+      const { data, error: reportError } = await supabase
+        .from('daily_reports')
+        .insert(reportPayload)
+        .select('id')
+        .single()
+
+      if (reportError || !data) {
+        setError(reportError?.message || 'Failed to create report')
+        setSaving(false)
+        return
+      }
+      report = data
     }
 
     const labourPayload = labourRows
@@ -506,9 +701,35 @@ export default function SiteDiaryPage() {
     }
 
     const sequenced = resequencePhotos(photos)
+    const keptStoragePaths = sequenced
+      .filter((p) => !p.file && p.storagePath)
+      .map((p) => p.storagePath)
+
+    if (editingReportId) {
+      const { data: existingPhotoRows } = await supabase
+        .from('report_photos')
+        .select('id, url')
+        .eq('report_id', report.id)
+
+      const toRemove = (existingPhotoRows || []).filter((row) => !keptStoragePaths.includes(row.url))
+      if (toRemove.length > 0) {
+        const { error: deletePhotosError } = await supabase
+          .from('report_photos')
+          .delete()
+          .in('id', toRemove.map((row) => row.id))
+        if (deletePhotosError) {
+          setError(deletePhotosError.message)
+          setSaving(false)
+          return
+        }
+      }
+    }
+
     const photoRecords = []
 
     for (const photo of sequenced) {
+      if (!photo.file) continue
+
       const ext = photo.file.name.split('.').pop()?.toLowerCase() || 'jpg'
       const storagePath = `${user.id}/${report.id}/${photo.sequence_number}-${Date.now()}.${ext}`
 
@@ -539,7 +760,20 @@ export default function SiteDiaryPage() {
       }
     }
 
-    setSuccess('Site diary saved successfully')
+    // Keep captions/sequence in sync for existing kept photos
+    for (const photo of sequenced) {
+      if (photo.file || !photo.storagePath) continue
+      await supabase
+        .from('report_photos')
+        .update({
+          caption: photo.caption.trim() || null,
+          sequence: photo.sequence_number,
+        })
+        .eq('report_id', report.id)
+        .eq('url', photo.storagePath)
+    }
+
+    setSuccess(editingReportId ? 'Site diary updated successfully' : 'Site diary saved successfully')
     setSaving(false)
     setTimeout(() => router.push(`/dashboard/project/${projectId}`), 800)
   }
@@ -570,9 +804,14 @@ export default function SiteDiaryPage() {
           {success}
         </div>
       )}
-      {prefilledFromLast && (
+      {prefilledFromLast && !editingReportId && (
         <div style={{ background: `rgba(${DIARY_ACCENT}, 0.08)`, border: `1px solid rgba(${DIARY_ACCENT}, 0.25)`, color: '#F0EDE8', padding: '12px 14px', fontSize: 13, marginBottom: 16, borderRadius: 10, lineHeight: 1.5 }}>
           Standing crew, plant, weather and report details copied from your last report. Progress notes and work photos start blank — saving creates a new entry.
+        </div>
+      )}
+      {editingReportId && (
+        <div style={{ background: `rgba(${DIARY_ACCENT}, 0.08)`, border: `1px solid rgba(${DIARY_ACCENT}, 0.25)`, color: '#F0EDE8', padding: '12px 14px', fontSize: 13, marginBottom: 16, borderRadius: 10, lineHeight: 1.5 }}>
+          Editing an existing diary entry. Saving updates this record.
         </div>
       )}
 
@@ -647,29 +886,43 @@ export default function SiteDiaryPage() {
           )}
 
           <label style={labelStyle}>Signature</label>
-          {signature?.preview ? (
+          {(signatureMode === 'carried' || signatureMode === 'accepted') && signature?.preview ? (
             <div style={{ marginBottom: 0 }}>
               <img
                 src={signature.preview}
                 alt="Signature"
                 style={{ maxWidth: '100%', maxHeight: 120, objectFit: 'contain', borderRadius: 8, display: 'block', marginBottom: 10, background: '#fff', padding: 8 }}
               />
-              <button type="button" onClick={removeSignature} style={{ ...removeRowStyle, marginBottom: 0 }}>Remove signature</button>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                {signatureMode === 'carried' && (
+                  <button type="button" onClick={useExistingSignature} style={{ ...removeRowStyle, marginBottom: 0, color: '#9eb4c8' }}>
+                    Use Existing Signature
+                  </button>
+                )}
+                <button type="button" onClick={resignSignature} style={{ ...removeRowStyle, marginBottom: 0 }}>
+                  Re-sign / Clear
+                </button>
+              </div>
             </div>
           ) : (
-            <div
-              {...getSignatureRootProps()}
-              style={{
-                border: `2px dashed ${isSignatureDragActive ? `rgba(${DIARY_ACCENT}, 0.6)` : 'rgba(255,255,255,0.18)'}`,
-                borderRadius: 12,
-                padding: '20px 16px',
-                textAlign: 'center',
-                cursor: 'pointer',
-                background: isSignatureDragActive ? `rgba(${DIARY_ACCENT}, 0.08)` : 'rgba(255,255,255,0.03)',
-              }}
-            >
-              <input {...getSignatureInputProps()} />
-              <div style={{ fontSize: 13, color: '#7a92a8' }}>PNG signature upload</div>
+            <div style={{ marginBottom: 0 }}>
+              <canvas
+                ref={attachSignatureCanvas}
+                style={{
+                  touchAction: 'none',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  width: '100%',
+                  height: 120,
+                  display: 'block',
+                  borderRadius: 8,
+                  background: '#fff',
+                  marginBottom: 10,
+                }}
+              />
+              <button type="button" onClick={clearSignaturePad} style={{ ...removeRowStyle, marginBottom: 0 }}>
+                Clear
+              </button>
             </div>
           )}
         </GlassSection>
@@ -907,7 +1160,7 @@ export default function SiteDiaryPage() {
         </GlassSection>
 
         <button type="submit" disabled={saving} style={primaryButtonStyle(DIARY_ACCENT, saving)}>
-          {saving ? 'Saving…' : 'Save site diary'}
+          {saving ? 'Saving…' : (editingReportId ? 'Save changes' : 'Save site diary')}
         </button>
       </form>
     </PremiumShell>

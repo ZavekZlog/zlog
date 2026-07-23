@@ -150,7 +150,19 @@ export default function DashboardPage() {
               </div>
             ) : (
               diaries.map((d) => (
-                <div key={d.id} style={{ background: 'var(--plate)', border: '1px solid var(--edge)', borderRadius: '12px', padding: '16px', marginBottom: '12px' }}>
+                <div
+                  key={d.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => router.push(`/dashboard/project/${project.id}/diary?report=${d.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      router.push(`/dashboard/project/${project.id}/diary?report=${d.id}`)
+                    }
+                  }}
+                  style={{ background: 'var(--plate)', border: '1px solid var(--edge)', borderRadius: '12px', padding: '16px', marginBottom: '12px', cursor: 'pointer' }}
+                >
                   <div style={{ fontWeight: '600', color: 'var(--text)' }}>{d.report_date}</div>
                   <div style={{ color: 'var(--text-2)', fontSize: '13px', marginTop: '4px' }}>{d.site_summary?.slice(0, 100)}{(d.site_summary?.length || 0) > 100 ? '...' : ''}</div>
                 </div>
