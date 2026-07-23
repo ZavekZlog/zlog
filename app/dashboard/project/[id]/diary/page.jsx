@@ -18,8 +18,21 @@ import {
 
 const SHIFT_OPTIONS = ['Day', 'Night', 'Weekend', 'Half day']
 
+const makeUuid = () => {
+  const c = globalThis.crypto;
+  if (c?.randomUUID) return c.randomUUID();
+  if (c?.getRandomValues) {
+    const b = c.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+    return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+  }
+  return `${Date.now().toString(16)}-4000-8000-${Math.random().toString(16).slice(2, 14)}`;
+};
+
 const emptyLabour = () => ({
-  key: crypto.randomUUID(),
+  key: makeUuid(),
   trade: '',
   company: '',
   headcount: '',
@@ -28,7 +41,7 @@ const emptyLabour = () => ({
 })
 
 const emptyPlant = () => ({
-  key: crypto.randomUUID(),
+  key: makeUuid(),
   plant_type: '',
   quantity: '',
   hours: '',
@@ -82,7 +95,7 @@ function resequencePhotos(photos) {
 
 function labourFromDbRow(row) {
   return {
-    key: crypto.randomUUID(),
+    key: makeUuid(),
     trade: row.trade ?? '',
     company: row.company ?? '',
     headcount: row.count != null ? String(row.count) : '',
@@ -93,7 +106,7 @@ function labourFromDbRow(row) {
 
 function plantFromDbRow(row) {
   return {
-    key: crypto.randomUUID(),
+    key: makeUuid(),
     plant_type: row.item ?? '',
     quantity: row.ref != null ? String(row.ref) : '',
     hours: row.status != null ? String(row.status) : '',
@@ -246,7 +259,7 @@ export default function SiteDiaryPage() {
 
   const onDrop = useCallback((accepted) => {
     const next = accepted.map((file) => ({
-      key: crypto.randomUUID(),
+      key: makeUuid(),
       file,
       preview: URL.createObjectURL(file),
       caption: '',
@@ -394,7 +407,7 @@ export default function SiteDiaryPage() {
       return
     }
 
-    const pendingId = crypto.randomUUID()
+    const pendingId = makeUuid()
     let coverPhotoUrl = coverPhoto?.storagePath || null
     let signatureUrl = signature?.storagePath || null
 
