@@ -17,6 +17,10 @@ import {
   premiumScopedCss,
 } from '@/lib/premium-ui'
 import { REPORT_THEMES } from '@/lib/report-theme'
+import {
+  labourAggregateTotals,
+} from '@/lib/labour-from-register'
+import { fileToVisionDataUrl, parseSignInSheetImage } from '@/lib/parse-signin-sheet'
 import { BrandingSelector, brandingPayload } from '@/components/branding/BrandingSelector'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
 
@@ -198,6 +202,10 @@ const carriedFieldNoteStyle = {
   letterSpacing: '0.04em',
 }
 
+function labourRowHasData(row) {
+  return Boolean(row.trade.trim() || row.company.trim() || row.headcount || row.hours || row.notes.trim())
+}
+
 async function signedUrlForPath(supabase, path) {
   if (!path) return null
   const { data } = await supabase.storage.from('site-photos').createSignedUrl(path, 3600)
@@ -226,6 +234,12 @@ export default function SiteDiaryPage() {
   const [shiftType, setShiftType] = useState('Day')
   const [siteSummary, setSiteSummary] = useState('')
   const [labourRows, setLabourRows] = useState([emptyLabour()])
+  const [labourMode, setLabourMode] = useState('manual') // 'scan' | 'manual'
+  const [labourGroupBy, setLabourGroupBy] = useState('trade_company')
+  const [scanLoading, setScanLoading] = useState(false)
+  const [scanError, setScanError] = useState('')
+  const [scanMeta, setScanMeta] = useState({ matched: 0, ignored: 0 })
+  const [scanSheetPreview, setScanSheetPreview] = useState(null)
   const [plantRows, setPlantRows] = useState([emptyPlant()])
   const [equipmentHireRows, setEquipmentHireRows] = useState([emptyEquipmentHire()])
   const [visitors, setVisitors] = useState('')
@@ -601,6 +615,8 @@ export default function SiteDiaryPage() {
   coverPhotoRef.current = coverPhoto
   const signatureRef = useRef(signature)
   signatureRef.current = signature
+  const scanSheetPreviewRef = useRef(scanSheetPreview)
+  scanSheetPreviewRef.current = scanSheetPreview
   useEffect(() => () => {
     photosRef.current.forEach((p) => {
       if (p.preview) URL.revokeObjectURL(p.preview)
@@ -611,6 +627,9 @@ export default function SiteDiaryPage() {
     if (signatureRef.current?.file && signatureRef.current.preview) {
       URL.revokeObjectURL(signatureRef.current.preview)
     }
+    if (scanSheetPreviewRef.current) {
+      URL.revokeObjectURL(scanSheetPreviewRef.current)
+    }
   }, [])
 
   const projectSubtitle = useMemo(() => {
@@ -618,6 +637,69 @@ export default function SiteDiaryPage() {
     const parts = [project.client_name, project.site_address].filter(Boolean)
     return parts.join(' · ')
   }, [project])
+
+  const labourTotals = useMemo(() => labourAggregateTotals(labourRows), [labourRows])
+
+  const clearScanPreview = useCallback(() => {
+    setScanSheetPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+  }, [])
+
+  const handleSignInSheetFiles = useCallback(async (files) => {
+    const file = files?.[0]
+    if (!file) return
+    if (!reportDate) {
+      setScanError('Set the report date before scanning a sign-in sheet.')
+      return
+    }
+
+    setLabourMode('scan')
+    setScanLoading(true)
+    setScanError('')
+    clearScanPreview()
+    setScanSheetPreview(URL.createObjectURL(file))
+
+    try {
+      const dataUrl = await fileToVisionDataUrl(file)
+      const result = await parseSignInSheetImage({
+        dataUrl,
+        reportDate,
+        groupBy: labourGroupBy,
+      })
+
+      setScanMeta({
+        matched: result.matchedCount || 0,
+        ignored: result.ignoredCount || 0,
+      })
+
+      const nextRows = (result.labour || []).map((row) => ({
+        key: makeUuid(),
+        trade: row.trade ?? '',
+        company: row.company ?? '',
+        headcount: row.headcount != null ? String(row.headcount) : '',
+        hours: row.hours != null ? String(row.hours) : '',
+        notes: row.notes ?? '',
+      }))
+      setLabourRows(nextRows.length > 0 ? nextRows : [emptyLabour()])
+      if (!nextRows.length) {
+        setScanError(`No rows matched report date ${reportDate}. Other dates on the sheet were ignored.`)
+      }
+    } catch (err) {
+      setScanError(err?.message || 'Failed to scan sign-in sheet')
+      setScanMeta({ matched: 0, ignored: 0 })
+    }
+    setScanLoading(false)
+  }, [reportDate, labourGroupBy, clearScanPreview])
+
+  const startManualLabour = useCallback(() => {
+    setLabourMode('manual')
+    setScanError('')
+    setScanMeta({ matched: 0, ignored: 0 })
+    clearScanPreview()
+    setLabourRows((rows) => (rows.some(labourRowHasData) ? rows : [emptyLabour()]))
+  }, [clearScanPreview])
 
   const updateLabour = (key, field, value) => {
     setLabourRows((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)))
@@ -658,8 +740,7 @@ export default function SiteDiaryPage() {
     setCoverPhoto(null)
   }
 
-  const labourHasData = (row) =>
-    row.trade.trim() || row.company.trim() || row.headcount || row.hours || row.notes.trim()
+  const labourHasData = labourRowHasData
 
   const plantHasData = (row) =>
     row.plant_type.trim() || row.quantity || row.hours || row.notes.trim()
@@ -1092,35 +1173,202 @@ export default function SiteDiaryPage() {
         </GlassSection>
 
         <GlassSection title="Labour" accent={DIARY_ACCENT}>
-          {labourRows.map((row) => (
-            <div key={row.key} style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-              {labourRows.length > 1 && (
-                <button type="button" style={removeRowStyle} onClick={() => setLabourRows((rows) => rows.filter((r) => r.key !== row.key))}>
-                  Remove row
-                </button>
-              )}
-              <div style={rowGridStyle}>
-                <div>
-                  <label style={{ ...labelStyle, fontSize: 10 }}>Trade</label>
-                  <input style={cellInputStyle} value={row.trade} onChange={(e) => updateLabour(row.key, 'trade', e.target.value)} placeholder="Carpenter" />
-                </div>
-                <div>
-                  <label style={{ ...labelStyle, fontSize: 10 }}>Company</label>
-                  <input style={cellInputStyle} value={row.company} onChange={(e) => updateLabour(row.key, 'company', e.target.value)} placeholder="Subco Ltd" />
-                </div>
-                <div>
-                  <label style={{ ...labelStyle, fontSize: 10 }}>Headcount</label>
-                  <input type="number" min="0" style={cellInputStyle} value={row.headcount} onChange={(e) => updateLabour(row.key, 'headcount', e.target.value)} placeholder="4" />
-                </div>
-                <div>
-                  <label style={{ ...labelStyle, fontSize: 10 }}>Hours</label>
-                  <input type="number" min="0" step="0.5" style={cellInputStyle} value={row.hours} onChange={(e) => updateLabour(row.key, 'hours', e.target.value)} placeholder="8" />
-                </div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+              gap: 10,
+              marginBottom: 14,
+            }}
+          >
+            <button
+              type="button"
+              className="zlog-secondary-btn"
+              onClick={() => {
+                setLabourMode('scan')
+                setScanError('')
+              }}
+              style={{
+                ...addRowButtonStyle,
+                textTransform: 'none',
+                letterSpacing: '0.02em',
+                borderStyle: labourMode === 'scan' ? 'solid' : 'dashed',
+                borderColor: labourMode === 'scan' ? `rgba(${DIARY_ACCENT}, 0.55)` : 'var(--edge)',
+                color: 'var(--text)',
+                boxShadow: labourMode === 'scan' ? `0 0 0 1px rgba(${DIARY_ACCENT}, 0.25)` : undefined,
+              }}
+            >
+              Scan Sign-In Sheet (Camera/Upload)
+            </button>
+            <button
+              type="button"
+              className="zlog-secondary-btn"
+              onClick={startManualLabour}
+              style={{
+                ...addRowButtonStyle,
+                textTransform: 'none',
+                letterSpacing: '0.02em',
+                borderStyle: labourMode === 'manual' ? 'solid' : 'dashed',
+                borderColor: labourMode === 'manual' ? `rgba(${DIARY_ACCENT}, 0.55)` : 'var(--edge)',
+                color: 'var(--text)',
+                boxShadow: labourMode === 'manual' ? `0 0 0 1px rgba(${DIARY_ACCENT}, 0.25)` : undefined,
+              }}
+            >
+              Manual Entry
+            </button>
+          </div>
+
+          {labourMode === 'scan' && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+                <label style={{ ...labelStyle, marginBottom: 0, fontSize: 10 }}>Aggregate by</label>
+                <select
+                  value={labourGroupBy}
+                  onChange={(e) => setLabourGroupBy(e.target.value)}
+                  style={{ ...cellInputStyle, width: 'auto', minWidth: 180, marginBottom: 0 }}
+                  disabled={scanLoading}
+                >
+                  <option value="trade_company">Trade + company</option>
+                  <option value="trade">Trade</option>
+                  <option value="company">Company / subcontractor</option>
+                </select>
               </div>
-              <label style={{ ...labelStyle, fontSize: 10 }}>Notes</label>
-              <input style={{ ...cellInputStyle, width: '100%' }} value={row.notes} onChange={(e) => updateLabour(row.key, 'notes', e.target.value)} placeholder="Optional notes" />
+              <ImageSourceButtons
+                onFiles={handleSignInSheetFiles}
+                disabled={scanLoading}
+                cameraLabel="Scan with camera"
+                galleryLabel="Upload sheet photo"
+                hint={`Only rows matching report date ${reportDate} are kept. Other days on the sheet are ignored.`}
+              />
+              {scanLoading && (
+                <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--text-2)' }}>
+                  Reading sign-in sheet…
+                </p>
+              )}
+              {scanSheetPreview && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={scanSheetPreview}
+                  alt="Sign-in sheet preview"
+                  style={{
+                    marginTop: 12,
+                    width: '100%',
+                    maxHeight: 180,
+                    objectFit: 'cover',
+                    borderRadius: 10,
+                    border: '1px solid var(--edge)',
+                  }}
+                />
+              )}
+              {scanError && (
+                <p style={{ margin: '12px 0 0', fontSize: 13, color: '#ff6b6b' }}>{scanError}</p>
+              )}
+              {!scanLoading && (scanMeta.matched > 0 || scanMeta.ignored > 0) && !scanError && (
+                <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--text-2)' }}>
+                  Imported {scanMeta.matched} matching sign-in{scanMeta.matched === 1 ? '' : 's'}
+                  {scanMeta.ignored > 0 ? ` · ignored ${scanMeta.ignored} from other dates` : ''}.
+                </p>
+              )}
             </div>
-          ))}
+          )}
+
+          <div
+            style={{
+              marginBottom: 12,
+              border: '1px solid var(--edge)',
+              borderRadius: 10,
+              overflow: 'hidden',
+              background: 'var(--plate)',
+            }}
+          >
+            <div
+              style={{
+                padding: '10px 12px',
+                borderBottom: '1px solid var(--edge)',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 8,
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                Labour summary · {reportDate}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                {labourTotals.operatives} operatives · {labourTotals.hours} hrs
+              </div>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 480 }}>
+                <thead>
+                  <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
+                    <th style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--text-2)', fontWeight: 600 }}>Trade</th>
+                    <th style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--text-2)', fontWeight: 600 }}>Company</th>
+                    <th style={{ textAlign: 'right', padding: '8px 10px', color: 'var(--text-2)', fontWeight: 600, width: 88 }}>Ops</th>
+                    <th style={{ textAlign: 'right', padding: '8px 10px', color: 'var(--text-2)', fontWeight: 600, width: 88 }}>Hours</th>
+                    <th style={{ width: 44 }} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {labourRows.map((row) => (
+                    <tr key={row.key} style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                      <td style={{ padding: '6px 8px' }}>
+                        <input
+                          style={{ ...cellInputStyle, marginBottom: 0, width: '100%' }}
+                          value={row.trade}
+                          onChange={(e) => updateLabour(row.key, 'trade', e.target.value)}
+                          placeholder="Carpenter"
+                        />
+                      </td>
+                      <td style={{ padding: '6px 8px' }}>
+                        <input
+                          style={{ ...cellInputStyle, marginBottom: 0, width: '100%' }}
+                          value={row.company}
+                          onChange={(e) => updateLabour(row.key, 'company', e.target.value)}
+                          placeholder="Subco Ltd"
+                        />
+                      </td>
+                      <td style={{ padding: '6px 8px' }}>
+                        <input
+                          type="number"
+                          min="0"
+                          style={{ ...cellInputStyle, marginBottom: 0, width: '100%', textAlign: 'right' }}
+                          value={row.headcount}
+                          onChange={(e) => updateLabour(row.key, 'headcount', e.target.value)}
+                          placeholder="4"
+                        />
+                      </td>
+                      <td style={{ padding: '6px 8px' }}>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          style={{ ...cellInputStyle, marginBottom: 0, width: '100%', textAlign: 'right' }}
+                          value={row.hours}
+                          onChange={(e) => updateLabour(row.key, 'hours', e.target.value)}
+                          placeholder="8"
+                        />
+                      </td>
+                      <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                        {labourRows.length > 1 && (
+                          <button
+                            type="button"
+                            style={{ ...removeRowStyle, marginBottom: 0, padding: '4px 6px' }}
+                            onClick={() => setLabourRows((rows) => rows.filter((r) => r.key !== row.key))}
+                            aria-label="Remove labour row"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <button type="button" style={addRowButtonStyle} onClick={() => setLabourRows((rows) => [...rows, emptyLabour()])}>
             + Add labour row
           </button>

@@ -136,6 +136,16 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica',
     marginTop: 4,
   },
+  colTrade: { width: '32%' },
+  colCompany: { width: '32%' },
+  colOps: { width: '18%' },
+  colHours: { width: '18%' },
+  labourTotals: {
+    marginTop: 6,
+    fontSize: 9,
+    fontFamily: 'Helvetica',
+    color: '#444',
+  },
   // Signature / declaration page
   signTitle: {
     marginBottom: 12,
@@ -326,6 +336,75 @@ function GridPages({
   })
 }
 
+function LabourTable({ items = [], brandColor = '#FF5000' }) {
+  const borderColor = brandColor || '#FF5000'
+  const rows = Array.isArray(items)
+    ? items.filter(
+        (i) =>
+          i &&
+          (String(i.trade || '').trim() ||
+            String(i.company || '').trim() ||
+            (i.headcount != null && i.headcount !== '') ||
+            (i.count != null && i.count !== '') ||
+            (i.hours != null && i.hours !== '')),
+      )
+    : []
+
+  let operatives = 0
+  let hours = 0
+  for (const row of rows) {
+    const hc = Number(row.headcount ?? row.count ?? 0)
+    const h = Number(row.hours ?? 0)
+    if (Number.isFinite(hc)) operatives += hc
+    if (Number.isFinite(h)) hours += h
+  }
+
+  return (
+    <View>
+      <Text style={[styles.hireSectionTitle, { color: borderColor }]}>LABOUR</Text>
+      {rows.length === 0 ? (
+        <Text style={styles.hireEmpty}>No labour recorded.</Text>
+      ) : (
+        <>
+          <View style={[styles.hireTable, { borderColor }]}>
+            <View style={[styles.hireHeaderRow, { backgroundColor: borderColor, borderBottomColor: borderColor }]}>
+              <Text style={[styles.hireHeaderCell, styles.colTrade]}>Trade</Text>
+              <Text style={[styles.hireHeaderCell, styles.colCompany]}>Company</Text>
+              <Text style={[styles.hireHeaderCell, styles.colOps]}>Operatives</Text>
+              <Text style={[styles.hireHeaderCell, styles.colHours]}>Hours</Text>
+            </View>
+            {rows.map((item, index) => (
+              <View
+                key={`labour-${index}`}
+                style={[
+                  styles.hireRow,
+                  index === rows.length - 1 ? { borderBottomWidth: 0 } : null,
+                ]}
+              >
+                <Text style={[styles.hireCell, styles.colTrade]}>{item.trade || '—'}</Text>
+                <Text style={[styles.hireCell, styles.colCompany]}>{item.company || '—'}</Text>
+                <Text style={[styles.hireCell, styles.colOps]}>
+                  {item.headcount != null && item.headcount !== ''
+                    ? String(item.headcount)
+                    : item.count != null && item.count !== ''
+                      ? String(item.count)
+                      : '—'}
+                </Text>
+                <Text style={[styles.hireCell, styles.colHours]}>
+                  {item.hours != null && item.hours !== '' ? String(item.hours) : '—'}
+                </Text>
+              </View>
+            ))}
+          </View>
+          <Text style={styles.labourTotals}>
+            Totals: {operatives} operative{operatives === 1 ? '' : 's'} · {Math.round(hours * 100) / 100} hours
+          </Text>
+        </>
+      )}
+    </View>
+  )
+}
+
 function EquipmentHireTable({ items = [], brandColor = '#FF5000' }) {
   const borderColor = brandColor || '#FF5000'
   const rows = Array.isArray(items)
@@ -423,6 +502,7 @@ function SignaturePage({
  * full (1/page), grid4 (2×2), grid6 (3×2), then declaration/signature.
  *
  * photos: [{ key?, src|preview|url, caption, layout: 'full'|'grid4'|'grid6' }]
+ * labour: [{ trade, company, headcount|count, hours }]
  * equipmentHire: [{ description, supplier, quantity, status }]
  */
 export function DiaryPdfDocument({
@@ -433,6 +513,7 @@ export function DiaryPdfDocument({
   logoUrl,
   companyName,
   photos = [],
+  labour = [],
   equipmentHire = [],
   authorName = '',
   authorRole = '',
@@ -460,6 +541,7 @@ export function DiaryPdfDocument({
         {companyName ? <Text style={styles.meta}>Prepared for: {companyName}</Text> : null}
         <Text style={styles.section}>Site summary</Text>
         <Text style={styles.body}>{siteSummary || '—'}</Text>
+        <LabourTable items={labour} brandColor={brandColor} />
         <EquipmentHireTable items={equipmentHire} brandColor={brandColor} />
       </Page>
 
