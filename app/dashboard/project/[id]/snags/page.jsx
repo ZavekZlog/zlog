@@ -2,7 +2,20 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
+import { BrandingSelector, brandingPayload } from '@/components/branding/BrandingSelector'
+import {
+  PremiumShell,
+  GlassSection,
+  PrimaryCTA,
+  SecondaryButton,
+  RecentEntryCard,
+  inputStyle,
+  labelStyle,
+} from '@/lib/premium-ui'
+import { REPORT_THEMES, formatProjectMeta } from '@/lib/report-theme'
+
+const SNAG_THEME = REPORT_THEMES.snag
 
 export default function SnagList() {
   const [snags, setSnags] = useState([])
@@ -11,11 +24,69 @@ export default function SnagList() {
   const [description, setDescription] = useState('')
   const [location, setLocation] = useState('')
   const [saving, setSaving] = useState(false)
+  const [duplicatedFromSnag, setDuplicatedFromSnag] = useState(false)
+  const [brandingSelection, setBrandingSelection] = useState(null)
+  const [error, setError] = useState('')
+  const [project, setProject] = useState(null)
   const supabase = createClient()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { id } = useParams()
+  const duplicateSnagId = searchParams.get('duplicate') || null
 
-  useEffect(() => { fetchSnags() }, [])
+  useEffect(() => {
+    fetchSnags()
+  }, [id])
+
+  useEffect(() => {
+    const loadProject = async () => {
+      const { data: proj } = await supabase
+        .from('projects')
+        .select('name, client_name, site_address')
+        .eq('id', id)
+        .single()
+      setProject(proj)
+    }
+    loadProject()
+  }, [id])
+
+  useEffect(() => {
+    const loadDuplicate = async () => {
+      if (!duplicateSnagId) {
+        setDuplicatedFromSnag(false)
+        return
+      }
+
+      setError('')
+      const { data: source, error: sourceError } = await supabase
+        .from('snags')
+        .select('*')
+        .eq('id', duplicateSnagId)
+        .eq('project_id', id)
+        .maybeSingle()
+
+      if (sourceError || !source) {
+        setError(sourceError?.message || 'Snag not found')
+        setDuplicatedFromSnag(false)
+        return
+      }
+
+      setDescription(source.description ?? '')
+      setLocation(source.location ?? '')
+      setShowForm(true)
+      setDuplicatedFromSnag(true)
+      if (source.branding_id || source.brand_color || source.brand_logo_url) {
+        setBrandingSelection({
+          brandingId: source.branding_id || null,
+          brandColor: source.brand_color || '#FF5000',
+          brandLogoUrl: source.brand_logo_url || null,
+          companyName: '',
+        })
+      }
+    }
+
+    loadDuplicate()
+  }, [duplicateSnagId, id])
 
   const fetchSnags = async () => {
     const { data } = await supabase.from('snags').select('*').eq('project_id', id).order('created_at', { ascending: false })
@@ -23,20 +94,53 @@ export default function SnagList() {
     setLoading(false)
   }
 
-  const handleSave = async () => {
-    if (!description.trim()) return
-    setSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('snags').insert({
-      project_id: id,
-      user_id: user.id,
-      description: description.trim(),
-      location: location.trim()
-    })
+  const clearForm = () => {
     setDescription('')
     setLocation('')
     setShowForm(false)
+    setDuplicatedFromSnag(false)
+    setBrandingSelection(null)
+    setError('')
+    if (duplicateSnagId) {
+      router.replace(`/dashboard/project/${id}/snags`)
+    }
+  }
+
+  const handleSave = async () => {
+    if (!description.trim()) return
+    setSaving(true)
+    setError('')
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setError('You must be signed in to save a snag')
+      setSaving(false)
+      return
+    }
+
+    const { error: insertError } = await supabase.from('snags').insert({
+      project_id: id,
+      user_id: user.id,
+      description: description.trim(),
+      location: location.trim() || null,
+      status: 'open',
+      ...brandingPayload(brandingSelection),
+    })
+
+    if (insertError) {
+      setError(insertError.message)
+      setSaving(false)
+      return
+    }
+
+    setDescription('')
+    setLocation('')
+    setShowForm(false)
+    setDuplicatedFromSnag(false)
+    setBrandingSelection(null)
     setSaving(false)
+    if (duplicateSnagId) {
+      router.replace(`/dashboard/project/${id}/snags`)
+    }
     fetchSnags()
   }
 
@@ -46,56 +150,142 @@ export default function SnagList() {
     fetchSnags()
   }
 
-  if (loading) return <div style={{ background: '#0a0a0a', color: '#fff', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>
+  const openDuplicate = (snagId) => {
+    router.push(`/dashboard/project/${id}/snags?duplicate=${snagId}`)
+  }
+
+  if (loading) {
+    return (
+      <PremiumShell
+        title={SNAG_THEME.title}
+        reportName="Loading…"
+        backHref="/dashboard"
+        accent={SNAG_THEME.accent}
+      >
+        <p style={{ color: 'var(--text-2)' }}>Loading…</p>
+      </PremiumShell>
+    )
+  }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#fff', fontFamily: 'sans-serif' }}>
-      <div style={{ background: '#111', borderBottom: '1px solid #222', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button onClick={() => router.back()} style={{ background: 'transparent', border: 'none', color: '#888', fontSize: '20px', cursor: 'pointer' }}>←</button>
-          <div style={{ fontSize: '18px', fontWeight: '700' }}>Snag List</div>
+    <PremiumShell
+      title={SNAG_THEME.title}
+      reportName={project?.name || 'Snag list'}
+      meta={formatProjectMeta(project)}
+      backHref="/dashboard"
+      accent={SNAG_THEME.accent}
+      trailing={
+        <SecondaryButton
+          type="button"
+          onClick={() => {
+            if (showForm) clearForm()
+            else {
+              setShowForm(true)
+              setDuplicatedFromSnag(false)
+            }
+          }}
+          style={{ flexShrink: 0 }}
+        >
+          {showForm ? 'Cancel' : '+ Add'}
+        </SecondaryButton>
+      }
+    >
+      {error && (
+        <div style={{ background: 'rgba(220,50,50,0.1)', border: '1px solid rgba(220,50,50,0.3)', color: '#ff6b6b', padding: '12px 14px', fontSize: 14, marginBottom: 16, borderRadius: 10 }}>
+          {error}
         </div>
-        <button onClick={() => setShowForm(!showForm)}
-          style={{ background: '#3b82f6', border: 'none', color: '#fff', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>
-          + Add
-        </button>
-      </div>
+      )}
 
-      <div style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
-        {showForm && (
-          <div style={{ background: '#111', border: '1px solid #333', borderRadius: '10px', padding: '20px', marginBottom: '24px' }}>
-            <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Describe the snag..."
-              style={{ width: '100%', padding: '12px', background: '#0a0a0a', border: '1px solid #333', borderRadius: '8px', color: '#fff', fontSize: '14px', marginBottom: '12px', boxSizing: 'border-box' }} />
-            <input value={location} onChange={e => setLocation(e.target.value)} placeholder="Location (e.g. 1st floor bathroom)"
-              style={{ width: '100%', padding: '12px', background: '#0a0a0a', border: '1px solid #333', borderRadius: '8px', color: '#fff', fontSize: '14px', marginBottom: '12px', boxSizing: 'border-box' }} />
-            <button onClick={handleSave} disabled={saving}
-              style={{ width: '100%', padding: '12px', background: '#3b82f6', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: '700', cursor: 'pointer' }}>
-              {saving ? 'Saving...' : 'SAVE SNAG'}
-            </button>
+      {showForm && (
+        <GlassSection title={duplicatedFromSnag ? 'Duplicate snag' : 'New snag'} accent={SNAG_THEME.accent}>
+          {duplicatedFromSnag && (
+            <div style={{ background: `rgba(${SNAG_THEME.accent}, 0.1)`, border: `1px solid rgba(${SNAG_THEME.accent}, 0.35)`, color: 'var(--text)', padding: '10px 12px', fontSize: 13, marginBottom: 14, borderRadius: 8, lineHeight: 1.5 }}>
+              Duplicated from an existing snag — saving creates a new independent entry.
+            </div>
+          )}
+          <div style={{ marginBottom: 16 }}>
+            <BrandingSelector
+              value={brandingSelection}
+              onChange={setBrandingSelection}
+              accent={SNAG_THEME.accent}
+              autoSelectDefault={!duplicatedFromSnag}
+              compact
+            />
           </div>
-        )}
+          <label style={labelStyle}>Description</label>
+          <input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Describe the snag..."
+            style={inputStyle}
+          />
+          <label style={labelStyle}>Location</label>
+          <input
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="Location (e.g. 1st floor bathroom)"
+            style={{ ...inputStyle, marginBottom: 16 }}
+          />
+          <PrimaryCTA onClick={handleSave} disabled={saving} accent={SNAG_THEME.accent}>
+            {saving ? 'Saving…' : (duplicatedFromSnag ? 'Save duplicate snag' : 'Save snag')}
+          </PrimaryCTA>
+        </GlassSection>
+      )}
 
-        {snags.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#555' }}>
-            <div style={{ fontSize: '40px', marginBottom: '12px' }}>⚠️</div>
-            <p>No snags logged yet</p>
-          </div>
-        ) : (
-          snags.map(s => (
-            <div key={s.id} onClick={() => toggleStatus(s)}
-              style={{ background: '#111', border: `1px solid ${s.status === 'resolved' ? '#14532d' : '#7f1d1d'}`, borderRadius: '10px', padding: '16px', marginBottom: '12px', cursor: 'pointer' }}>
+      {snags.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-2)' }}>
+          <div style={{ fontSize: '40px', marginBottom: '12px' }}>⚠️</div>
+          <p>No snags logged yet</p>
+        </div>
+      ) : (
+        snags.map((s) => (
+          <RecentEntryCard key={s.id} accent={SNAG_THEME.accent}>
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => toggleStatus(s)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  toggleStatus(s)
+                }
+              }}
+              style={{ cursor: 'pointer' }}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ fontWeight: '600', fontSize: '15px' }}>{s.description}</div>
-                <span style={{ fontSize: '11px', background: s.status === 'resolved' ? '#14532d' : '#7f1d1d', color: s.status === 'resolved' ? '#4ade80' : '#fca5a5', padding: '2px 8px', borderRadius: '20px', marginLeft: '8px', whiteSpace: 'nowrap' }}>
+                <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)' }}>{s.description}</div>
+                <span
+                  style={{
+                    fontSize: 11,
+                    background: s.status === 'resolved' ? 'rgba(34,197,94,0.18)' : 'rgba(229,72,77,0.18)',
+                    color: s.status === 'resolved' ? '#4ade80' : '#fca5a5',
+                    border: `1px solid ${s.status === 'resolved' ? 'rgba(34,197,94,0.35)' : 'rgba(229,72,77,0.35)'}`,
+                    padding: '2px 8px',
+                    borderRadius: 20,
+                    marginLeft: 8,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
                   {s.status}
                 </span>
               </div>
-              {s.location && <div style={{ color: '#666', fontSize: '13px', marginTop: '4px' }}>📍 {s.location}</div>}
-              <div style={{ color: '#444', fontSize: '11px', marginTop: '8px' }}>Tap to toggle status</div>
+              {s.location && <div style={{ color: 'var(--text-2)', fontSize: 13, marginTop: 4 }}>📍 {s.location}</div>}
+              <div style={{ color: 'var(--text-2)', fontSize: 11, marginTop: 8, opacity: 0.8 }}>Tap to toggle status</div>
             </div>
-          ))
-        )}
-      </div>
-    </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+              <SecondaryButton
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openDuplicate(s.id)
+                }}
+              >
+                Duplicate
+              </SecondaryButton>
+            </div>
+          </RecentEntryCard>
+        ))
+      )}
+    </PremiumShell>
   )
 }

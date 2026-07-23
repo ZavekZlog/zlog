@@ -10,11 +10,12 @@ import {
   labelStyle,
   inputStyle,
   textareaStyle,
-  primaryButtonStyle,
+  PrimaryCTA,
   DIARY_ACCENT,
   pageBackground,
   premiumScopedCss,
 } from '@/lib/premium-ui'
+import { REPORT_THEMES } from '@/lib/report-theme'
 import { BrandingSelector, brandingPayload } from '@/components/branding/BrandingSelector'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
 
@@ -101,24 +102,26 @@ const cellInputStyle = {
 }
 
 const addRowButtonStyle = {
-  background: 'rgba(255, 255, 255, 0.06)',
-  border: '1px dashed rgba(255, 255, 255, 0.2)',
-  borderRadius: 10,
-  color: '#9eb4c8',
+  background: 'var(--plate)',
+  border: '1px dashed var(--edge)',
+  borderRadius: 12,
+  color: 'var(--text-2)',
   padding: '10px 14px',
   fontSize: 13,
-  fontWeight: 600,
+  fontWeight: 500,
   cursor: 'pointer',
   width: '100%',
-  letterSpacing: '0.06em',
+  letterSpacing: '0.04em',
   textTransform: 'uppercase',
+  boxShadow: 'inset 0 1px 0 var(--edge-highlight)',
 }
 
 const removeRowStyle = {
   background: 'transparent',
   border: 'none',
-  color: '#ff6b6b',
+  color: 'color-mix(in srgb, var(--danger) 72%, var(--text))',
   fontSize: 12,
+  fontWeight: 500,
   cursor: 'pointer',
   padding: '4px 0',
   marginBottom: 8,
@@ -902,9 +905,11 @@ export default function SiteDiaryPage() {
 
   return (
     <PremiumShell
-      title="Site Diary Report"
-      subtitle={project?.name || 'Daily site record'}
+      title={REPORT_THEMES.diary.title}
+      reportName={project?.name || 'Daily site record'}
+      meta={projectSubtitle}
       backHref="/dashboard"
+      accent={REPORT_THEMES.diary.accent}
       maxWidth={720}
     >
       {error && (
@@ -1350,9 +1355,9 @@ export default function SiteDiaryPage() {
           })}
         </GlassSection>
 
-        <button type="submit" disabled={saving} style={primaryButtonStyle(DIARY_ACCENT, saving)}>
+        <PrimaryCTA type="submit" disabled={saving} accent={REPORT_THEMES.diary.accent}>
           {saving ? 'Saving…' : (editingReportId ? 'Save changes' : 'Save site diary')}
-        </button>
+        </PrimaryCTA>
       </form>
     </PremiumShell>
   )

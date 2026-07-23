@@ -3,7 +3,14 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { PremiumBackButton, pageBackground, labelStyle } from '@/lib/premium-ui'
+import {
+  PremiumShell,
+  GlassSection,
+  PrimaryCTA,
+  labelStyle,
+  inputStyle,
+  DIARY_ACCENT,
+} from '@/lib/premium-ui'
 
 export default function NewProject() {
   const [name, setName] = useState('')
@@ -20,16 +27,15 @@ export default function NewProject() {
     if (!name.trim()) { setError('Project name is required'); return }
     setLoading(true)
     setError('')
-    const { data: { user } } = await supabase.auth.getUser()
-    const { error } = await supabase.from('projects').insert({
+    const { error: insertError } = await supabase.from('projects').insert({
       name: name.trim(),
       client_name: client.trim() || null,
       site_address: siteAddress.trim() || null,
       start_date: startDate || null,
       status,
     })
-    if (error) {
-      setError(error.message)
+    if (insertError) {
+      setError(insertError.message)
       setLoading(false)
     } else {
       router.push('/dashboard')
@@ -37,65 +43,64 @@ export default function NewProject() {
   }
 
   return (
-    <div className="dashboard-premium-bg" style={{ ...pageBackground, color: '#fff' }}>
-      <div
-        className="premium-shell-header"
-        style={{
-          background: 'transparent',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-          padding: '16px 24px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-        }}
-      >
-        <PremiumBackButton onClick={() => router.back()} />
-        <div style={{ fontSize: '18px', fontWeight: '700', color: '#FAFAF8' }}>New Project</div>
-      </div>
+    <PremiumShell
+      title="New project"
+      reportName="Create a site"
+      meta="Add a project before opening reports"
+      backHref="/dashboard"
+      accent={DIARY_ACCENT}
+      maxWidth={500}
+    >
+      {error && <p style={{ color: '#ef4444', marginBottom: 16, fontSize: 14 }}>{error}</p>}
 
-      <div style={{ padding: '24px', maxWidth: '500px', margin: '0 auto' }}>
-        {error && <p style={{ color: '#ef4444', marginBottom: '16px', fontSize: '14px' }}>{error}</p>}
-
-        <label style={{ display: 'block', color: '#888', fontSize: '12px', marginBottom: '6px' }}>PROJECT NAME *</label>
-        <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. 14 High Street Extension"
-          style={{ width: '100%', padding: '14px', background: '#111', border: '1px solid #333', borderRadius: '8px', color: '#fff', fontSize: '15px', marginBottom: '20px', boxSizing: 'border-box' }} />
+      <GlassSection title="Project details" accent={DIARY_ACCENT}>
+        <label style={labelStyle}>Project name *</label>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. 14 High Street Extension"
+          style={inputStyle}
+        />
 
         <label style={labelStyle}>Address</label>
         <input
           value={siteAddress}
-          onChange={e => setSiteAddress(e.target.value)}
+          onChange={(e) => setSiteAddress(e.target.value)}
           placeholder="e.g. 14 High Street, Manchester"
           style={inputStyle}
         />
 
-        <label style={{ display: 'block', color: '#888', fontSize: '12px', marginBottom: '6px' }}>CLIENT NAME</label>
-        <input value={client} onChange={e => setClient(e.target.value)} placeholder="e.g. Mr J Smith"
-          style={{ width: '100%', padding: '14px', background: '#111', border: '1px solid #333', borderRadius: '8px', color: '#fff', fontSize: '15px', marginBottom: '20px', boxSizing: 'border-box' }} />
+        <label style={labelStyle}>Client name</label>
+        <input
+          value={client}
+          onChange={(e) => setClient(e.target.value)}
+          placeholder="e.g. Mr J Smith"
+          style={inputStyle}
+        />
 
         <label style={labelStyle}>Start date</label>
         <input
           type="date"
           value={startDate}
-          onChange={e => setStartDate(e.target.value)}
+          onChange={(e) => setStartDate(e.target.value)}
           style={inputStyle}
         />
 
         <label style={labelStyle}>Status</label>
         <select
           value={status}
-          onChange={e => setStatus(e.target.value)}
-          style={{ ...inputStyle, marginBottom: '32px' }}
+          onChange={(e) => setStatus(e.target.value)}
+          style={{ ...inputStyle, marginBottom: 0 }}
         >
           <option value="active">Active</option>
           <option value="on-hold">On hold</option>
           <option value="complete">Complete</option>
         </select>
+      </GlassSection>
 
-        <button onClick={handleCreate} disabled={loading}
-          style={{ width: '100%', padding: '16px', background: '#3b82f6', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: '700', fontSize: '15px', cursor: 'pointer' }}>
-          {loading ? 'Creating...' : 'CREATE PROJECT'}
-        </button>
-      </div>
-    </div>
+      <PrimaryCTA onClick={handleCreate} disabled={loading}>
+        {loading ? 'Creating…' : 'Create project'}
+      </PrimaryCTA>
+    </PremiumShell>
   )
 }

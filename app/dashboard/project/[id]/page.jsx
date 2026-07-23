@@ -3,7 +3,16 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams } from 'next/navigation'
-import { PremiumBackButton, pageBackground, premiumScopedCss } from '@/lib/premium-ui'
+import {
+  PremiumShell,
+  ModuleHomeCard,
+  RecentEntryCard,
+  SecondaryButton,
+  dashboardCardInteractionCss,
+  premiumScopedCss,
+  typeTokens,
+} from '@/lib/premium-ui'
+import { REPORT_THEMES, formatProjectMeta } from '@/lib/report-theme'
 
 export default function ProjectPage() {
   const [project, setProject] = useState(null)
@@ -24,76 +33,79 @@ export default function ProjectPage() {
     load()
   }, [id])
 
-  if (loading) return <div style={{ background: '#0a0a0a', color: '#fff', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>
+  if (loading) {
+    return (
+      <PremiumShell title="Project" reportName="Loading…" backHref="/dashboard" accent={REPORT_THEMES.diary.accent}>
+        <p style={{ color: 'var(--text-2)' }}>Loading…</p>
+      </PremiumShell>
+    )
+  }
 
   return (
-    <div className="dashboard-premium-bg" style={pageBackground}>
-      <style>{premiumScopedCss}</style>
-      <div
-        className="premium-shell-header"
-        style={{
-          background: 'transparent',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-          padding: '16px 24px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-        }}
-      >
-        <PremiumBackButton onClick={() => router.push('/dashboard')} />
-        <div>
-          <div style={{ fontSize: '17px', fontWeight: '700', color: '#FAFAF8' }}>{project?.name}</div>
-          <div className="premium-shell-subtitle" style={{ fontSize: '12px', color: '#8ea2b5' }}>{project?.client_name} · {project?.site_address}</div>
+    <PremiumShell
+      title="Project"
+      reportName={project?.name || 'Project'}
+      meta={formatProjectMeta(project)}
+      backHref="/dashboard"
+      accent={REPORT_THEMES.diary.accent}
+    >
+      <style>{`${premiumScopedCss}${dashboardCardInteractionCss}`}</style>
+
+      <div className="premium-dash-cards-grid" style={{ marginBottom: 32 }}>
+        <div className="premium-dash-card-wrap" style={{ animationDelay: '0ms' }}>
+          <ModuleHomeCard
+            title="New Report"
+            description="Pre-filled from last entry"
+            icon="📋"
+            accent={REPORT_THEMES.diary.accent}
+            onClick={() => router.push(`/dashboard/project/${id}/diary?prefill=last`)}
+          />
+        </div>
+        <div className="premium-dash-card-wrap" style={{ animationDelay: '70ms' }}>
+          <ModuleHomeCard
+            title="Snag List"
+            description="Log issues"
+            icon="⚠️"
+            accent={REPORT_THEMES.snag.accent}
+            onClick={() => router.push(`/dashboard/project/${id}/snags`)}
+          />
         </div>
       </div>
 
-      <div style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '32px' }}>
-          <button onClick={() => router.push(`/dashboard/project/${id}/diary?prefill=last`)}
-            style={{ padding: '20px', background: '#111', border: '1px solid #222', borderRadius: '10px', color: '#fff', cursor: 'pointer', textAlign: 'left' }}>
-            <div style={{ fontSize: '24px', marginBottom: '8px' }}>📋</div>
-            <div style={{ fontWeight: '600' }}>New Report</div>
-            <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>Pre-filled from last entry</div>
-          </button>
-          <button onClick={() => router.push(`/dashboard/project/${id}/snags`)}
-            style={{ padding: '20px', background: '#111', border: '1px solid #222', borderRadius: '10px', color: '#fff', cursor: 'pointer', textAlign: 'left' }}>
-            <div style={{ fontSize: '24px', marginBottom: '8px' }}>⚠️</div>
-            <div style={{ fontWeight: '600' }}>Snag List</div>
-            <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>Log issues</div>
-          </button>
+      <h2 style={{ ...typeTokens.sectionTitle, marginBottom: 16, color: 'var(--text-2)' }}>
+        Recent diary entries
+      </h2>
+
+      {diaries.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-2)' }}>
+          <p style={{ margin: '0 0 8px', color: 'var(--text)', fontWeight: 600 }}>No entries yet</p>
+          <p style={{ margin: 0, fontSize: 13 }}>Tap New Report to add your first entry</p>
         </div>
-
-        <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#888' }}>RECENT DIARY ENTRIES</h2>
-
-        {diaries.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: '#555' }}>
-            <p>No entries yet</p>
-            <p style={{ fontSize: '13px' }}>Tap New Report to add your first entry</p>
-          </div>
-        ) : (
-          diaries.map(d => (
-            <div
-              key={d.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => router.push(`/dashboard/project/${id}/diary?report=${d.id}`)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  router.push(`/dashboard/project/${id}/diary?report=${d.id}`)
-                }
-              }}
-              style={{ background: '#111', border: '1px solid #222', borderRadius: '10px', padding: '16px', marginBottom: '12px', cursor: 'pointer' }}
-            >
-              <div style={{ fontWeight: '600' }}>{d.report_date}</div>
-              <div style={{ color: '#888', fontSize: '13px', marginTop: '4px' }}>
-                {(d.site_summary || d.notes || '')?.slice(0, 100)}
-                {((d.site_summary || d.notes || '').length > 100) ? '...' : ''}
-              </div>
+      ) : (
+        diaries.map((d) => (
+          <RecentEntryCard key={d.id} accent={REPORT_THEMES.diary.accent}>
+            <div style={{ fontWeight: 600, color: 'var(--text)' }}>{d.report_date}</div>
+            <div style={{ color: 'var(--text-2)', fontSize: 13, marginTop: 4 }}>
+              {(d.site_summary || d.notes || '')?.slice(0, 100)}
+              {((d.site_summary || d.notes || '').length > 100) ? '...' : ''}
             </div>
-          ))
-        )}
-      </div>
-    </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+              <SecondaryButton
+                type="button"
+                onClick={() => router.push(`/dashboard/project/${id}/diary?report=${d.id}`)}
+              >
+                View / Edit
+              </SecondaryButton>
+              <SecondaryButton
+                type="button"
+                onClick={() => router.push(`/dashboard/project/${id}/diary?duplicate=${d.id}`)}
+              >
+                Duplicate
+              </SecondaryButton>
+            </div>
+          </RecentEntryCard>
+        ))
+      )}
+    </PremiumShell>
   )
 }

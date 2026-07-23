@@ -152,8 +152,14 @@ body {
     font-size: 13px !important;
   }
 
-  .premium-primary-btn,
-  .dashboard-premium-bg form > button[type="submit"] {
+  .zlog-primary-cta.premium-primary-btn,
+  .premium-primary-btn.zlog-primary-cta {
+    min-height: 50px !important;
+    padding: 16px 18px !important;
+    font-size: 15px !important;
+  }
+
+  .dashboard-premium-bg form > button[type="submit"]:not(.zlog-primary-cta) {
     min-height: 50px !important;
     padding: 16px 18px !important;
     font-size: 15px !important;

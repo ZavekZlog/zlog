@@ -1,14 +1,66 @@
 'use client'
 
 import Link from 'next/link'
+import { REPORT_THEMES } from '@/lib/report-theme'
 
-export const DIARY_ACCENT = '255,140,66'
+export const DIARY_ACCENT = REPORT_THEMES.diary.accent
 export const CTA_ORANGE = 'var(--action)'
+
+/* ── Typography tokens (Barlow via body; Space Grotesk reserved for brand moments) ── */
+export const typeTokens = {
+  wordmark: {
+    fontSize: 13,
+    fontWeight: 600,
+    letterSpacing: '0.06em',
+    lineHeight: 1.2,
+    color: 'var(--text)',
+  },
+  moduleTitle: {
+    fontSize: 13,
+    fontWeight: 600,
+    letterSpacing: '0.04em',
+    lineHeight: 1.3,
+    color: 'var(--text-2)',
+  },
+  reportName: {
+    fontSize: 19,
+    fontWeight: 600,
+    letterSpacing: '0.01em',
+    lineHeight: 1.25,
+    color: 'var(--text)',
+  },
+  meta: {
+    fontSize: 12,
+    fontWeight: 400,
+    lineHeight: 1.4,
+    color: 'var(--text-2)',
+  },
+  sectionTitle: {
+    fontWeight: 600,
+    fontSize: 13,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+    color: 'var(--text)',
+  },
+  label: {
+    fontSize: 11,
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+    fontWeight: 500,
+    color: 'var(--text-2)',
+  },
+  body: {
+    fontSize: 15,
+    fontWeight: 400,
+    lineHeight: 1.55,
+    color: 'var(--text)',
+  },
+}
 
 export const pageBackground = {
   minHeight: '100vh',
   color: 'var(--text)',
-  fontFamily: 'sans-serif',
+  fontFamily: 'var(--font-barlow), system-ui, sans-serif',
   backgroundColor: 'var(--ink)',
   backgroundImage: `
     radial-gradient(ellipse 78% 58% at 50% 44%, color-mix(in srgb, var(--text-2) 9%, transparent) 0%, transparent 70%),
@@ -17,6 +69,9 @@ export const pageBackground = {
     linear-gradient(172deg, var(--ink) 0%, var(--plate) 38%, var(--plate) 68%, var(--plate) 100%)
   `,
 }
+
+const POWDER_CTA_NOISE =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")"
 
 export const premiumScopedCss = `
   .dashboard-premium-bg { position: relative; }
@@ -36,16 +91,35 @@ export const premiumScopedCss = `
     line-height: 1;
     font-weight: 600;
   }
+  .zlog-primary-cta {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .zlog-primary-cta:not(:disabled):hover {
+    filter: brightness(1.04);
+  }
+  .zlog-primary-cta:not(:disabled):active {
+    filter: brightness(0.96);
+    transform: translateY(1px);
+  }
+  .zlog-secondary-btn:not(:disabled):hover {
+    border-color: color-mix(in srgb, var(--text) 28%, transparent);
+    background: color-mix(in srgb, var(--plate), var(--text) 4%);
+  }
+  .zlog-secondary-btn:not(:disabled):active {
+    transform: translateY(1px);
+    filter: brightness(0.96);
+  }
+  .zlog-destructive-btn:not(:disabled):hover {
+    filter: brightness(1.08);
+  }
 `
 
 export const labelStyle = {
   display: 'block',
-  fontSize: 11,
-  letterSpacing: '0.12em',
-  textTransform: 'uppercase',
-  color: 'var(--text-2)',
+  ...typeTokens.label,
   marginBottom: 8,
-  fontWeight: 600,
 }
 
 export const inputStyle = {
@@ -56,6 +130,7 @@ export const inputStyle = {
   borderRadius: '10px',
   color: 'var(--text)',
   fontSize: 15,
+  fontFamily: 'inherit',
   outline: 'none',
   boxSizing: 'border-box',
   marginBottom: 16,
@@ -68,53 +143,185 @@ export const textareaStyle = {
   lineHeight: 1.55,
 }
 
+/** Powder-coated plate surface — shared by report cards / home cards */
 export const glassPanelStyle = {
   background: 'var(--plate)',
-  backdropFilter: 'blur(16px)',
-  WebkitBackdropFilter: 'blur(16px)',
   border: '1px solid var(--edge)',
   borderRadius: '16px',
   padding: '22px',
-  boxShadow: '0 8px 32px color-mix(in srgb, var(--ink) 40%, transparent), inset 0 1px 0 var(--edge-highlight)',
+  boxShadow:
+    '0 8px 32px color-mix(in srgb, var(--ink) 40%, transparent), inset 0 1px 0 var(--edge-highlight)',
   marginBottom: 16,
 }
 
 export const sectionTitleStyle = {
-  fontWeight: 700,
-  fontSize: 14,
-  letterSpacing: '0.06em',
-  textTransform: 'uppercase',
-  color: 'var(--text)',
+  ...typeTokens.sectionTitle,
   marginBottom: 16,
 }
 
-export const accentBarStyle = (accent) => ({
+/** Module-coloured top-edge highlight (dashboard card language) */
+export function ModuleAccent({ accent = DIARY_ACCENT, height = '2.55px', radius = '16px 16px 0 0' }) {
+  return (
+    <div
+      className="premium-accent-bar premium-dash-accent"
+      style={accentBarStyle(accent, height, radius)}
+      aria-hidden
+    />
+  )
+}
+
+export const accentBarStyle = (accent, height = '2.55px', radius = '16px 16px 0 0') => ({
   position: 'absolute',
   top: 0,
   left: 0,
   right: 0,
-  height: '2.55px',
+  height,
   background: `linear-gradient(90deg, transparent 0%, rgba(${accent}, 0.95) 22%, color-mix(in srgb, var(--text) 55%, transparent) 50%, rgba(${accent}, 0.95) 78%, transparent 100%)`,
   boxShadow: `0 0 12px rgba(${accent}, 0.32), 0 2px 6px rgba(${accent}, 0.2)`,
   pointerEvents: 'none',
-  borderRadius: '16px 16px 0 0',
+  borderRadius: radius,
 })
 
-export function primaryButtonStyle(accent = DIARY_ACCENT, disabled = false) {
+/**
+ * Powder-coated primary CTA — landing-page material language on --action (Forge Orange).
+ * Soft depth + top highlight + outer glow; not flat fluorescent fill.
+ */
+export function primaryButtonStyle(_accent = DIARY_ACCENT, disabled = false) {
   return {
+    position: 'relative',
+    overflow: 'hidden',
     width: '100%',
-    padding: '14px 16px',
-    background: CTA_ORANGE,
-    color: 'var(--ink)',
-    border: 'none',
-    borderRadius: '10px',
-    fontWeight: 700,
-    fontSize: 14,
-    letterSpacing: '0.08em',
+    minHeight: 48,
+    padding: '14px 18px',
+    borderRadius: '12px',
+    border: '1px solid color-mix(in srgb, var(--action), var(--ink) 58%)',
+    background:
+      'linear-gradient(180deg, color-mix(in srgb, var(--action), var(--text) 16%) 0%, color-mix(in srgb, var(--action), var(--text) 6%) 18%, var(--action) 42%, var(--action) 62%, color-mix(in srgb, var(--action), var(--ink) 29%) 88%, color-mix(in srgb, var(--action), var(--ink) 45%) 100%)',
+    boxShadow:
+      'inset 0 1px 0 color-mix(in srgb, var(--text), transparent 75%), inset 0 16px 28px color-mix(in srgb, var(--text), transparent 94%), inset 0 -14px 20px color-mix(in srgb, var(--ink), transparent 48%), 0 0 22px color-mix(in srgb, var(--action), transparent 75%)',
+    color: 'var(--text)',
+    fontWeight: 600,
+    fontSize: 15,
+    fontFamily: 'inherit',
+    letterSpacing: '0.04em',
     textTransform: 'uppercase',
     cursor: disabled ? 'wait' : 'pointer',
     opacity: disabled ? 0.7 : 1,
+    boxSizing: 'border-box',
+  }
+}
+
+export function PrimaryCTA({
+  children,
+  disabled = false,
+  type = 'button',
+  onClick,
+  style,
+  className = '',
+  accent,
+}) {
+  return (
+    <button
+      type={type}
+      disabled={disabled}
+      onClick={onClick}
+      className={`zlog-primary-cta premium-primary-btn ${className}`.trim()}
+      style={{ ...primaryButtonStyle(accent, disabled), ...style }}
+    >
+      <span
+        aria-hidden
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: 0,
+          height: '46%',
+          pointerEvents: 'none',
+          background:
+            'linear-gradient(180deg, color-mix(in srgb, var(--text), transparent 90%) 0%, color-mix(in srgb, var(--text), transparent 97%) 55%, transparent 100%)',
+        }}
+      />
+      <span
+        aria-hidden
+        style={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          opacity: 0.12,
+          mixBlendMode: 'soft-light',
+          backgroundImage: POWDER_CTA_NOISE,
+          backgroundSize: '160px 160px',
+        }}
+      />
+      <span style={{ position: 'relative', zIndex: 1 }}>{children}</span>
+    </button>
+  )
+}
+
+export function secondaryButtonStyle(disabled = false) {
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 44,
+    padding: '10px 16px',
+    background: 'var(--plate)',
+    border: '1px solid var(--edge)',
+    borderRadius: '12px',
+    color: 'var(--text)',
+    fontWeight: 500,
+    fontSize: 14,
+    fontFamily: 'inherit',
+    letterSpacing: '0.02em',
+    cursor: disabled ? 'wait' : 'pointer',
+    opacity: disabled ? 0.7 : 1,
+    lineHeight: 1.2,
+    textDecoration: 'none',
+    boxSizing: 'border-box',
     boxShadow: 'inset 0 1px 0 var(--edge-highlight)',
+  }
+}
+
+export function SecondaryButton({
+  children,
+  disabled = false,
+  type = 'button',
+  onClick,
+  href,
+  style,
+  className = '',
+}) {
+  const merged = {
+    ...secondaryButtonStyle(disabled),
+    ...style,
+  }
+  if (href) {
+    return (
+      <Link href={href} className={`zlog-secondary-btn ${className}`.trim()} style={merged} onClick={onClick}>
+        {children}
+      </Link>
+    )
+  }
+  return (
+    <button
+      type={type}
+      disabled={disabled}
+      onClick={onClick}
+      className={`zlog-secondary-btn ${className}`.trim()}
+      style={merged}
+    >
+      {children}
+    </button>
+  )
+}
+
+export function destructiveButtonStyle(disabled = false) {
+  return {
+    ...secondaryButtonStyle(disabled),
+    background: 'color-mix(in srgb, var(--danger) 14%, var(--plate))',
+    border: '1px solid color-mix(in srgb, var(--danger) 45%, transparent)',
+    color: 'color-mix(in srgb, var(--danger) 70%, var(--text))',
   }
 }
 
@@ -137,25 +344,26 @@ export function ghostButtonStyle() {
 
 export function premiumBackPillStyle() {
   return {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px',
-    minHeight: 44,
-    padding: '8px 16px',
-    background: 'var(--plate)',
-    backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
-    border: '1px solid var(--edge)',
+    ...secondaryButtonStyle(false),
     borderRadius: 999,
-    color: 'var(--text)',
-    fontWeight: 500,
-    fontSize: 14,
-    letterSpacing: '0.02em',
-    cursor: 'pointer',
-    lineHeight: 1,
-    fontFamily: 'inherit',
+    padding: '8px 16px',
     flexShrink: 0,
   }
+}
+
+/** Subtle Zlog wordmark — warm white + orange “log” */
+export function ZlogWordmark({ style } = {}) {
+  return (
+    <div
+      aria-label="Zlog"
+      style={{
+        ...typeTokens.wordmark,
+        ...style,
+      }}
+    >
+      Z<span style={{ color: 'var(--action)' }}>log</span>
+    </div>
+  )
 }
 
 export function PremiumBackButton({ onClick, href, label = 'Back' }) {
@@ -169,7 +377,9 @@ export function PremiumBackButton({ onClick, href, label = 'Back' }) {
   }
   const content = (
     <>
-      <span className="premium-back-btn__arrow" aria-hidden>←</span>
+      <span className="premium-back-btn__arrow" aria-hidden>
+        ←
+      </span>
       <span>{label}</span>
     </>
   )
@@ -177,7 +387,7 @@ export function PremiumBackButton({ onClick, href, label = 'Back' }) {
     return (
       <Link
         href={href}
-        className="premium-back-btn"
+        className="premium-back-btn zlog-secondary-btn"
         style={style}
         aria-label={`Go ${label.toLowerCase()}`}
         onClick={onClick}
@@ -189,7 +399,7 @@ export function PremiumBackButton({ onClick, href, label = 'Back' }) {
   return (
     <button
       type="button"
-      className="premium-back-btn"
+      className="premium-back-btn zlog-secondary-btn"
       onClick={onClick}
       style={style}
       aria-label={`Go ${label.toLowerCase()}`}
@@ -199,45 +409,185 @@ export function PremiumBackButton({ onClick, href, label = 'Back' }) {
   )
 }
 
-export function PremiumShell({ title, subtitle, onBack, backHref, accent = DIARY_ACCENT, children, maxWidth = 640 }) {
+/**
+ * Branded internal page header — Back + Zlog identity + module/report hierarchy.
+ * Props:
+ *   title       — module title (e.g. "Site Diary Report")
+ *   reportName  — prominent project / report name (~19px)
+ *   meta        — client · location (muted)
+ *   subtitle    — legacy alias for reportName when reportName omitted
+ */
+export function ZlogInternalHeader({
+  title,
+  reportName,
+  meta,
+  subtitle,
+  onBack,
+  backHref,
+  accent = DIARY_ACCENT,
+  trailing = null,
+}) {
+  const name = reportName || subtitle || ''
+  const metaLine = meta || ''
+
+  return (
+    <header
+      className="premium-shell-header zlog-internal-header"
+      style={{
+        position: 'relative',
+        zIndex: 50,
+        background: 'color-mix(in srgb, var(--ink) 72%, var(--plate))',
+        borderBottom: '1px solid var(--edge-highlight)',
+        padding: '14px 24px 16px',
+        pointerEvents: 'auto',
+        overflow: 'hidden',
+      }}
+    >
+      <ModuleAccent accent={accent} height="3px" radius="0" />
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, position: 'relative' }}>
+        {(backHref || onBack) && <PremiumBackButton href={backHref} onClick={onBack} />}
+        <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
+          <ZlogWordmark style={{ marginBottom: 6, opacity: 0.92 }} />
+          {title ? <div style={{ ...typeTokens.moduleTitle, marginBottom: name ? 4 : 0 }}>{title}</div> : null}
+          {name ? <div style={{ ...typeTokens.reportName, marginBottom: metaLine ? 4 : 0 }}>{name}</div> : null}
+          {metaLine ? <div className="premium-shell-subtitle" style={typeTokens.meta}>{metaLine}</div> : null}
+        </div>
+        {trailing}
+      </div>
+    </header>
+  )
+}
+
+export function PremiumShell({
+  title,
+  reportName,
+  meta,
+  subtitle,
+  onBack,
+  backHref,
+  accent = DIARY_ACCENT,
+  children,
+  maxWidth = 640,
+  trailing = null,
+}) {
   return (
     <div className="dashboard-premium-bg" style={pageBackground}>
       <style>{premiumScopedCss}</style>
-      <div
-        className="premium-shell-header"
-        style={{
-          position: 'relative',
-          zIndex: 50,
-          background: 'transparent',
-          borderBottom: '1px solid var(--edge-highlight)',
-          padding: '16px 24px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          pointerEvents: 'auto',
-        }}
-      >
-        {(backHref || onBack) && (
-          <PremiumBackButton href={backHref} onClick={onBack} />
-        )}
-        <div style={{ flex: 1, position: 'relative', zIndex: 50 }}>
-          <div style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text)' }}>{title}</div>
-          {subtitle && <div className="premium-shell-subtitle" style={{ fontSize: '12px', color: 'var(--text-2)', marginTop: 2 }}>{subtitle}</div>}
-        </div>
-        <div style={{ width: 28, height: 3, borderRadius: 999, background: `rgba(${accent}, 0.85)`, boxShadow: `0 0 12px rgba(${accent}, 0.45)` }} />
+      <ZlogInternalHeader
+        title={title}
+        reportName={reportName}
+        meta={meta}
+        subtitle={subtitle}
+        onBack={onBack}
+        backHref={backHref}
+        accent={accent}
+        trailing={trailing}
+      />
+      <div style={{ position: 'relative', zIndex: 1, padding: '20px 24px 32px', maxWidth, margin: '0 auto' }}>
+        {children}
       </div>
-      <div style={{ position: 'relative', zIndex: 1, padding: '20px 24px 32px', maxWidth, margin: '0 auto' }}>{children}</div>
     </div>
   )
 }
 
-export function GlassSection({ title, accent = DIARY_ACCENT, children }) {
+/** Report editor section card — powder-coat plate + module top accent */
+export function ReportSectionCard({ title, accent = DIARY_ACCENT, children, style }) {
   return (
-    <section className="premium-glass-panel" style={{ ...glassPanelStyle, position: 'relative', overflow: 'hidden' }}>
-      <div className="premium-accent-bar" style={accentBarStyle(accent)} />
-      {title && <h2 className="premium-section-title" style={{ ...sectionTitleStyle, marginTop: 4 }}>{title}</h2>}
+    <section
+      className="premium-glass-panel zlog-report-section"
+      style={{ ...glassPanelStyle, position: 'relative', overflow: 'hidden', ...style }}
+    >
+      <ModuleAccent accent={accent} />
+      {title && (
+        <h2 className="premium-section-title" style={{ ...sectionTitleStyle, marginTop: 4 }}>
+          {title}
+        </h2>
+      )}
       {children}
     </section>
+  )
+}
+
+/** Alias — existing call sites */
+export function GlassSection(props) {
+  return <ReportSectionCard {...props} />
+}
+
+/** Module home / action card (New Report, dashboard modules, etc.) */
+export function ModuleHomeCard({
+  title,
+  description,
+  icon,
+  accent = DIARY_ACCENT,
+  onClick,
+  disabled = false,
+  style,
+  children,
+}) {
+  return (
+    <button
+      type="button"
+      className="premium-dash-card"
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        ...dashboardCardStyle,
+        '--accent': accent,
+        ...(disabled ? { cursor: 'default', opacity: 0.45 } : {}),
+        ...style,
+      }}
+    >
+      <ModuleAccent accent={accent} />
+      {icon != null && (
+        <div className="premium-dash-icon" style={{ ...dashboardIconBoxStyle(accent), '--accent': accent }}>
+          {icon}
+        </div>
+      )}
+      {title && (
+        <div className="premium-dash-card-title" style={dashboardCardTitleStyle}>
+          {title}
+        </div>
+      )}
+      {description && (
+        <div className="premium-dash-card-desc" style={dashboardCardDescStyle}>
+          {description}
+        </div>
+      )}
+      {children}
+    </button>
+  )
+}
+
+/** Neutral recent-entry card with optional subtle module edge */
+export function RecentEntryCard({ accent = DIARY_ACCENT, children, style }) {
+  return (
+    <div
+      style={{
+        position: 'relative',
+        overflow: 'hidden',
+        background: 'var(--plate)',
+        border: '1px solid var(--edge)',
+        borderRadius: '12px',
+        padding: '16px',
+        marginBottom: '12px',
+        boxShadow: 'inset 0 1px 0 var(--edge-highlight)',
+        ...style,
+      }}
+    >
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          bottom: 0,
+          width: 3,
+          background: `rgba(${accent}, 0.55)`,
+          borderRadius: '12px 0 0 12px',
+        }}
+      />
+      <div style={{ paddingLeft: 6 }}>{children}</div>
+    </div>
   )
 }
 
@@ -245,14 +595,11 @@ export const premiumDiaryEmptyClass = 'premium-diary-empty'
 export const premiumDiaryEmptyTitleClass = 'premium-diary-empty__title'
 export const premiumDiaryEmptyHintClass = 'premium-diary-empty__hint'
 
-/** Shared dashboard module card tokens — import on future pages; mobile overrides in globals.css */
 export const dashboardCardStyle = {
   position: 'relative',
   width: '100%',
   padding: '28px',
   background: 'var(--plate)',
-  backdropFilter: 'blur(16px)',
-  WebkitBackdropFilter: 'blur(16px)',
   borderRadius: '16px',
   cursor: 'pointer',
   textAlign: 'left',
@@ -260,7 +607,8 @@ export const dashboardCardStyle = {
   fontFamily: 'inherit',
   color: 'var(--text)',
   border: '1px solid var(--edge)',
-  boxShadow: '0 8px 32px color-mix(in srgb, var(--ink) 42%, transparent), inset 0 1px 0 var(--edge-highlight)',
+  boxShadow:
+    '0 8px 32px color-mix(in srgb, var(--ink) 42%, transparent), inset 0 1px 0 var(--edge-highlight)',
 }
 
 export const dashboardCardTitleStyle = {
@@ -290,8 +638,6 @@ export const dashboardIconBoxStyle = (accent) => ({
   lineHeight: 1,
   background: `linear-gradient(145deg, rgba(${accent}, 0.24) 0%, rgba(${accent}, 0.1) 100%)`,
   border: `1px solid rgba(${accent}, 0.32)`,
-  backdropFilter: 'blur(10px)',
-  WebkitBackdropFilter: 'blur(10px)',
   boxShadow: `inset 0 1px 0 var(--edge-highlight), 0 4px 18px rgba(${accent}, 0.2)`,
 })
 

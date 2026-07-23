@@ -6,7 +6,8 @@ import {
   GlassSection,
   labelStyle,
   inputStyle,
-  primaryButtonStyle,
+  PrimaryCTA,
+  SecondaryButton,
   DIARY_ACCENT,
 } from '@/lib/premium-ui'
 import { extractBrandColorFromFile } from '@/lib/extract-brand-color'
@@ -249,16 +250,18 @@ export function BrandingSelector({
         <button
           type="button"
           onClick={() => setShowQuickAdd(true)}
+          className="zlog-secondary-btn"
           style={{
-            background: 'transparent',
+            background: 'var(--plate)',
             border: '1px dashed var(--edge)',
-            borderRadius: 10,
+            borderRadius: 12,
             color: 'var(--text-2)',
             padding: '10px 14px',
             fontSize: 13,
-            fontWeight: 600,
+            fontWeight: 500,
             cursor: 'pointer',
             width: '100%',
+            boxShadow: 'inset 0 1px 0 var(--edge-highlight)',
           }}
         >
           + Quick add client branding
@@ -308,24 +311,12 @@ export function BrandingSelector({
           )}
 
           <div style={{ display: 'flex', gap: 10 }}>
-            <button type="button" onClick={handleQuickAdd} disabled={saving || extracting} style={primaryButtonStyle(accent, saving || extracting)}>
+            <PrimaryCTA onClick={handleQuickAdd} disabled={saving || extracting} accent={accent} style={{ flex: 1 }}>
               {saving ? 'Saving…' : 'Save & use profile'}
-            </button>
-            <button
-              type="button"
-              onClick={resetQuickAdd}
-              style={{
-                background: 'transparent',
-                border: '1px solid var(--edge)',
-                borderRadius: 10,
-                color: 'var(--text-2)',
-                padding: '12px 16px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
+            </PrimaryCTA>
+            <SecondaryButton type="button" onClick={resetQuickAdd}>
               Cancel
-            </button>
+            </SecondaryButton>
           </div>
         </div>
       )}
