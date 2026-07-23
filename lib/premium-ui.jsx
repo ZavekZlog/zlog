@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 export const DIARY_ACCENT = '255,140,66'
 export const CTA_ORANGE = 'var(--action)'
 
@@ -156,40 +158,75 @@ export function premiumBackPillStyle() {
   }
 }
 
-export function PremiumBackButton({ onClick, label = 'Back' }) {
-  return (
-    <button type="button" className="premium-back-btn" onClick={onClick} style={premiumBackPillStyle()} aria-label={`Go ${label.toLowerCase()}`}>
+export function PremiumBackButton({ onClick, href, label = 'Back' }) {
+  const style = {
+    ...premiumBackPillStyle(),
+    position: 'relative',
+    zIndex: 50,
+    pointerEvents: 'auto',
+    touchAction: 'manipulation',
+    textDecoration: 'none',
+  }
+  const content = (
+    <>
       <span className="premium-back-btn__arrow" aria-hidden>←</span>
       <span>{label}</span>
+    </>
+  )
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="premium-back-btn"
+        style={style}
+        aria-label={`Go ${label.toLowerCase()}`}
+        onClick={onClick}
+      >
+        {content}
+      </Link>
+    )
+  }
+  return (
+    <button
+      type="button"
+      className="premium-back-btn"
+      onClick={onClick}
+      style={style}
+      aria-label={`Go ${label.toLowerCase()}`}
+    >
+      {content}
     </button>
   )
 }
 
-export function PremiumShell({ title, subtitle, onBack, accent = DIARY_ACCENT, children, maxWidth = 640 }) {
+export function PremiumShell({ title, subtitle, onBack, backHref, accent = DIARY_ACCENT, children, maxWidth = 640 }) {
   return (
     <div className="dashboard-premium-bg" style={pageBackground}>
       <style>{premiumScopedCss}</style>
       <div
         className="premium-shell-header"
         style={{
+          position: 'relative',
+          zIndex: 50,
           background: 'transparent',
           borderBottom: '1px solid var(--edge-highlight)',
           padding: '16px 24px',
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
+          pointerEvents: 'auto',
         }}
       >
-        {onBack && (
-          <PremiumBackButton onClick={onBack} />
+        {(backHref || onBack) && (
+          <PremiumBackButton href={backHref} onClick={onBack} />
         )}
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, position: 'relative', zIndex: 50 }}>
           <div style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text)' }}>{title}</div>
           {subtitle && <div className="premium-shell-subtitle" style={{ fontSize: '12px', color: 'var(--text-2)', marginTop: 2 }}>{subtitle}</div>}
         </div>
         <div style={{ width: 28, height: 3, borderRadius: 999, background: `rgba(${accent}, 0.85)`, boxShadow: `0 0 12px rgba(${accent}, 0.45)` }} />
       </div>
-      <div style={{ padding: '20px 24px 32px', maxWidth, margin: '0 auto' }}>{children}</div>
+      <div style={{ position: 'relative', zIndex: 1, padding: '20px 24px 32px', maxWidth, margin: '0 auto' }}>{children}</div>
     </div>
   )
 }

@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useDropzone } from 'react-dropzone'
 import SignaturePad from 'signature_pad'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
@@ -16,6 +15,8 @@ import {
   pageBackground,
   premiumScopedCss,
 } from '@/lib/premium-ui'
+import { BrandingSelector, brandingPayload } from '@/components/branding/BrandingSelector'
+import { ImageSourceButtons } from '@/components/ImageSourceButtons'
 
 const SHIFT_OPTIONS = ['Day', 'Night', 'Weekend', 'Half day']
 
@@ -48,6 +49,42 @@ const emptyPlant = () => ({
   hours: '',
   notes: '',
 })
+
+const EQUIPMENT_HIRE_STATUSES = ['Active', 'Off-Hired', 'Awaiting Collection']
+
+const emptyEquipmentHire = () => ({
+  key: makeUuid(),
+  description: '',
+  supplier: '',
+  quantity: '',
+  status: 'Active',
+})
+
+function equipmentHireFromDb(items) {
+  if (!Array.isArray(items) || items.length === 0) return [emptyEquipmentHire()]
+  return items.map((item) => ({
+    key: makeUuid(),
+    description: item?.description ?? '',
+    supplier: item?.supplier ?? '',
+    quantity: item?.quantity != null ? String(item.quantity) : '',
+    status: EQUIPMENT_HIRE_STATUSES.includes(item?.status) ? item.status : 'Active',
+  }))
+}
+
+function equipmentHireHasData(row) {
+  return row.description.trim() || row.supplier.trim() || row.quantity || (row.status && row.status !== 'Active')
+}
+
+function equipmentHirePayload(rows) {
+  return rows
+    .filter(equipmentHireHasData)
+    .map((row) => ({
+      description: row.description.trim() || null,
+      supplier: row.supplier.trim() || null,
+      quantity: row.quantity ? parseInt(row.quantity, 10) : null,
+      status: row.status || 'Active',
+    }))
+}
 
 const rowGridStyle = {
   display: 'grid',
@@ -88,11 +125,36 @@ const removeRowStyle = {
 }
 
 function resequencePhotos(photos) {
-  return photos.map((photo, index) => ({
+  const layoutOrder = { full: 0, grid4: 1, grid6: 2 }
+  const sorted = [...photos].sort((a, b) => {
+    const la = layoutOrder[a.layout] ?? 1
+    const lb = layoutOrder[b.layout] ?? 1
+    if (la !== lb) return la - lb
+    return (a.sequence_number || 0) - (b.sequence_number || 0)
+  })
+  return sorted.map((photo, index) => ({
     ...photo,
     sequence_number: index + 1,
   }))
 }
+
+const PHOTO_LAYOUT_SECTIONS = [
+  {
+    id: 'full',
+    title: 'Full Page Photos (1 per page)',
+    hint: 'Detailed focus shots — one large photo per PDF page',
+  },
+  {
+    id: 'grid4',
+    title: 'Standard Grid Photos (4 per page)',
+    hint: 'Progress / snag shots — 2×2 grid on each PDF page',
+  },
+  {
+    id: 'grid6',
+    title: 'Compact Grid Photos (6 per page)',
+    hint: 'Dense site checks — 3×2 grid on each PDF page',
+  },
+]
 
 function labourFromDbRow(row) {
   return {
@@ -143,6 +205,7 @@ export default function SiteDiaryPage() {
   const searchParams = useSearchParams()
   const prefillLast = searchParams.get('prefill') === 'last'
   const editingReportId = searchParams.get('report') || searchParams.get('diaryId') || null
+  const duplicateReportId = (!editingReportId && searchParams.get('duplicate')) || null
   const router = useRouter()
   const supabase = createClient()
 
@@ -160,17 +223,20 @@ export default function SiteDiaryPage() {
   const [siteSummary, setSiteSummary] = useState('')
   const [labourRows, setLabourRows] = useState([emptyLabour()])
   const [plantRows, setPlantRows] = useState([emptyPlant()])
+  const [equipmentHireRows, setEquipmentHireRows] = useState([emptyEquipmentHire()])
   const [visitors, setVisitors] = useState('')
   const [delaysIssues, setDelaysIssues] = useState('')
   const [actionsRequired, setActionsRequired] = useState('')
   const [photos, setPhotos] = useState([])
   const [prefilledFromLast, setPrefilledFromLast] = useState(false)
+  const [duplicatedFromReport, setDuplicatedFromReport] = useState(false)
   const [companyReportingFor, setCompanyReportingFor] = useState('')
   const [creatorName, setCreatorName] = useState('')
   const [creatorRole, setCreatorRole] = useState('')
   const [coverPhoto, setCoverPhoto] = useState(null)
   const [signature, setSignature] = useState(null)
   const [signatureMode, setSignatureMode] = useState('draw') // 'carried' | 'accepted' | 'draw'
+  const [brandingSelection, setBrandingSelection] = useState(null)
   const [carriedVisitors, setCarriedVisitors] = useState(false)
   const [carriedDelaysIssues, setCarriedDelaysIssues] = useState(false)
 
@@ -179,6 +245,7 @@ export default function SiteDiaryPage() {
       setLoading(true)
       setError('')
       setPrefilledFromLast(false)
+      setDuplicatedFromReport(false)
       setCarriedVisitors(false)
       setCarriedDelaysIssues(false)
 
@@ -197,6 +264,7 @@ export default function SiteDiaryPage() {
       setCoverPhoto(null)
       setSignature(null)
       setSignatureMode('draw')
+      setBrandingSelection(null)
       setWeather('')
       setShiftType('Day')
       setVisitors('')
@@ -206,6 +274,7 @@ export default function SiteDiaryPage() {
       setCreatorRole('')
       setLabourRows([emptyLabour()])
       setPlantRows([emptyPlant()])
+      setEquipmentHireRows([emptyEquipmentHire()])
 
       const applyCover = async (storagePath) => {
         if (!storagePath) return
@@ -230,11 +299,12 @@ export default function SiteDiaryPage() {
         setSignatureMode('carried')
       }
 
-      if (editingReportId) {
+      if (editingReportId || duplicateReportId) {
+        const sourceId = editingReportId || duplicateReportId
         const { data: existing, error: existingError } = await supabase
           .from('daily_reports')
           .select('*')
-          .eq('id', editingReportId)
+          .eq('id', sourceId)
           .eq('project_id', projectId)
           .maybeSingle()
 
@@ -247,10 +317,11 @@ export default function SiteDiaryPage() {
         const [{ data: labour }, { data: plant }, { data: reportPhotos }] = await Promise.all([
           supabase.from('report_labour').select('trade, company, count, hours, notes').eq('report_id', existing.id).order('sequence'),
           supabase.from('report_plant').select('item, ref, status, notes').eq('report_id', existing.id).order('sequence'),
-          supabase.from('report_photos').select('url, caption, sequence').eq('report_id', existing.id).order('sequence'),
+          supabase.from('report_photos').select('url, caption, sequence, layout').eq('report_id', existing.id).order('sequence'),
         ])
 
-        setReportDate(existing.report_date || today)
+        // Edit keeps the source date; duplicate always starts as today (CREATE mode — no id/created_at).
+        setReportDate(editingReportId ? (existing.report_date || today) : today)
         setWeather(existing.weather ?? '')
         setShiftType(existing.shift || 'Day')
         setSiteSummary(existing.site_summary ?? '')
@@ -262,6 +333,17 @@ export default function SiteDiaryPage() {
         setCreatorRole(existing.creator_role ?? '')
         setLabourRows(labour?.length ? labour.map(labourFromDbRow) : [emptyLabour()])
         setPlantRows(plant?.length ? plant.map(plantFromDbRow) : [emptyPlant()])
+        setEquipmentHireRows(equipmentHireFromDb(existing.equipment_hire))
+        if (duplicateReportId) setDuplicatedFromReport(true)
+
+        if (existing.branding_id || existing.brand_color || existing.brand_logo_url) {
+          setBrandingSelection({
+            brandingId: existing.branding_id || null,
+            brandColor: existing.brand_color || '#FF5000',
+            brandLogoUrl: existing.brand_logo_url || null,
+            companyName: '',
+          })
+        }
 
         await applyCover(existing.cover_photo_url)
         await applySignature(existing.signature_url)
@@ -277,6 +359,7 @@ export default function SiteDiaryPage() {
             preview,
             storagePath: p.url,
             caption: p.caption ?? '',
+            layout: p.layout === 'full' || p.layout === 'grid6' ? p.layout : 'grid4',
             sequence_number: p.sequence ?? 0,
           })
         }
@@ -284,7 +367,7 @@ export default function SiteDiaryPage() {
       } else if (prefillLast) {
         const { data: lastReport } = await supabase
           .from('daily_reports')
-          .select('id, shift, weather, visitors, delays_issues, company_reporting_for, creator_name, creator_role, cover_photo_url, signature_url')
+          .select('id, shift, weather, visitors, delays_issues, company_reporting_for, creator_name, creator_role, cover_photo_url, signature_url, equipment_hire')
           .eq('project_id', projectId)
           .order('report_date', { ascending: false })
           .order('created_at', { ascending: false })
@@ -308,6 +391,7 @@ export default function SiteDiaryPage() {
           setCreatorRole(lastReport.creator_role ?? '')
           setLabourRows(labour?.length ? labour.map(labourFromDbRow) : [emptyLabour()])
           setPlantRows(plant?.length ? plant.map(plantFromDbRow) : [emptyPlant()])
+          setEquipmentHireRows(equipmentHireFromDb(lastReport.equipment_hire))
           setPrefilledFromLast(true)
 
           await applyCover(lastReport.cover_photo_url)
@@ -318,14 +402,15 @@ export default function SiteDiaryPage() {
       setLoading(false)
     }
     load()
-  }, [projectId, prefillLast, editingReportId])
+  }, [projectId, prefillLast, editingReportId, duplicateReportId])
 
-  const onDrop = useCallback((accepted) => {
+  const addPhotosForLayout = useCallback((layout) => (accepted) => {
     const next = accepted.map((file) => ({
       key: makeUuid(),
       file,
       preview: URL.createObjectURL(file),
       caption: '',
+      layout,
       sequence_number: 0,
     }))
     setPhotos((prev) => resequencePhotos([...prev, ...next]))
@@ -344,35 +429,17 @@ export default function SiteDiaryPage() {
     })
   }, [])
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: { 'image/*': ['.jpeg', '.jpg', '.png', '.webp', '.heic', '.heif'] },
-    multiple: true,
-  })
-
-  const {
-    getRootProps: getCoverRootProps,
-    getInputProps: getCoverInputProps,
-    isDragActive: isCoverDragActive,
-  } = useDropzone({
-    onDrop: onCoverDrop,
-    accept: { 'image/*': ['.jpeg', '.jpg', '.png', '.webp', '.heic', '.heif'] },
-    maxFiles: 1,
-    multiple: false,
-  })
-
   const canvasRef = useRef(null)
   const signaturePadRef = useRef(null)
   const endStrokeHandlerRef = useRef(null)
   const touchBlockerRef = useRef(null)
   const originalReleasePointerCaptureRef = useRef(null)
+  const globalReleasePointerCaptureRef = useRef(null)
 
   const teardownSignaturePad = useCallback(() => {
     const canvas = canvasRef.current
     if (canvas && touchBlockerRef.current) {
-      canvas.removeEventListener('touchstart', touchBlockerRef.current)
       canvas.removeEventListener('touchmove', touchBlockerRef.current)
-      canvas.removeEventListener('touchend', touchBlockerRef.current)
       touchBlockerRef.current = null
     }
     if (canvas && originalReleasePointerCaptureRef.current) {
@@ -382,6 +449,10 @@ export default function SiteDiaryPage() {
         canvas.releasePointerCapture = originalReleasePointerCaptureRef.current
       }
       originalReleasePointerCaptureRef.current = null
+    }
+    if (globalReleasePointerCaptureRef.current) {
+      Element.prototype.releasePointerCapture = globalReleasePointerCaptureRef.current
+      globalReleasePointerCaptureRef.current = null
     }
     const pad = signaturePadRef.current
     if (!pad) return
@@ -403,13 +474,15 @@ export default function SiteDiaryPage() {
     canvas.style.userSelect = 'none'
     canvas.style.webkitUserSelect = 'none'
 
-    // Guard releasePointerCapture — browsers throw NotFoundError if the
-    // pointer is already gone (common on mobile touch-up / pointercancel).
-    originalReleasePointerCaptureRef.current =
+    // Guard releasePointerCapture on this canvas and (while mounted) on Element
+    // so a NotFoundError mid-pointerup cannot abort SignaturePad's cleanup and
+    // leave window-level preventDefault listeners that block the back button.
+    const protoRelease =
       Object.getOwnPropertyDescriptor(Element.prototype, 'releasePointerCapture')?.value ||
-      canvas.releasePointerCapture
-    const originalRelease = originalReleasePointerCaptureRef.current
-    canvas.releasePointerCapture = function releasePointerCaptureSafe(pointerId) {
+      Element.prototype.releasePointerCapture
+    originalReleasePointerCaptureRef.current = protoRelease
+
+    const safeReleasePointerCapture = function releasePointerCaptureSafe(pointerId) {
       try {
         if (
           typeof this.hasPointerCapture === 'function' &&
@@ -417,10 +490,15 @@ export default function SiteDiaryPage() {
         ) {
           return
         }
-        originalRelease.call(this, pointerId)
+        return protoRelease.call(this, pointerId)
       } catch {
         // Ignore NotFoundError when no active pointer remains
       }
+    }
+    canvas.releasePointerCapture = safeReleasePointerCapture
+    if (!globalReleasePointerCaptureRef.current) {
+      globalReleasePointerCaptureRef.current = protoRelease
+      Element.prototype.releasePointerCapture = safeReleasePointerCapture
     }
 
     // Only block scroll on move. preventDefault on touchstart/touchend can
@@ -449,9 +527,25 @@ export default function SiteDiaryPage() {
     // SignaturePad.on() may reset touch-action — keep scroll locked while drawing
     canvas.style.touchAction = 'none'
 
+    const rebindPadIfNeeded = () => {
+      // After the current event finishes, ensure no dangling window listeners
+      queueMicrotask(() => {
+        try {
+          pad.off()
+          pad.on()
+          canvas.style.touchAction = 'none'
+          canvas.style.userSelect = 'none'
+          canvas.style.webkitUserSelect = 'none'
+        } catch {
+          // ignore
+        }
+      })
+    }
+
     const onEndStroke = () => {
       if (pad.isEmpty()) {
         setSignature(null)
+        rebindPadIfNeeded()
         return
       }
       canvas.toBlob((blob) => {
@@ -466,6 +560,7 @@ export default function SiteDiaryPage() {
           }
         })
       }, 'image/png')
+      rebindPadIfNeeded()
     }
 
     endStrokeHandlerRef.current = onEndStroke
@@ -528,6 +623,10 @@ export default function SiteDiaryPage() {
     setPlantRows((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)))
   }
 
+  const updateEquipmentHire = (key, field, value) => {
+    setEquipmentHireRows((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)))
+  }
+
   const removePhoto = (key) => {
     setPhotos((prev) => {
       const removed = prev.find((p) => p.key === key)
@@ -542,9 +641,10 @@ export default function SiteDiaryPage() {
 
   const handleProjectChange = (newId) => {
     if (newId && newId !== projectId) {
-      const query = editingReportId
-        ? ''
-        : (prefillLast ? '?prefill=last' : '')
+      let query = ''
+      if (editingReportId) query = ''
+      else if (duplicateReportId) query = `?duplicate=${duplicateReportId}`
+      else if (prefillLast) query = '?prefill=last'
       router.push(`/dashboard/project/${newId}/diary${query}`)
     }
   }
@@ -623,6 +723,8 @@ export default function SiteDiaryPage() {
       creator_role: creatorRole.trim() || null,
       cover_photo_url: coverPhotoUrl,
       signature_url: signatureUrl,
+      equipment_hire: equipmentHirePayload(equipmentHireRows),
+      ...brandingPayload(brandingSelection),
     }
 
     let report = null
@@ -728,27 +830,37 @@ export default function SiteDiaryPage() {
     const photoRecords = []
 
     for (const photo of sequenced) {
-      if (!photo.file) continue
+      if (photo.file) {
+        const ext = photo.file.name.split('.').pop()?.toLowerCase() || 'jpg'
+        const storagePath = `${user.id}/${report.id}/${photo.sequence_number}-${Date.now()}.${ext}`
 
-      const ext = photo.file.name.split('.').pop()?.toLowerCase() || 'jpg'
-      const storagePath = `${user.id}/${report.id}/${photo.sequence_number}-${Date.now()}.${ext}`
+        const { error: uploadError } = await supabase.storage
+          .from('site-photos')
+          .upload(storagePath, photo.file, { contentType: photo.file.type, upsert: false })
 
-      const { error: uploadError } = await supabase.storage
-        .from('site-photos')
-        .upload(storagePath, photo.file, { contentType: photo.file.type, upsert: false })
+        if (uploadError) {
+          setError(`Photo upload failed: ${uploadError.message}`)
+          setSaving(false)
+          return
+        }
 
-      if (uploadError) {
-        setError(`Photo upload failed: ${uploadError.message}`)
-        setSaving(false)
-        return
+        photoRecords.push({
+          report_id: report.id,
+          url: storagePath,
+          caption: photo.caption.trim() || null,
+          sequence: photo.sequence_number,
+          layout: photo.layout || 'grid4',
+        })
+      } else if (!editingReportId && photo.storagePath) {
+        // Duplicate / create: link existing storage paths onto the new report row
+        photoRecords.push({
+          report_id: report.id,
+          url: photo.storagePath,
+          caption: photo.caption.trim() || null,
+          sequence: photo.sequence_number,
+          layout: photo.layout || 'grid4',
+        })
       }
-
-      photoRecords.push({
-        report_id: report.id,
-        url: storagePath,
-        caption: photo.caption.trim() || null,
-        sequence: photo.sequence_number,
-      })
     }
 
     if (photoRecords.length > 0) {
@@ -768,6 +880,7 @@ export default function SiteDiaryPage() {
         .update({
           caption: photo.caption.trim() || null,
           sequence: photo.sequence_number,
+          layout: photo.layout || 'grid4',
         })
         .eq('report_id', report.id)
         .eq('url', photo.storagePath)
@@ -791,7 +904,7 @@ export default function SiteDiaryPage() {
     <PremiumShell
       title="Site Diary Report"
       subtitle={project?.name || 'Daily site record'}
-      onBack={() => router.push(`/dashboard/project/${projectId}`)}
+      backHref="/dashboard"
       maxWidth={720}
     >
       {error && (
@@ -804,9 +917,14 @@ export default function SiteDiaryPage() {
           {success}
         </div>
       )}
-      {prefilledFromLast && !editingReportId && (
+      {prefilledFromLast && !editingReportId && !duplicatedFromReport && (
         <div style={{ background: `rgba(${DIARY_ACCENT}, 0.08)`, border: `1px solid rgba(${DIARY_ACCENT}, 0.25)`, color: '#F0EDE8', padding: '12px 14px', fontSize: 13, marginBottom: 16, borderRadius: 10, lineHeight: 1.5 }}>
           Standing crew, plant, weather and report details copied from your last report. Progress notes and work photos start blank — saving creates a new entry.
+        </div>
+      )}
+      {duplicatedFromReport && !editingReportId && (
+        <div style={{ background: `rgba(${DIARY_ACCENT}, 0.08)`, border: `1px solid rgba(${DIARY_ACCENT}, 0.25)`, color: '#F0EDE8', padding: '12px 14px', fontSize: 13, marginBottom: 16, borderRadius: 10, lineHeight: 1.5 }}>
+          Duplicated from an existing entry. Report date is set to today — saving creates a new independent report.
         </div>
       )}
       {editingReportId && (
@@ -816,6 +934,13 @@ export default function SiteDiaryPage() {
       )}
 
       <form onSubmit={handleSave}>
+        <BrandingSelector
+          value={brandingSelection}
+          onChange={setBrandingSelection}
+          accent={DIARY_ACCENT}
+          autoSelectDefault={!editingReportId && !duplicateReportId}
+        />
+
         <GlassSection title="Project" accent={DIARY_ACCENT}>
           <label style={labelStyle}>Project</label>
           <select
@@ -868,20 +993,11 @@ export default function SiteDiaryPage() {
               <button type="button" onClick={removeCoverPhoto} style={removeRowStyle}>Remove cover photo</button>
             </div>
           ) : (
-            <div
-              {...getCoverRootProps()}
-              style={{
-                border: `2px dashed ${isCoverDragActive ? `rgba(${DIARY_ACCENT}, 0.6)` : 'rgba(255,255,255,0.18)'}`,
-                borderRadius: 12,
-                padding: '20px 16px',
-                textAlign: 'center',
-                cursor: 'pointer',
-                background: isCoverDragActive ? `rgba(${DIARY_ACCENT}, 0.08)` : 'rgba(255,255,255,0.03)',
-                marginBottom: 16,
-              }}
-            >
-              <input {...getCoverInputProps()} />
-              <div style={{ fontSize: 13, color: '#7a92a8' }}>One cover image for this report</div>
+            <div style={{ marginBottom: 16 }}>
+              <ImageSourceButtons
+                onFiles={onCoverDrop}
+                hint="One cover image for this report"
+              />
             </div>
           )}
 
@@ -1035,6 +1151,72 @@ export default function SiteDiaryPage() {
           </button>
         </GlassSection>
 
+        <GlassSection title="Equipment on hire" accent={DIARY_ACCENT}>
+          {equipmentHireRows.map((row) => (
+            <div key={row.key} style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              {equipmentHireRows.length > 1 && (
+                <button
+                  type="button"
+                  style={removeRowStyle}
+                  onClick={() => setEquipmentHireRows((rows) => rows.filter((r) => r.key !== row.key))}
+                >
+                  Remove entry
+                </button>
+              )}
+              <div style={rowGridStyle}>
+                <div>
+                  <label style={{ ...labelStyle, fontSize: 10 }}>Equipment description</label>
+                  <input
+                    style={cellInputStyle}
+                    value={row.description}
+                    onChange={(e) => updateEquipmentHire(row.key, 'description', e.target.value)}
+                    placeholder="1.5T Digger"
+                  />
+                </div>
+                <div>
+                  <label style={{ ...labelStyle, fontSize: 10 }}>Hire company / supplier</label>
+                  <input
+                    style={cellInputStyle}
+                    value={row.supplier}
+                    onChange={(e) => updateEquipmentHire(row.key, 'supplier', e.target.value)}
+                    placeholder="HSS Hire"
+                  />
+                </div>
+                <div>
+                  <label style={{ ...labelStyle, fontSize: 10 }}>Quantity</label>
+                  <input
+                    type="number"
+                    min="0"
+                    style={cellInputStyle}
+                    value={row.quantity}
+                    onChange={(e) => updateEquipmentHire(row.key, 'quantity', e.target.value)}
+                    placeholder="1"
+                  />
+                </div>
+                <div>
+                  <label style={{ ...labelStyle, fontSize: 10 }}>Status</label>
+                  <select
+                    style={cellInputStyle}
+                    value={row.status}
+                    onChange={(e) => updateEquipmentHire(row.key, 'status', e.target.value)}
+                  >
+                    {EQUIPMENT_HIRE_STATUSES.map((status) => (
+                      <option key={status} value={status}>{status}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            style={addRowButtonStyle}
+            onClick={() => setEquipmentHireRows((rows) => [...rows, emptyEquipmentHire()])}
+          >
+            + Add Equipment
+          </button>
+        </GlassSection>
+
         <GlassSection title="Visitors" accent={DIARY_ACCENT}>
           <div style={carriedVisitors ? carriedFieldWrapStyle : undefined}>
             {carriedVisitors && (
@@ -1082,81 +1264,90 @@ export default function SiteDiaryPage() {
         </GlassSection>
 
         <GlassSection title="Work photos" accent={DIARY_ACCENT}>
-          <div
-            {...getRootProps()}
-            style={{
-              border: `2px dashed ${isDragActive ? `rgba(${DIARY_ACCENT}, 0.6)` : 'rgba(255,255,255,0.18)'}`,
-              borderRadius: 12,
-              padding: '28px 20px',
-              textAlign: 'center',
-              cursor: 'pointer',
-              background: isDragActive ? `rgba(${DIARY_ACCENT}, 0.08)` : 'rgba(255,255,255,0.03)',
-              marginBottom: photos.length ? 20 : 0,
-              transition: 'all 180ms ease',
-            }}
-          >
-            <input {...getInputProps()} />
-            <div style={{ fontSize: 28, marginBottom: 8 }}>📷</div>
-            <div style={{ fontWeight: 600, fontSize: 14, color: '#F0EDE8' }}>
-              {isDragActive ? 'Drop photos here' : 'Tap or drag photos to upload'}
-            </div>
-            <div style={{ fontSize: 12, color: '#7a92a8', marginTop: 6 }}>JPEG, PNG, WebP · max 10 MB each</div>
-          </div>
-
-          {photos.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {resequencePhotos(photos).map((photo) => (
-                <div
-                  key={photo.key}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '88px 1fr auto',
-                    gap: 14,
-                    alignItems: 'start',
-                    padding: 12,
-                    background: 'rgba(0,0,0,0.2)',
-                    borderRadius: 12,
-                    border: '1px solid rgba(255,255,255,0.08)',
-                  }}
-                >
-                  <div style={{ position: 'relative' }}>
-                    <img
-                      src={photo.preview}
-                      alt={`Photo ${photo.sequence_number}`}
-                      style={{ width: 88, height: 88, objectFit: 'contain', borderRadius: 8, display: 'block' }}
-                    />
-                    <span
-                      style={{
-                        position: 'absolute',
-                        top: 6,
-                        left: 6,
-                        background: `rgba(${DIARY_ACCENT}, 0.92)`,
-                        color: '#0b0d12',
-                        fontSize: 11,
-                        fontWeight: 700,
-                        padding: '2px 7px',
-                        borderRadius: 999,
-                      }}
-                    >
-                      #{photo.sequence_number}
-                    </span>
-                  </div>
-                  <div>
-                    <label style={{ ...labelStyle, fontSize: 10 }}>Caption</label>
-                    <input
-                      style={{ ...cellInputStyle, width: '100%' }}
-                      value={photo.caption}
-                      onChange={(e) => updatePhotoCaption(photo.key, e.target.value)}
-                      placeholder={`Caption for photo ${photo.sequence_number}`}
-                    />
-                  </div>
-                  <button type="button" onClick={() => removePhoto(photo.key)} style={{ ...removeRowStyle, marginBottom: 0, marginTop: 24 }}>
-                    Remove
-                  </button>
+          {PHOTO_LAYOUT_SECTIONS.map((section) => {
+            const sectionPhotos = resequencePhotos(photos).filter(
+              (p) => (p.layout || 'grid4') === section.id,
+            )
+            return (
+              <div
+                key={section.id}
+                style={{
+                  marginBottom: 22,
+                  paddingBottom: 18,
+                  borderBottom: '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                <div style={{ fontWeight: 700, fontSize: 14, color: '#F0EDE8', marginBottom: 6 }}>
+                  {section.title}
                 </div>
-              ))}
-            </div>
-          )}
+                <div style={{ marginBottom: 12 }}>
+                  <ImageSourceButtons
+                    onFiles={addPhotosForLayout(section.id)}
+                    multiple
+                    hint={section.hint}
+                  />
+                </div>
+                {sectionPhotos.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {sectionPhotos.map((photo) => (
+                      <div
+                        key={photo.key}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '88px 1fr auto',
+                          gap: 14,
+                          alignItems: 'start',
+                          padding: 12,
+                          background: 'rgba(0,0,0,0.2)',
+                          borderRadius: 12,
+                          border: '1px solid rgba(255,255,255,0.08)',
+                        }}
+                      >
+                        <div style={{ position: 'relative' }}>
+                          <img
+                            src={photo.preview}
+                            alt={`Photo ${photo.sequence_number}`}
+                            style={{ width: 88, height: 88, objectFit: 'cover', borderRadius: 8, display: 'block' }}
+                          />
+                          <span
+                            style={{
+                              position: 'absolute',
+                              top: 6,
+                              left: 6,
+                              background: `rgba(${DIARY_ACCENT}, 0.92)`,
+                              color: '#0b0d12',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: '2px 7px',
+                              borderRadius: 999,
+                            }}
+                          >
+                            #{photo.sequence_number}
+                          </span>
+                        </div>
+                        <div>
+                          <label style={{ ...labelStyle, fontSize: 10 }}>Caption</label>
+                          <input
+                            style={{ ...cellInputStyle, width: '100%' }}
+                            value={photo.caption}
+                            onChange={(e) => updatePhotoCaption(photo.key, e.target.value)}
+                            placeholder={`Caption for photo ${photo.sequence_number}`}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removePhoto(photo.key)}
+                          style={{ ...removeRowStyle, marginBottom: 0, marginTop: 24 }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </GlassSection>
 
         <button type="submit" disabled={saving} style={primaryButtonStyle(DIARY_ACCENT, saving)}>
