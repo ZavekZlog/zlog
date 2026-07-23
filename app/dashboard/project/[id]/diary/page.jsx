@@ -11,6 +11,7 @@ import {
   inputStyle,
   textareaStyle,
   PrimaryCTA,
+  SecondaryButton,
   DIARY_ACCENT,
   pageBackground,
   premiumScopedCss,
@@ -1016,13 +1017,13 @@ export default function SiteDiaryPage() {
               />
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
                 {signatureMode === 'carried' && (
-                  <button type="button" onClick={useExistingSignature} style={{ ...removeRowStyle, marginBottom: 0, color: '#9eb4c8' }}>
+                  <SecondaryButton type="button" onClick={useExistingSignature}>
                     Use Existing Signature
-                  </button>
+                  </SecondaryButton>
                 )}
-                <button type="button" onClick={resignSignature} style={{ ...removeRowStyle, marginBottom: 0 }}>
+                <SecondaryButton type="button" onClick={resignSignature}>
                   Re-sign / Clear
-                </button>
+                </SecondaryButton>
               </div>
             </div>
           ) : (
@@ -1041,9 +1042,9 @@ export default function SiteDiaryPage() {
                   marginBottom: 10,
                 }}
               />
-              <button type="button" onClick={clearSignaturePad} style={{ ...removeRowStyle, marginBottom: 0 }}>
+              <SecondaryButton type="button" onClick={clearSignaturePad}>
                 Clear
-              </button>
+              </SecondaryButton>
             </div>
           )}
         </GlassSection>

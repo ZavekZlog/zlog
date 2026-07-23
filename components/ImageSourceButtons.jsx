@@ -11,16 +11,17 @@ const buttonBase = {
   minHeight: 56,
   padding: '14px 12px',
   borderRadius: 12,
-  border: '1px solid var(--edge, rgba(255,255,255,0.18))',
-  background: 'var(--plate, rgba(255,255,255,0.06))',
-  color: 'var(--text, #F0EDE8)',
+  border: '1px solid var(--edge)',
+  background: 'var(--plate)',
+  color: 'var(--text)',
   fontSize: 13,
-  fontWeight: 600,
+  fontWeight: 500,
   letterSpacing: '0.02em',
   cursor: 'pointer',
   fontFamily: 'inherit',
   WebkitTapHighlightColor: 'transparent',
   touchAction: 'manipulation',
+  boxShadow: 'inset 0 1px 0 var(--edge-highlight)',
 }
 
 /**
@@ -79,6 +80,7 @@ export function ImageSourceButtons({
       >
         <button
           type="button"
+          className="zlog-secondary-btn"
           disabled={disabled}
           onClick={() => cameraInputRef.current?.click()}
           style={{ ...buttonBase, opacity: disabled ? 0.5 : 1 }}
@@ -89,6 +91,7 @@ export function ImageSourceButtons({
         </button>
         <button
           type="button"
+          className="zlog-secondary-btn"
           disabled={disabled}
           onClick={() => galleryInputRef.current?.click()}
           style={{ ...buttonBase, opacity: disabled ? 0.5 : 1 }}

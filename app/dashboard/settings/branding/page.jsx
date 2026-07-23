@@ -9,6 +9,7 @@ import {
   inputStyle,
   PrimaryCTA,
   SecondaryButton,
+  DestructiveButton,
   DIARY_ACCENT,
 } from '@/lib/premium-ui'
 import { extractBrandColorFromFile } from '@/lib/extract-brand-color'
@@ -355,18 +356,30 @@ export default function BrandingSettingsPage() {
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--text-2)' }}>{row.brand_color}</div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch' }}>
                 {!row.is_default && (
-                  <button type="button" onClick={() => setAsDefault(row)} style={{ background: 'transparent', border: 'none', color: 'var(--text-2)', fontSize: 12, cursor: 'pointer', textAlign: 'right' }}>
+                  <SecondaryButton
+                    type="button"
+                    onClick={() => setAsDefault(row)}
+                    style={{ minHeight: 36, padding: '6px 10px', fontSize: 12 }}
+                  >
                     Set default
-                  </button>
+                  </SecondaryButton>
                 )}
-                <button type="button" onClick={() => startEdit(row)} style={{ background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer', textAlign: 'right' }}>
+                <SecondaryButton
+                  type="button"
+                  onClick={() => startEdit(row)}
+                  style={{ minHeight: 36, padding: '6px 10px', fontSize: 12 }}
+                >
                   Edit
-                </button>
-                <button type="button" onClick={() => removeProfile(row)} style={{ background: 'transparent', border: 'none', color: '#ff6b6b', fontSize: 12, cursor: 'pointer', textAlign: 'right' }}>
+                </SecondaryButton>
+                <DestructiveButton
+                  type="button"
+                  onClick={() => removeProfile(row)}
+                  style={{ minHeight: 36, padding: '6px 10px', fontSize: 12 }}
+                >
                   Delete
-                </button>
+                </DestructiveButton>
               </div>
             </div>
           ))

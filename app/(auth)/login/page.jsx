@@ -3,6 +3,19 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import {
+  pageBackground,
+  premiumScopedCss,
+  ZlogWordmark,
+  PrimaryCTA,
+  SecondaryButton,
+  labelStyle,
+  inputStyle,
+  typeTokens,
+  glassPanelStyle,
+  ModuleAccent,
+  DIARY_ACCENT,
+} from '@/lib/premium-ui'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -15,9 +28,9 @@ export default function Login() {
   const handleLogin = async () => {
     setLoading(true)
     setError('')
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      setError(error.message)
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    if (authError) {
+      setError(authError.message)
     } else {
       router.push('/dashboard')
     }
@@ -25,19 +38,59 @@ export default function Login() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'sans-serif' }}>
-      <div style={{ width: '100%', maxWidth: '400px', padding: '40px 24px' }}>
-        <div style={{ fontSize: '28px', fontWeight: '800', color: '#3b82f6', marginBottom: '32px' }}>ZLOG</div>
-        <h1 style={{ color: '#fff', fontSize: '24px', fontWeight: '700', marginBottom: '8px' }}>Sign In</h1>
-        {error && <p style={{ color: '#ef4444', fontSize: '14px', marginBottom: '16px' }}>{error}</p>}
-        <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)}
-          style={{ width: '100%', padding: '12px', background: '#1a1a1a', border: '1px solid #333', borderRadius: '8px', color: '#fff', marginBottom: '12px', fontSize: '14px', boxSizing: 'border-box' }} />
-        <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)}
-          style={{ width: '100%', padding: '12px', background: '#1a1a1a', border: '1px solid #333', borderRadius: '8px', color: '#fff', marginBottom: '20px', fontSize: '14px', boxSizing: 'border-box' }} />
-        <button onClick={handleLogin} disabled={loading}
-          style={{ width: '100%', padding: '14px', background: '#f59e0b', border: 'none', borderRadius: '8px', color: '#000', fontWeight: '700', fontSize: '15px', cursor: 'pointer' }}>
-          {loading ? 'Signing in...' : 'SIGN IN'}
-        </button>
+    <div
+      className="dashboard-premium-bg"
+      style={{
+        ...pageBackground,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <style>{premiumScopedCss}</style>
+      <div style={{ width: '100%', maxWidth: 420, padding: '40px 24px' }}>
+        <div style={{ ...glassPanelStyle, position: 'relative', overflow: 'hidden', marginBottom: 0 }}>
+          <ModuleAccent accent={DIARY_ACCENT} />
+          <ZlogWordmark style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 20, marginTop: 4 }} />
+          <h1 style={{ ...typeTokens.reportName, margin: '0 0 8px' }}>Sign in</h1>
+          <p style={{ ...typeTokens.meta, margin: '0 0 24px' }}>Access your site reports and projects</p>
+
+          {error && (
+            <p style={{ color: 'var(--danger)', fontSize: 14, marginBottom: 16 }}>{error}</p>
+          )}
+
+          <label style={labelStyle}>Email</label>
+          <input
+            type="email"
+            placeholder="you@company.co.uk"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={inputStyle}
+            autoComplete="email"
+          />
+          <label style={labelStyle}>Password</label>
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={{ ...inputStyle, marginBottom: 20 }}
+            autoComplete="current-password"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleLogin()
+            }}
+          />
+
+          <PrimaryCTA onClick={handleLogin} disabled={loading}>
+            {loading ? 'Signing in…' : 'Sign in'}
+          </PrimaryCTA>
+
+          <div style={{ marginTop: 14 }}>
+            <SecondaryButton href="/signup" style={{ width: '100%' }}>
+              Create account
+            </SecondaryButton>
+          </div>
+        </div>
       </div>
     </div>
   )

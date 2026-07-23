@@ -325,6 +325,27 @@ export function destructiveButtonStyle(disabled = false) {
   }
 }
 
+export function DestructiveButton({
+  children,
+  disabled = false,
+  type = 'button',
+  onClick,
+  style,
+  className = '',
+}) {
+  return (
+    <button
+      type={type}
+      disabled={disabled}
+      onClick={onClick}
+      className={`zlog-destructive-btn ${className}`.trim()}
+      style={{ ...destructiveButtonStyle(disabled), ...style }}
+    >
+      {children}
+    </button>
+  )
+}
+
 export function ghostButtonStyle() {
   return {
     background: 'transparent',
