@@ -11,15 +11,26 @@ import {
   RecentEntryCard,
   SecondaryButton,
   PrimaryCTA,
-  ZlogWordmark,
-  ModuleAccent,
-  typeTokens,
-  DIARY_ACCENT,
   premiumDiaryEmptyClass,
   premiumDiaryEmptyTitleClass,
   premiumDiaryEmptyHintClass,
+  typeTokens,
+  recentEntryDateStyle,
+  recentEntrySummaryStyle,
+  recentEntryActionsStyle,
+  recentEntryActionButtonStyle,
 } from '@/lib/premium-ui'
-import { REPORT_THEME_LIST, REPORT_THEMES, formatProjectMeta } from '@/lib/report-theme'
+import { REPORT_THEME_LIST, REPORT_THEMES } from '@/lib/report-theme'
+import { DashboardTopBar } from '@/components/dashboard/DashboardTopBar'
+
+/** Dashboard vertical rhythm (8px grid) */
+const SPACE = {
+  contentTop: 12,
+  contentX: 20,
+  contentBottom: 24,
+  sectionAfterCards: 16,
+  headingToList: 12,
+}
 
 export default function DashboardPage() {
   const [project, setProject] = useState(null)
@@ -59,16 +70,13 @@ export default function DashboardPage() {
     )
   }
 
-  const mainCards = REPORT_THEME_LIST.slice(0, 4)
-  const hsCard = REPORT_THEME_LIST[4]
-
-  const renderCard = (card, index, wrapClassName = 'premium-dash-card-wrap', wrapStyle = {}) => {
+  const renderCard = (card, index, wrapClassName = 'premium-dash-card-wrap') => {
     const disabled = !project
     return (
       <div
         key={card.path}
         className={wrapClassName}
-        style={{ animationDelay: `${index * 70}ms`, ...wrapStyle }}
+        style={{ animationDelay: `${index * 70}ms` }}
       >
         <ModuleHomeCard
           title={card.title}
@@ -87,41 +95,15 @@ export default function DashboardPage() {
   return (
     <div className="dashboard-premium-bg" style={pageBackground}>
       <style>{`${premiumScopedCss}${dashboardCardInteractionCss}`}</style>
+      <DashboardTopBar />
+
       <div
-        className="premium-shell-header zlog-internal-header"
         style={{
-          position: 'relative',
-          overflow: 'hidden',
-          background: 'color-mix(in srgb, var(--ink) 72%, var(--plate))',
-          borderBottom: '1px solid var(--edge-highlight)',
-          padding: '16px 24px',
+          padding: `${SPACE.contentTop}px ${SPACE.contentX}px ${SPACE.contentBottom}px`,
+          maxWidth: '600px',
+          margin: '0 auto',
         }}
       >
-        <ModuleAccent accent={DIARY_ACCENT} height="3px" radius="0" />
-        <div style={{ position: 'relative' }}>
-          <ZlogWordmark style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.04em' }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 6 }}>
-            {project && (
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ ...typeTokens.reportName, fontSize: 17 }}>{project.name}</div>
-                {formatProjectMeta(project) ? (
-                  <div className="premium-shell-subtitle" style={{ ...typeTokens.meta, marginTop: 2 }}>
-                    {formatProjectMeta(project)}
-                  </div>
-                ) : null}
-              </div>
-            )}
-            <SecondaryButton
-              href="/dashboard/settings/branding"
-              style={{ marginLeft: 'auto', minHeight: 36, padding: '6px 12px', fontSize: 12 }}
-            >
-              Branding
-            </SecondaryButton>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ padding: '20px 24px 24px', maxWidth: '600px', margin: '0 auto' }}>
         {!project && (
           <div
             style={{
@@ -129,33 +111,43 @@ export default function DashboardPage() {
               overflow: 'hidden',
               textAlign: 'center',
               padding: '24px 20px',
-              marginBottom: '20px',
+              marginBottom: 16,
               background: 'var(--plate)',
               border: '1px solid var(--edge)',
               borderRadius: '12px',
               boxShadow: 'inset 0 1px 0 var(--edge-highlight)',
             }}
           >
-            <ModuleAccent accent={DIARY_ACCENT} height="2.55px" radius="12px 12px 0 0" />
-            <p style={{ margin: '8px 0 12px', color: 'var(--text)', fontWeight: 600 }}>Create your first project</p>
-            <p style={{ margin: '0 0 16px', fontSize: '13px', color: 'var(--text-2)' }}>Add a site before opening reports.</p>
+            <p style={{ margin: '8px 0 12px', color: 'var(--text)', fontWeight: 600, fontSize: 16 }}>Create your first project</p>
+            <p style={{ margin: '0 0 16px', fontSize: 16, lineHeight: 1.45, color: 'color-mix(in srgb, var(--text) 90%, var(--text-2))' }}>Add a site before opening reports.</p>
             <PrimaryCTA onClick={() => router.push('/dashboard/new-project')} style={{ maxWidth: 280, margin: '0 auto' }}>
               New project
             </PrimaryCTA>
           </div>
         )}
 
-        <div className="premium-dash-cards-grid" style={{ marginBottom: '16px' }}>
-          {mainCards.map((card, index) => renderCard(card, index))}
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '4px' }}>
-          {renderCard(hsCard, 4, 'premium-dash-card-wrap premium-dash-card-wrap--solo', { width: 'calc(50% - 10px)' })}
+        <div className="premium-dash-cards-grid" style={{ marginBottom: 0 }}>
+          {REPORT_THEME_LIST.map((card, index) =>
+            renderCard(
+              card,
+              index,
+              index === 4 ? 'premium-dash-card-wrap premium-dash-card-wrap--hs' : 'premium-dash-card-wrap',
+            ),
+          )}
         </div>
 
         {project && (
           <>
-            <h2 style={{ ...typeTokens.sectionTitle, marginTop: 48, marginBottom: 16, color: 'var(--text-2)' }}>
+            <h2
+              style={{
+                ...typeTokens.sectionTitle,
+                marginTop: SPACE.sectionAfterCards,
+                marginBottom: SPACE.headingToList,
+                color: 'color-mix(in srgb, var(--text) 78%, var(--text-2))',
+                fontSize: 16,
+                letterSpacing: '0.072em',
+              }}
+            >
               Recent diary entries
             </h2>
 
@@ -167,20 +159,23 @@ export default function DashboardPage() {
             ) : (
               diaries.map((d) => (
                 <RecentEntryCard key={d.id} accent={REPORT_THEMES.diary.accent}>
-                  <div style={{ fontWeight: 600, color: 'var(--text)' }}>{d.report_date}</div>
-                  <div style={{ color: 'var(--text-2)', fontSize: 13, marginTop: 4 }}>
-                    {d.site_summary?.slice(0, 100)}{(d.site_summary?.length || 0) > 100 ? '...' : ''}
+                  <div style={recentEntryDateStyle}>{d.report_date}</div>
+                  <div style={recentEntrySummaryStyle}>
+                    {d.site_summary?.slice(0, 100)}
+                    {(d.site_summary?.length || 0) > 100 ? '...' : ''}
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+                  <div style={recentEntryActionsStyle}>
                     <SecondaryButton
                       type="button"
                       onClick={() => router.push(`/dashboard/project/${project.id}/diary?report=${d.id}`)}
+                      style={recentEntryActionButtonStyle}
                     >
                       View / Edit
                     </SecondaryButton>
                     <SecondaryButton
                       type="button"
                       onClick={() => router.push(`/dashboard/project/${project.id}/diary?duplicate=${d.id}`)}
+                      style={recentEntryActionButtonStyle}
                     >
                       Duplicate
                     </SecondaryButton>

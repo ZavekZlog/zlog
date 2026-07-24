@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import {
@@ -14,12 +15,13 @@ import {
   typeTokens,
   glassPanelStyle,
   ModuleAccent,
-  DIARY_ACCENT,
+  BRAND_ACCENT,
 } from '@/lib/premium-ui'
 
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
@@ -50,7 +52,7 @@ export default function Login() {
       <style>{premiumScopedCss}</style>
       <div style={{ width: '100%', maxWidth: 420, padding: '40px 24px' }}>
         <div style={{ ...glassPanelStyle, position: 'relative', overflow: 'hidden', marginBottom: 0 }}>
-          <ModuleAccent accent={DIARY_ACCENT} />
+          <ModuleAccent accent={BRAND_ACCENT} />
           <ZlogWordmark style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 20, marginTop: 4 }} />
           <h1 style={{ ...typeTokens.reportName, margin: '0 0 8px' }}>Sign in</h1>
           <p style={{ ...typeTokens.meta, margin: '0 0 24px' }}>Access your site reports and projects</p>
@@ -69,17 +71,53 @@ export default function Login() {
             autoComplete="email"
           />
           <label style={labelStyle}>Password</label>
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ ...inputStyle, marginBottom: 20 }}
-            autoComplete="current-password"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleLogin()
-            }}
-          />
+          <div style={{ position: 'relative', marginBottom: 20 }}>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={{
+                ...inputStyle,
+                marginBottom: 0,
+                paddingRight: 48,
+              }}
+              autoComplete="current-password"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleLogin()
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
+              style={{
+                position: 'absolute',
+                top: '50%',
+                right: 10,
+                transform: 'translateY(-50%)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 36,
+                height: 36,
+                padding: 0,
+                border: 'none',
+                borderRadius: 8,
+                background: 'transparent',
+                color: 'var(--text-2)',
+                cursor: 'pointer',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              {showPassword ? (
+                <EyeOff size={18} strokeWidth={1.75} aria-hidden />
+              ) : (
+                <Eye size={18} strokeWidth={1.75} aria-hidden />
+              )}
+            </button>
+          </div>
 
           <PrimaryCTA onClick={handleLogin} disabled={loading}>
             {loading ? 'Signing in…' : 'Sign in'}

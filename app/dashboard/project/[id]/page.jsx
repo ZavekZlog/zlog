@@ -11,6 +11,10 @@ import {
   dashboardCardInteractionCss,
   premiumScopedCss,
   typeTokens,
+  recentEntryDateStyle,
+  recentEntrySummaryStyle,
+  recentEntryActionsStyle,
+  recentEntryActionButtonStyle,
 } from '@/lib/premium-ui'
 import { REPORT_THEMES, formatProjectMeta } from '@/lib/report-theme'
 
@@ -72,33 +76,43 @@ export default function ProjectPage() {
         </div>
       </div>
 
-      <h2 style={{ ...typeTokens.sectionTitle, marginBottom: 16, color: 'var(--text-2)' }}>
+      <h2
+        style={{
+          ...typeTokens.sectionTitle,
+          marginBottom: 12,
+          color: 'color-mix(in srgb, var(--text) 78%, var(--text-2))',
+          fontSize: 16,
+          letterSpacing: '0.072em',
+        }}
+      >
         Recent diary entries
       </h2>
 
       {diaries.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-2)' }}>
-          <p style={{ margin: '0 0 8px', color: 'var(--text)', fontWeight: 600 }}>No entries yet</p>
-          <p style={{ margin: 0, fontSize: 13 }}>Tap New Report to add your first entry</p>
+        <div style={{ textAlign: 'center', padding: 40, color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))' }}>
+          <p style={{ margin: '0 0 8px', color: 'var(--text)', fontWeight: 600, fontSize: 16 }}>No entries yet</p>
+          <p style={{ margin: 0, fontSize: 16, lineHeight: 1.45 }}>Tap New Report to add your first entry</p>
         </div>
       ) : (
         diaries.map((d) => (
           <RecentEntryCard key={d.id} accent={REPORT_THEMES.diary.accent}>
-            <div style={{ fontWeight: 600, color: 'var(--text)' }}>{d.report_date}</div>
-            <div style={{ color: 'var(--text-2)', fontSize: 13, marginTop: 4 }}>
+            <div style={recentEntryDateStyle}>{d.report_date}</div>
+            <div style={recentEntrySummaryStyle}>
               {(d.site_summary || d.notes || '')?.slice(0, 100)}
               {((d.site_summary || d.notes || '').length > 100) ? '...' : ''}
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+            <div style={recentEntryActionsStyle}>
               <SecondaryButton
                 type="button"
                 onClick={() => router.push(`/dashboard/project/${id}/diary?report=${d.id}`)}
+                style={recentEntryActionButtonStyle}
               >
                 View / Edit
               </SecondaryButton>
               <SecondaryButton
                 type="button"
                 onClick={() => router.push(`/dashboard/project/${id}/diary?duplicate=${d.id}`)}
+                style={recentEntryActionButtonStyle}
               >
                 Duplicate
               </SecondaryButton>

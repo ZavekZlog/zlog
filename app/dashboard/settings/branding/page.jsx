@@ -10,7 +10,7 @@ import {
   PrimaryCTA,
   SecondaryButton,
   DestructiveButton,
-  DIARY_ACCENT,
+  BRAND_ACCENT,
 } from '@/lib/premium-ui'
 import { extractBrandColorFromFile } from '@/lib/extract-brand-color'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
@@ -237,7 +237,7 @@ export default function BrandingSettingsPage() {
       reportName="PDF report profiles"
       meta="Logos and colours for PDF reports"
       backHref="/dashboard"
-      accent={DIARY_ACCENT}
+      accent={BRAND_ACCENT}
     >
       {error && (
         <div style={{ background: 'rgba(220,50,50,0.1)', border: '1px solid rgba(220,50,50,0.3)', color: '#ff6b6b', padding: '12px 14px', fontSize: 14, marginBottom: 16, borderRadius: 10 }}>
@@ -250,7 +250,7 @@ export default function BrandingSettingsPage() {
         </div>
       )}
 
-      <GlassSection title={editingId ? 'Edit profile' : 'Add profile'} accent={DIARY_ACCENT}>
+      <GlassSection title={editingId ? 'Edit profile' : 'Add profile'} accent={BRAND_ACCENT}>
         <form onSubmit={handleSave}>
           <label style={labelStyle}>Company name</label>
           <input
@@ -301,7 +301,7 @@ export default function BrandingSettingsPage() {
           </label>
 
           <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-            <PrimaryCTA type="submit" disabled={saving || extracting} accent={DIARY_ACCENT} style={{ flex: 1 }}>
+            <PrimaryCTA type="submit" disabled={saving || extracting} style={{ flex: 1 }}>
               {saving ? 'Saving…' : (editingId ? 'Update profile' : 'Save profile')}
             </PrimaryCTA>
             {editingId && (
@@ -313,7 +313,7 @@ export default function BrandingSettingsPage() {
         </form>
       </GlassSection>
 
-      <GlassSection title="Saved profiles" accent={DIARY_ACCENT}>
+      <GlassSection title="Saved profiles" accent={BRAND_ACCENT}>
         {loading ? (
           <p style={{ color: 'var(--text-2)', margin: 0 }}>Loading…</p>
         ) : brandings.length === 0 ? (

@@ -14,7 +14,7 @@ import {
   typeTokens,
   glassPanelStyle,
   ModuleAccent,
-  DIARY_ACCENT,
+  BRAND_ACCENT,
 } from '@/lib/premium-ui'
 
 export default function SignupPage() {
@@ -81,7 +81,7 @@ export default function SignupPage() {
       <style>{premiumScopedCss}</style>
       <div style={{ width: '100%', maxWidth: 440, padding: '40px 24px' }}>
         <div style={{ ...glassPanelStyle, position: 'relative', overflow: 'hidden', marginBottom: 0 }}>
-          <ModuleAccent accent={DIARY_ACCENT} />
+          <ModuleAccent accent={BRAND_ACCENT} />
           <ZlogWordmark style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 20, marginTop: 4 }} />
           <h1 style={{ ...typeTokens.reportName, margin: '0 0 8px' }}>Create your account</h1>
           <p style={{ ...typeTokens.meta, margin: '0 0 24px' }}>14-day free trial. No card required.</p>

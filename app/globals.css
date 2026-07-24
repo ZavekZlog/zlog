@@ -18,10 +18,10 @@ body {
   --rust: #B8431C;
   --ink: #0b0d12;
   --text: #F4F2EF;
-  --text-dim: #9A968F;
+  --text-dim: #A8A49C;
   --action: #FF5000;
   --danger: #E5484D;
-  --text-2: #B8B2AA;
+  --text-2: #C9C3BA;
   --radius-sm: 8px;
   --radius-lg: 16px;
   --radius-full: 999px;
@@ -36,7 +36,9 @@ body {
   --premium-text-title: #FAFAF8;
   --premium-text-body: #93a7b9;
   --premium-text-muted: #8ea2b5;
-  --premium-accent-strip: 3.6px;
+  --premium-accent-strip: 2.5px;
+  --module-accent-thickness: 2.5px;
+  --category-rail-thickness: 5.5px;
 }
 
 .premium-diary-empty {
@@ -61,8 +63,8 @@ body {
 
 .premium-diary-empty__hint {
   margin: 0;
-  font-size: 14px;
-  color: var(--premium-text-body);
+  font-size: 16px;
+  color: color-mix(in srgb, var(--text) 88%, var(--text-2));
   line-height: 1.5;
 }
 
@@ -72,37 +74,60 @@ body {
   font-weight: 600;
 }
 
-/* Mobile legibility + industrial confidence — layout unchanged */
+/* Mobile legibility — keep dash cards compact & grid-aligned */
 @media (max-width: 768px) {
   .premium-dash-card {
-    background: var(--premium-card-bg) !important;
-    border: 1px solid var(--premium-card-border) !important;
+    background: var(--plate) !important;
+    border: 1px solid var(--edge) !important;
     box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.42),
+      0 8px 32px color-mix(in srgb, var(--ink) 42%, transparent),
       inset 0 1px 0 var(--edge-highlight) !important;
-    min-height: 174px !important;
-    padding: 22px !important;
+    min-height: 0 !important;
+    padding: 11px 8px 9px !important;
   }
 
   .premium-dash-icon {
-    margin-bottom: 14px !important;
+    margin-bottom: 6px !important;
     filter: brightness(1.1);
   }
 
   .premium-dash-card > .premium-dash-card-title {
-    color: #FFFFFF !important;
-    font-size: 17px !important;
+    color: var(--text) !important;
+    font-size: 15px !important;
     font-weight: 700 !important;
+    line-height: 1.2 !important;
+    margin-bottom: 4px !important;
   }
 
   .premium-dash-card > .premium-dash-card-desc {
-    color: #A3B5C4 !important;
-    font-size: 14px !important;
-    line-height: 1.55 !important;
+    color: color-mix(in srgb, var(--text) 92%, var(--text-2)) !important;
+    font-size: 16px !important;
+    line-height: 1.28 !important;
+    width: 100% !important;
+    min-height: calc(1.28em * 3) !important;
+    max-height: none !important;
+    display: block !important;
+    -webkit-line-clamp: unset !important;
+    line-clamp: unset !important;
+    text-overflow: clip !important;
+    overflow: visible !important;
+    white-space: normal !important;
   }
 
   .premium-dash-accent {
+    height: var(--module-accent-thickness, 2.5px) !important;
+  }
+
+  .premium-accent-bar {
     height: var(--premium-accent-strip) !important;
+  }
+
+  .premium-accent-bar.premium-dash-accent {
+    height: var(--module-accent-thickness, 2.5px) !important;
+  }
+
+  .premium-category-rail {
+    width: var(--category-rail-thickness, 5.5px) !important;
   }
 
   .premium-glass-panel {
@@ -126,10 +151,6 @@ body {
     border-color: rgba(255, 255, 255, 0.14) !important;
   }
 
-  .premium-accent-bar {
-    height: var(--premium-accent-strip) !important;
-  }
-
   .premium-section-title {
     color: var(--premium-text-title) !important;
     font-size: 15px !important;
@@ -148,7 +169,7 @@ body {
   }
 
   .premium-shell-subtitle {
-    color: var(--premium-text-body) !important;
+    color: color-mix(in srgb, var(--text) 72%, var(--text-2)) !important;
     font-size: 13px !important;
   }
 
@@ -190,6 +211,11 @@ body {
   .premium-shell-header {
     background: transparent !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+
+  .zlog-dashboard-topbar.premium-shell-header {
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
   }
 
   .premium-diary-empty {

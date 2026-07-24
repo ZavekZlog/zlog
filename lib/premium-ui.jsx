@@ -4,7 +4,11 @@ import Link from 'next/link'
 import { REPORT_THEMES } from '@/lib/report-theme'
 
 export const DIARY_ACCENT = REPORT_THEMES.diary.accent
+/** Brand chrome accent (Forge Orange) — not a report-type colour; CTAs use powder-coat --rust */
+export const BRAND_ACCENT = '255,80,0'
 export const CTA_ORANGE = 'var(--action)'
+/** Powder-coat CTA base — landing “Start Trial” uses --rust enamel */
+export const CTA_POWDER = 'var(--rust)'
 
 /* ── Typography tokens (Barlow via body; Space Grotesk reserved for brand moments) ── */
 export const typeTokens = {
@@ -16,11 +20,11 @@ export const typeTokens = {
     color: 'var(--text)',
   },
   moduleTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: 600,
     letterSpacing: '0.04em',
     lineHeight: 1.3,
-    color: 'var(--text-2)',
+    color: 'color-mix(in srgb, var(--text) 78%, var(--text-2))',
   },
   reportName: {
     fontSize: 19,
@@ -30,24 +34,24 @@ export const typeTokens = {
     color: 'var(--text)',
   },
   meta: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 400,
-    lineHeight: 1.4,
-    color: 'var(--text-2)',
+    lineHeight: 1.45,
+    color: 'color-mix(in srgb, var(--text) 72%, var(--text-2))',
   },
   sectionTitle: {
     fontWeight: 600,
-    fontSize: 13,
+    fontSize: 14,
     letterSpacing: '0.08em',
     textTransform: 'uppercase',
     color: 'var(--text)',
   },
   label: {
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: '0.12em',
     textTransform: 'uppercase',
     fontWeight: 500,
-    color: 'var(--text-2)',
+    color: 'color-mix(in srgb, var(--text) 70%, var(--text-2))',
   },
   body: {
     fontSize: 15,
@@ -55,7 +59,14 @@ export const typeTokens = {
     lineHeight: 1.55,
     color: 'var(--text)',
   },
+  helper: {
+    fontSize: 13,
+    fontWeight: 400,
+    lineHeight: 1.45,
+    color: 'color-mix(in srgb, var(--text) 68%, var(--text-2))',
+  },
 }
+
 
 export const pageBackground = {
   minHeight: '100vh',
@@ -111,8 +122,22 @@ export const premiumScopedCss = `
     transform: translateY(1px);
     filter: brightness(0.96);
   }
+  .zlog-header-utility-card:not(:disabled):hover {
+    border-color: color-mix(in srgb, var(--edge) 100%, var(--text) 12%);
+    filter: brightness(1.06);
+  }
+  .zlog-header-utility-card:not(:disabled):active {
+    transform: translateY(1px);
+    filter: brightness(0.97);
+  }
   .zlog-destructive-btn:not(:disabled):hover {
     filter: brightness(1.08);
+  }
+  .dashboard-premium-bg input::placeholder,
+  .dashboard-premium-bg textarea::placeholder,
+  .dashboard-premium-bg select:invalid {
+    color: color-mix(in srgb, var(--text) 48%, var(--text-dim));
+    opacity: 1;
   }
 `
 
@@ -159,8 +184,20 @@ export const sectionTitleStyle = {
   marginBottom: 16,
 }
 
+/**
+ * Locked Zlog industrial powder-coat design tokens.
+ * Report-card top accents stay thin; history/list category rails use the thicker mobile-visible strip.
+ */
+export const MODULE_ACCENT_THICKNESS = 2.5
+/** History / item listing left rail — locked mobile-visible powder-coat strip */
+export const CATEGORY_RAIL_THICKNESS = 5.5
+
 /** Module-coloured top-edge highlight (dashboard card language) */
-export function ModuleAccent({ accent = DIARY_ACCENT, height = '2.55px', radius = '16px 16px 0 0' }) {
+export function ModuleAccent({
+  accent = DIARY_ACCENT,
+  height = `${MODULE_ACCENT_THICKNESS}px`,
+  radius = '16px 16px 0 0',
+}) {
   return (
     <div
       className="premium-accent-bar premium-dash-accent"
@@ -170,7 +207,7 @@ export function ModuleAccent({ accent = DIARY_ACCENT, height = '2.55px', radius 
   )
 }
 
-export const accentBarStyle = (accent, height = '2.55px', radius = '16px 16px 0 0') => ({
+export const accentBarStyle = (accent, height = `${MODULE_ACCENT_THICKNESS}px`, radius = '16px 16px 0 0') => ({
   position: 'absolute',
   top: 0,
   left: 0,
@@ -183,8 +220,42 @@ export const accentBarStyle = (accent, height = '2.55px', radius = '16px 16px 0 
 })
 
 /**
- * Powder-coated primary CTA — landing-page material language on --action (Forge Orange).
- * Soft depth + top highlight + outer glow; not flat fluorescent fill.
+ * Vertical category rail for history / list cards (Survey / Diary / Progress / Snag / H&S).
+ * Locked at CATEGORY_RAIL_THICKNESS (5.5px): deep module colour → pale specular → soft falloff.
+ */
+export const categoryRailStyle = (
+  accent,
+  width = CATEGORY_RAIL_THICKNESS,
+  radius = '12px 0 0 12px',
+) => ({
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  bottom: 0,
+  width,
+  borderRadius: radius,
+  pointerEvents: 'none',
+  background: `linear-gradient(180deg, transparent 0%, rgba(${accent}, 0.88) 18%, color-mix(in srgb, var(--text) 52%, transparent) 50%, rgba(${accent}, 0.88) 82%, transparent 100%)`,
+  boxShadow: `inset 1px 0 0 color-mix(in srgb, var(--text) 22%, transparent), 1px 0 5px rgba(${accent}, 0.16)`,
+})
+
+export function ModuleCategoryRail({
+  accent = DIARY_ACCENT,
+  width = CATEGORY_RAIL_THICKNESS,
+  radius = '12px 0 0 12px',
+}) {
+  return (
+    <div
+      className="premium-category-rail"
+      style={categoryRailStyle(accent, width, radius)}
+      aria-hidden
+    />
+  )
+}
+
+/**
+ * Powder-coated primary CTA — visual match to landing “Start 7-Day Free Trial”.
+ * Uses --rust enamel (darker base, top highlight, depth, soft glow) — not flat fluorescent orange.
  */
 export function primaryButtonStyle(_accent = DIARY_ACCENT, disabled = false) {
   return {
@@ -194,11 +265,11 @@ export function primaryButtonStyle(_accent = DIARY_ACCENT, disabled = false) {
     minHeight: 48,
     padding: '14px 18px',
     borderRadius: '12px',
-    border: '1px solid color-mix(in srgb, var(--action), var(--ink) 58%)',
+    border: '1px solid color-mix(in srgb, var(--rust), var(--ink) 58%)',
     background:
-      'linear-gradient(180deg, color-mix(in srgb, var(--action), var(--text) 16%) 0%, color-mix(in srgb, var(--action), var(--text) 6%) 18%, var(--action) 42%, var(--action) 62%, color-mix(in srgb, var(--action), var(--ink) 29%) 88%, color-mix(in srgb, var(--action), var(--ink) 45%) 100%)',
+      'linear-gradient(180deg, color-mix(in srgb, var(--rust), var(--text) 16%) 0%, color-mix(in srgb, var(--rust), var(--text) 6%) 18%, var(--rust) 42%, var(--rust) 62%, color-mix(in srgb, var(--rust), var(--ink) 29%) 88%, color-mix(in srgb, var(--rust), var(--ink) 45%) 100%)',
     boxShadow:
-      'inset 0 1px 0 color-mix(in srgb, var(--text), transparent 75%), inset 0 16px 28px color-mix(in srgb, var(--text), transparent 94%), inset 0 -14px 20px color-mix(in srgb, var(--ink), transparent 48%), 0 0 22px color-mix(in srgb, var(--action), transparent 75%)',
+      'inset 0 1px 0 color-mix(in srgb, var(--text), transparent 75%), inset 0 16px 28px color-mix(in srgb, var(--text), transparent 94%), inset 0 -14px 20px color-mix(in srgb, var(--ink), transparent 48%), 0 0 22px color-mix(in srgb, var(--rust), transparent 75%)',
     color: 'var(--text)',
     fontWeight: 600,
     fontSize: 15,
@@ -372,17 +443,19 @@ export function premiumBackPillStyle() {
   }
 }
 
-/** Subtle Zlog wordmark — warm white + orange “log” */
+/** Subtle Zlog wordmark — orange “Z” (matches riveted Z), warm white “log” */
 export function ZlogWordmark({ style } = {}) {
   return (
     <div
       aria-label="Zlog"
       style={{
         ...typeTokens.wordmark,
+        color: 'var(--text)',
         ...style,
       }}
     >
-      Z<span style={{ color: 'var(--action)' }}>log</span>
+      <span style={{ color: 'var(--rust)' }}>Z</span>
+      <span style={{ color: 'var(--text)' }}>log</span>
     </div>
   )
 }
@@ -579,37 +652,71 @@ export function ModuleHomeCard({
   )
 }
 
-/** Neutral recent-entry card with optional subtle module edge */
+/** Neutral recent-entry / history card with luminous module category rail */
 export function RecentEntryCard({ accent = DIARY_ACCENT, children, style }) {
   return (
     <div
+      className="premium-recent-entry-card"
       style={{
         position: 'relative',
         overflow: 'hidden',
         background: 'var(--plate)',
         border: '1px solid var(--edge)',
         borderRadius: '12px',
-        padding: '16px',
-        marginBottom: '12px',
+        padding: '16px 16px 16px 18px',
+        marginBottom: 12,
         boxShadow: 'inset 0 1px 0 var(--edge-highlight)',
+        boxSizing: 'border-box',
         ...style,
       }}
     >
+      <ModuleCategoryRail accent={accent} />
       <div
-        aria-hidden
+        className="premium-recent-entry-card__body"
         style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          bottom: 0,
-          width: 3,
-          background: `rgba(${accent}, 0.55)`,
-          borderRadius: '12px 0 0 12px',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+          paddingLeft: 4,
         }}
-      />
-      <div style={{ paddingLeft: 6 }}>{children}</div>
+      >
+        {children}
+      </div>
     </div>
   )
+}
+
+/** Shared diary-history entry typography / action geometry (16px body, 48px actions) */
+export const recentEntryDateStyle = {
+  fontWeight: 700,
+  fontSize: 16,
+  color: 'var(--text)',
+  lineHeight: 1.3,
+  letterSpacing: '0.01em',
+  minHeight: 21,
+}
+
+export const recentEntrySummaryStyle = {
+  color: 'color-mix(in srgb, var(--text) 90%, var(--text-2))',
+  fontSize: 16,
+  lineHeight: 1.45,
+  marginTop: 6,
+  minHeight: 'calc(1.45em * 2)',
+}
+
+export const recentEntryActionsStyle = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 10,
+  marginTop: 14,
+}
+
+export const recentEntryActionButtonStyle = {
+  minHeight: 48,
+  fontSize: 16,
+  fontWeight: 600,
+  padding: '12px 16px',
+  boxSizing: 'border-box',
 }
 
 export const premiumDiaryEmptyClass = 'premium-diary-empty'
@@ -619,7 +726,11 @@ export const premiumDiaryEmptyHintClass = 'premium-diary-empty__hint'
 export const dashboardCardStyle = {
   position: 'relative',
   width: '100%',
-  padding: '28px',
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-start',
+  padding: '11px 8px 9px',
   background: 'var(--plate)',
   borderRadius: '16px',
   cursor: 'pointer',
@@ -634,28 +745,40 @@ export const dashboardCardStyle = {
 
 export const dashboardCardTitleStyle = {
   fontWeight: 700,
-  fontSize: '16px',
+  fontSize: '15px',
   color: 'var(--text)',
-  marginBottom: '10px',
-  lineHeight: 1.35,
+  marginBottom: '4px',
+  lineHeight: 1.2,
 }
 
 export const dashboardCardDescStyle = {
-  fontSize: '13px',
-  color: 'var(--text-2)',
-  lineHeight: 1.6,
+  fontSize: '16px',
+  color: 'color-mix(in srgb, var(--text) 92%, var(--text-2))',
+  lineHeight: 1.28,
   margin: 0,
+  width: '100%',
+  minHeight: 'calc(1.28em * 3)',
+  maxHeight: 'none',
+  display: 'block',
+  overflow: 'visible',
+  textOverflow: 'clip',
+  WebkitLineClamp: 'unset',
+  whiteSpace: 'normal',
+  overflowWrap: 'break-word',
+  wordBreak: 'normal',
+  flex: '1 1 auto',
 }
 
 export const dashboardIconBoxStyle = (accent) => ({
-  width: '52px',
-  height: '52px',
+  width: '38px',
+  height: '38px',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   borderRadius: '12px',
-  marginBottom: '22px',
-  fontSize: '28px',
+  marginBottom: '6px',
+  flexShrink: 0,
+  fontSize: '20px',
   lineHeight: 1,
   background: `linear-gradient(145deg, rgba(${accent}, 0.24) 0%, rgba(${accent}, 0.1) 100%)`,
   border: `1px solid rgba(${accent}, 0.32)`,
@@ -667,10 +790,11 @@ export const dashboardCardInteractionCss = `
   .premium-dash-card-wrap {
     opacity: 0;
     animation: dash-card-enter 400ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    align-self: stretch;
   }
   @keyframes dash-card-enter {
-    from { opacity: 0; transform: translateY(12px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
   .premium-dash-card {
     transition: all 220ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -710,24 +834,43 @@ export const dashboardCardInteractionCss = `
     transition-duration: 120ms;
   }
   .premium-dash-cards-grid {
+    --dash-gap: 14px;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--dash-gap);
+    align-items: stretch;
   }
-  .premium-dash-cards-grid > .premium-dash-card-wrap,
-  .premium-dash-card-wrap--solo { display: flex; }
-  .premium-dash-cards-grid > .premium-dash-card-wrap > .premium-dash-card,
-  .premium-dash-card-wrap--solo > .premium-dash-card {
-    flex: 1;
+  .premium-dash-cards-grid > .premium-dash-card-wrap {
+    display: flex;
+    grid-column: span 2;
+    height: 100%;
+    min-width: 0;
+    min-height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  .premium-dash-cards-grid > .premium-dash-card-wrap > .premium-dash-card {
+    flex: 1 1 auto;
     width: 100%;
-    min-height: 188px;
+    height: 100%;
+    min-height: 100%;
+    box-sizing: border-box;
+  }
+  .premium-dash-cards-grid > .premium-dash-card-wrap--hs {
+    grid-column: 2 / 4;
+    justify-self: stretch;
+    width: auto;
+    max-width: none;
   }
 
   @media (max-width: 768px) {
-    .premium-dash-cards-grid > .premium-dash-card-wrap > .premium-dash-card,
-    .premium-dash-card-wrap--solo > .premium-dash-card {
-      min-height: 174px;
-      padding: 22px !important;
+    .premium-dash-cards-grid {
+      --dash-gap: 12px;
+    }
+
+    .premium-dash-cards-grid > .premium-dash-card-wrap > .premium-dash-card {
+      padding: 11px 8px 9px !important;
+      min-height: 0 !important;
     }
 
     .premium-dash-card {
@@ -738,27 +881,38 @@ export const dashboardCardInteractionCss = `
 
     .premium-dash-card-title {
       color: var(--text) !important;
-      font-size: 17px !important;
+      font-size: 15px !important;
       font-weight: 700 !important;
-      line-height: 1.32 !important;
-      margin-bottom: 8px !important;
+      line-height: 1.2 !important;
+      margin-bottom: 4px !important;
     }
 
     .premium-dash-card-desc {
-      color: var(--text-2) !important;
-      font-size: 14px !important;
-      line-height: 1.55 !important;
+      color: color-mix(in srgb, var(--text) 92%, var(--text-2)) !important;
+      font-size: 16px !important;
+      line-height: 1.28 !important;
+      min-height: calc(1.28em * 3) !important;
+      max-height: none !important;
+      display: block !important;
+      -webkit-line-clamp: unset !important;
+      line-clamp: unset !important;
+      text-overflow: clip !important;
+      overflow: visible !important;
+      white-space: normal !important;
     }
 
     .premium-dash-icon {
-      margin-bottom: 14px !important;
+      margin-bottom: 6px !important;
+      width: 38px !important;
+      height: 38px !important;
+      font-size: 20px !important;
       filter: brightness(1.1);
       box-shadow: inset 0 1px 0 var(--edge-highlight), 0 4px 22px rgba(var(--accent), 0.26) !important;
       border-color: rgba(var(--accent), 0.38) !important;
     }
 
     .premium-dash-accent {
-      height: 5px !important;
+      height: var(--module-accent-thickness, 2.5px) !important;
       transition: filter 100ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 100ms cubic-bezier(0.22, 1, 0.36, 1);
     }
 

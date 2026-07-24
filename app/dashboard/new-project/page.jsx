@@ -9,7 +9,7 @@ import {
   PrimaryCTA,
   labelStyle,
   inputStyle,
-  DIARY_ACCENT,
+  BRAND_ACCENT,
 } from '@/lib/premium-ui'
 
 export default function NewProject() {
@@ -48,12 +48,12 @@ export default function NewProject() {
       reportName="Create a site"
       meta="Add a project before opening reports"
       backHref="/dashboard"
-      accent={DIARY_ACCENT}
+      accent={BRAND_ACCENT}
       maxWidth={500}
     >
       {error && <p style={{ color: '#ef4444', marginBottom: 16, fontSize: 14 }}>{error}</p>}
 
-      <GlassSection title="Project details" accent={DIARY_ACCENT}>
+      <GlassSection title="Project details" accent={BRAND_ACCENT}>
         <label style={labelStyle}>Project name *</label>
         <input
           value={name}
