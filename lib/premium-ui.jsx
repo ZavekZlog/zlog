@@ -81,9 +81,6 @@ export const pageBackground = {
   `,
 }
 
-const POWDER_CTA_NOISE =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")"
-
 export const premiumScopedCss = `
   .dashboard-premium-bg { position: relative; }
   .dashboard-premium-bg::before {
@@ -254,18 +251,10 @@ export function ModuleCategoryRail({
 }
 
 /**
- * LOCKED landing primary CTA surface — single source of truth for all orange powder-coat CTAs.
- * Matches landing “Start 7-Day Free Trial” exactly (--rust enamel, highlight, depth, glow).
- * Do not approximate; always render via PrimaryCTA.
+ * LOCKED primary CTA — flat Forge Orange per DESIGN.md.
+ * --action (#FF5000) only; --rust is logo/glow material, never a control.
+ * Hover/active live in .zlog-primary-cta (brightness + translateY).
  */
-export const POWDER_CTA_BORDER = '1px solid color-mix(in srgb, var(--rust), var(--ink) 58%)'
-export const POWDER_CTA_BACKGROUND =
-  'linear-gradient(180deg, color-mix(in srgb, var(--rust), var(--text) 16%) 0%, color-mix(in srgb, var(--rust), var(--text) 6%) 18%, var(--rust) 42%, var(--rust) 62%, color-mix(in srgb, var(--rust), var(--ink) 29%) 88%, color-mix(in srgb, var(--rust), var(--ink) 45%) 100%)'
-export const POWDER_CTA_SHADOW =
-  'inset 0 1px 0 color-mix(in srgb, var(--text), transparent 75%), inset 0 16px 28px color-mix(in srgb, var(--text), transparent 94%), inset 0 -14px 20px color-mix(in srgb, var(--ink), transparent 48%), 0 0 22px color-mix(in srgb, var(--rust), transparent 75%)'
-export const POWDER_CTA_HIGHLIGHT =
-  'linear-gradient(180deg, color-mix(in srgb, var(--text), transparent 90%) 0%, color-mix(in srgb, var(--text), transparent 97%) 55%, transparent 100%)'
-
 export function primaryButtonStyle(_accent = DIARY_ACCENT, disabled = false) {
   return {
     position: 'relative',
@@ -274,9 +263,10 @@ export function primaryButtonStyle(_accent = DIARY_ACCENT, disabled = false) {
     minHeight: 40,
     padding: '8px 18px',
     borderRadius: '12px',
-    border: POWDER_CTA_BORDER,
-    background: POWDER_CTA_BACKGROUND,
-    boxShadow: POWDER_CTA_SHADOW,
+    border: '1px solid color-mix(in srgb, var(--action), var(--ink) 28%)',
+    background: 'var(--action)',
+    // Powder-coat rim only — --edge-highlight is capped at 6% (globals.css)
+    boxShadow: 'inset 0 1px 0 var(--edge-highlight)',
     color: 'var(--text)',
     fontWeight: 600,
     fontSize: 16,
@@ -285,37 +275,6 @@ export function primaryButtonStyle(_accent = DIARY_ACCENT, disabled = false) {
     opacity: disabled ? 0.7 : 1,
     boxSizing: 'border-box',
   }
-}
-
-function PowderCtaOverlays() {
-  return (
-    <>
-      <span
-        aria-hidden
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top: 0,
-          height: '46%',
-          pointerEvents: 'none',
-          background: POWDER_CTA_HIGHLIGHT,
-        }}
-      />
-      <span
-        aria-hidden
-        style={{
-          position: 'absolute',
-          inset: 0,
-          pointerEvents: 'none',
-          opacity: 0.12,
-          mixBlendMode: 'soft-light',
-          backgroundImage: POWDER_CTA_NOISE,
-          backgroundSize: '160px 160px',
-        }}
-      />
-    </>
-  )
 }
 
 export function PrimaryCTA({
@@ -330,13 +289,6 @@ export function PrimaryCTA({
 }) {
   const classNames = `zlog-primary-cta premium-primary-btn ${className}`.trim()
   const merged = { ...primaryButtonStyle(accent, disabled), ...style }
-
-  const content = (
-    <>
-      <PowderCtaOverlays />
-      <span style={{ position: 'relative', zIndex: 1, width: '100%' }}>{children}</span>
-    </>
-  )
 
   if (href) {
     return (
@@ -353,14 +305,14 @@ export function PrimaryCTA({
         onClick={onClick}
         aria-disabled={disabled || undefined}
       >
-        {content}
+        {children}
       </Link>
     )
   }
 
   return (
     <button type={type} disabled={disabled} onClick={onClick} className={classNames} style={merged}>
-      {content}
+      {children}
     </button>
   )
 }
