@@ -254,51 +254,42 @@ export function ModuleCategoryRail({
 }
 
 /**
- * Powder-coated primary CTA — visual match to landing “Start 7-Day Free Trial”.
- * Uses --rust enamel (darker base, top highlight, depth, soft glow) — not flat fluorescent orange.
+ * LOCKED landing primary CTA surface — single source of truth for all orange powder-coat CTAs.
+ * Matches landing “Start 7-Day Free Trial” exactly (--rust enamel, highlight, depth, glow).
+ * Do not approximate; always render via PrimaryCTA.
  */
+export const POWDER_CTA_BORDER = '1px solid color-mix(in srgb, var(--rust), var(--ink) 58%)'
+export const POWDER_CTA_BACKGROUND =
+  'linear-gradient(180deg, color-mix(in srgb, var(--rust), var(--text) 16%) 0%, color-mix(in srgb, var(--rust), var(--text) 6%) 18%, var(--rust) 42%, var(--rust) 62%, color-mix(in srgb, var(--rust), var(--ink) 29%) 88%, color-mix(in srgb, var(--rust), var(--ink) 45%) 100%)'
+export const POWDER_CTA_SHADOW =
+  'inset 0 1px 0 color-mix(in srgb, var(--text), transparent 75%), inset 0 16px 28px color-mix(in srgb, var(--text), transparent 94%), inset 0 -14px 20px color-mix(in srgb, var(--ink), transparent 48%), 0 0 22px color-mix(in srgb, var(--rust), transparent 75%)'
+export const POWDER_CTA_HIGHLIGHT =
+  'linear-gradient(180deg, color-mix(in srgb, var(--text), transparent 90%) 0%, color-mix(in srgb, var(--text), transparent 97%) 55%, transparent 100%)'
+
 export function primaryButtonStyle(_accent = DIARY_ACCENT, disabled = false) {
   return {
     position: 'relative',
     overflow: 'hidden',
     width: '100%',
-    minHeight: 48,
-    padding: '14px 18px',
+    minHeight: 40,
+    padding: '8px 18px',
     borderRadius: '12px',
-    border: '1px solid color-mix(in srgb, var(--rust), var(--ink) 58%)',
-    background:
-      'linear-gradient(180deg, color-mix(in srgb, var(--rust), var(--text) 16%) 0%, color-mix(in srgb, var(--rust), var(--text) 6%) 18%, var(--rust) 42%, var(--rust) 62%, color-mix(in srgb, var(--rust), var(--ink) 29%) 88%, color-mix(in srgb, var(--rust), var(--ink) 45%) 100%)',
-    boxShadow:
-      'inset 0 1px 0 color-mix(in srgb, var(--text), transparent 75%), inset 0 16px 28px color-mix(in srgb, var(--text), transparent 94%), inset 0 -14px 20px color-mix(in srgb, var(--ink), transparent 48%), 0 0 22px color-mix(in srgb, var(--rust), transparent 75%)',
+    border: POWDER_CTA_BORDER,
+    background: POWDER_CTA_BACKGROUND,
+    boxShadow: POWDER_CTA_SHADOW,
     color: 'var(--text)',
     fontWeight: 600,
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: 'inherit',
-    letterSpacing: '0.04em',
-    textTransform: 'uppercase',
     cursor: disabled ? 'wait' : 'pointer',
     opacity: disabled ? 0.7 : 1,
     boxSizing: 'border-box',
   }
 }
 
-export function PrimaryCTA({
-  children,
-  disabled = false,
-  type = 'button',
-  onClick,
-  style,
-  className = '',
-  accent,
-}) {
+function PowderCtaOverlays() {
   return (
-    <button
-      type={type}
-      disabled={disabled}
-      onClick={onClick}
-      className={`zlog-primary-cta premium-primary-btn ${className}`.trim()}
-      style={{ ...primaryButtonStyle(accent, disabled), ...style }}
-    >
+    <>
       <span
         aria-hidden
         style={{
@@ -308,8 +299,7 @@ export function PrimaryCTA({
           top: 0,
           height: '46%',
           pointerEvents: 'none',
-          background:
-            'linear-gradient(180deg, color-mix(in srgb, var(--text), transparent 90%) 0%, color-mix(in srgb, var(--text), transparent 97%) 55%, transparent 100%)',
+          background: POWDER_CTA_HIGHLIGHT,
         }}
       />
       <span
@@ -324,7 +314,53 @@ export function PrimaryCTA({
           backgroundSize: '160px 160px',
         }}
       />
-      <span style={{ position: 'relative', zIndex: 1 }}>{children}</span>
+    </>
+  )
+}
+
+export function PrimaryCTA({
+  children,
+  disabled = false,
+  type = 'button',
+  onClick,
+  href,
+  style,
+  className = '',
+  accent,
+}) {
+  const classNames = `zlog-primary-cta premium-primary-btn ${className}`.trim()
+  const merged = { ...primaryButtonStyle(accent, disabled), ...style }
+
+  const content = (
+    <>
+      <PowderCtaOverlays />
+      <span style={{ position: 'relative', zIndex: 1, width: '100%' }}>{children}</span>
+    </>
+  )
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={classNames}
+        style={{
+          ...merged,
+          textDecoration: 'none',
+          display: merged.display ?? 'inline-flex',
+          alignItems: merged.alignItems ?? 'center',
+          justifyContent: merged.justifyContent ?? 'center',
+        }}
+        onClick={onClick}
+        aria-disabled={disabled || undefined}
+      >
+        {content}
+      </Link>
+    )
+  }
+
+  return (
+    <button type={type} disabled={disabled} onClick={onClick} className={classNames} style={merged}>
+      {content}
     </button>
   )
 }
@@ -456,6 +492,73 @@ export function ZlogWordmark({ style } = {}) {
     >
       <span style={{ color: 'var(--rust)' }}>Z</span>
       <span style={{ color: 'var(--text)' }}>log</span>
+    </div>
+  )
+}
+
+const BRAND_WORDMARK_SIZES = {
+  sm: 24,
+  md: 30,
+  default: 38,
+  lg: 57, // Enlarged 50% from default 38px
+}
+
+/**
+ * FINAL LOCKED brand masthead — --rust Z + warm log; opacity 0.42 glow.
+ * size: 'sm' | 'md' | 'default' | 'lg' (lg = 57px, preferred for auth mastheads)
+ */
+export function ZlogBrandWordmark({ size = 'lg', centered = true, style = {} }) {
+  const fontSize = BRAND_WORDMARK_SIZES[size] ?? BRAND_WORDMARK_SIZES.lg
+
+  return (
+    <div
+      className="zlog-brand-wordmark"
+      aria-label="Zlog"
+      style={{
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: centered ? 'auto' : undefined,
+        marginRight: centered ? 'auto' : undefined,
+        userSelect: 'none',
+        // Lifted upward to achieve precise visual vertical centering within the localized radial glow asset
+        transform: 'translateY(-16px)',
+        ...style,
+      }}
+    >
+      {/* Landing-Page Matched Atmospheric Radial Glow:
+        - Acts strictly as an accent light source centered around the wordmark.
+        - Radiates softly outward with smooth gradient falloff.
+        - Fades completely transparent into the natural dark page background (no hard boundaries, bars, or rectangular washes).
+      */}
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          inset: -120,
+          borderRadius: '50%',
+          pointerEvents: 'none',
+          opacity: 0.42,
+          filter: 'blur(45px)',
+          background:
+            'radial-gradient(ellipse 65% 75% at 50% 50%, color-mix(in srgb, var(--rust), transparent 38%) 0%, color-mix(in srgb, var(--rust), transparent 72%) 48%, color-mix(in srgb, var(--rust), transparent 94%) 75%, rgba(13,15,18,0) 92%)',
+        }}
+      />
+      <h1
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          fontSize,
+          fontWeight: 800,
+          letterSpacing: '-0.03em',
+          color: '#f3f4f6',
+          margin: 0,
+        }}
+      >
+        <span style={{ color: 'var(--rust)' }}>Z</span>log
+      </h1>
     </div>
   )
 }

@@ -2,6 +2,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { Space_Grotesk, Barlow } from 'next/font/google'
 import { LandingFeatureStrip, LandingMicIcon } from './landing-feature-strip'
+import { PrimaryCTA } from '@/lib/premium-ui'
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
@@ -160,73 +161,35 @@ export default function Home() {
             marginBottom: '28px',
           }}
         >
-          <Link
+          <PrimaryCTA
             href="/signup"
-            style={{
-              position: 'relative',
-              overflow: 'hidden',
-              display: 'grid',
-              gridTemplateColumns: '1fr auto 1fr',
-              alignItems: 'center',
-              width: '100%',
-              minHeight: '40px',
-              padding: '8px 18px',
-              borderRadius: '12px',
-              border: '1px solid color-mix(in srgb, var(--rust), var(--ink) 58%)',
-              background:
-                'linear-gradient(180deg, color-mix(in srgb, var(--rust), var(--text) 16%) 0%, color-mix(in srgb, var(--rust), var(--text) 6%) 18%, var(--rust) 42%, var(--rust) 62%, color-mix(in srgb, var(--rust), var(--ink) 29%) 88%, color-mix(in srgb, var(--rust), var(--ink) 45%) 100%)',
-              boxShadow:
-                'inset 0 1px 0 color-mix(in srgb, var(--text), transparent 75%), inset 0 16px 28px color-mix(in srgb, var(--text), transparent 94%), inset 0 -14px 20px color-mix(in srgb, var(--ink), transparent 48%), 0 0 22px color-mix(in srgb, var(--rust), transparent 75%)',
-              color: 'var(--text)',
-              fontFamily: barlow.style.fontFamily,
-              fontSize: '16px',
-              fontWeight: 600,
-              textDecoration: 'none',
-              boxSizing: 'border-box',
-            }}
+            style={{ fontFamily: barlow.style.fontFamily }}
           >
             <span
-              aria-hidden
               style={{
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                top: 0,
-                height: '46%',
-                pointerEvents: 'none',
-                background:
-                  'linear-gradient(180deg, color-mix(in srgb, var(--text), transparent 90%) 0%, color-mix(in srgb, var(--text), transparent 97%) 55%, transparent 100%)',
+                display: 'grid',
+                gridTemplateColumns: '1fr auto 1fr',
+                alignItems: 'center',
+                width: '100%',
               }}
-            />
-            <span
-              aria-hidden
-              style={{
-                position: 'absolute',
-                inset: 0,
-                pointerEvents: 'none',
-                opacity: 0.12,
-                mixBlendMode: 'soft-light',
-                backgroundImage:
-                  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
-                backgroundSize: '160px 160px',
-              }}
-            />
-            <span style={{ position: 'relative', zIndex: 1, justifySelf: 'start', display: 'inline-flex', color: 'var(--text)', paddingLeft: 10 }}>
-              <LandingMicIcon size={28} strokeWidth={1.75} />
+            >
+              <span style={{ justifySelf: 'start', display: 'inline-flex', color: 'var(--text)', paddingLeft: 10 }}>
+                <LandingMicIcon size={28} strokeWidth={1.75} />
+              </span>
+              <span>Start 7-Day Free Trial</span>
+              <span style={{ justifySelf: 'end', display: 'inline-flex', color: 'var(--text)' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path
+                    d="M5 12h12M13 6l6 6-6 6"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
             </span>
-            <span style={{ position: 'relative', zIndex: 1 }}>Start 7-Day Free Trial</span>
-            <span style={{ position: 'relative', zIndex: 1, justifySelf: 'end', display: 'inline-flex', color: 'var(--text)' }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-                <path
-                  d="M5 12h12M13 6l6 6-6 6"
-                  stroke="currentColor"
-                  strokeWidth="1.75"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
-          </Link>
+          </PrimaryCTA>
 
           <Link
             href="/login"

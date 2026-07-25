@@ -4,19 +4,18 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import {
-  pageBackground,
   premiumScopedCss,
-  ZlogWordmark,
+  ZlogBrandWordmark,
   PrimaryCTA,
   SecondaryButton,
   labelStyle,
   inputStyle,
-  typeTokens,
-  glassPanelStyle,
-  ModuleAccent,
-  BRAND_ACCENT,
 } from '@/lib/premium-ui'
 
+/**
+ * Sign-up — synced with login: flat #0d0f12 + localized ZlogBrandWordmark glow only.
+ * Auth: Supabase signUp → companies/users insert → /onboarding.
+ */
 export default function SignupPage() {
   const router = useRouter()
   const supabase = createClient()
@@ -33,7 +32,7 @@ export default function SignupPage() {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
   }
 
-  const handleSubmit = async (e) => {
+  const handleSignup = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError('')
@@ -69,88 +68,112 @@ export default function SignupPage() {
   }
 
   return (
-    <div
-      className="dashboard-premium-bg"
-      style={{
-        ...pageBackground,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
+    <div className="min-h-screen bg-[#0d0f12] text-[#f3f4f6] flex flex-col justify-center px-4 py-6 selection:bg-[#ff5500]/30">
       <style>{premiumScopedCss}</style>
-      <div style={{ width: '100%', maxWidth: 440, padding: '40px 24px' }}>
-        <div style={{ ...glassPanelStyle, position: 'relative', overflow: 'hidden', marginBottom: 0 }}>
-          <ModuleAccent accent={BRAND_ACCENT} />
-          <ZlogWordmark style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 20, marginTop: 4 }} />
-          <h1 style={{ ...typeTokens.reportName, margin: '0 0 8px' }}>Create your account</h1>
-          <p style={{ ...typeTokens.meta, margin: '0 0 24px' }}>14-day free trial. No card required.</p>
 
-          {error && (
+      <div className="w-full max-w-md mx-auto flex flex-col items-center">
+        {/* Brand container with localized atmospheric radial glow ONLY */}
+        <div style={{ marginBottom: 32, width: '100%', paddingTop: 18 }}>
+          <ZlogBrandWordmark size="lg" centered={true} />
+        </div>
+
+        {/* Unchanged Authentication Card */}
+        <div className="w-full bg-[#14171c] border border-[#222731] rounded-xl px-5 py-5 shadow-xl relative">
+          <div className="mb-4">
+            <h2 className="text-[20px] font-bold text-[#f3f4f6] tracking-tight mb-0.5">
+              Create an account
+            </h2>
+            <p className="text-[14px] text-[#9ca3af] leading-relaxed">
+              Get started with Zlog today
+            </p>
+          </div>
+
+          {error ? (
             <div
               style={{
-                background: 'rgba(220,50,50,0.1)',
-                border: '1px solid rgba(220,50,50,0.3)',
-                color: '#ff6b6b',
-                padding: '12px 14px',
-                fontSize: 14,
-                marginBottom: 20,
+                marginBottom: 12,
+                padding: 12,
+                background: 'color-mix(in srgb, var(--danger) 14%, var(--plate))',
+                border: '1px solid color-mix(in srgb, var(--danger) 45%, transparent)',
                 borderRadius: 10,
+                color: 'color-mix(in srgb, var(--danger) 75%, var(--text))',
+                fontSize: 13,
+                lineHeight: 1.4,
               }}
             >
               {error}
             </div>
-          )}
+          ) : null}
 
-          <form onSubmit={handleSubmit}>
-            <label style={labelStyle}>Your name</label>
-            <input
-              style={inputStyle}
-              name="fullName"
-              type="text"
-              placeholder="John Smith"
-              value={form.fullName}
-              onChange={handleChange}
-              required
-            />
-            <label style={labelStyle}>Company name</label>
-            <input
-              style={inputStyle}
-              name="companyName"
-              type="text"
-              placeholder="Smith Building Ltd"
-              value={form.companyName}
-              onChange={handleChange}
-              required
-            />
-            <label style={labelStyle}>Email address</label>
-            <input
-              style={inputStyle}
-              name="email"
-              type="email"
-              placeholder="john@smithbuilding.co.uk"
-              value={form.email}
-              onChange={handleChange}
-              required
-            />
-            <label style={labelStyle}>Password</label>
-            <input
-              style={{ ...inputStyle, marginBottom: 20 }}
-              name="password"
-              type="password"
-              placeholder="At least 8 characters"
-              value={form.password}
-              onChange={handleChange}
-              required
-              minLength={8}
-            />
-            <PrimaryCTA type="submit" disabled={loading}>
-              {loading ? 'Creating account…' : 'Create account'}
+          <form onSubmit={handleSignup} className="space-y-4">
+            <div>
+              <label style={{ ...labelStyle, fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', marginBottom: 4 }}>
+                Your name
+              </label>
+              <input
+                style={{ ...inputStyle, minHeight: 50, fontSize: 16, marginBottom: 0 }}
+                name="fullName"
+                type="text"
+                placeholder="John Smith"
+                value={form.fullName}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div>
+              <label style={{ ...labelStyle, fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', marginBottom: 4 }}>
+                Company name
+              </label>
+              <input
+                style={{ ...inputStyle, minHeight: 50, fontSize: 16, marginBottom: 0 }}
+                name="companyName"
+                type="text"
+                placeholder="Smith Building Ltd"
+                value={form.companyName}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div>
+              <label style={{ ...labelStyle, fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', marginBottom: 4 }}>
+                Email address
+              </label>
+              <input
+                style={{ ...inputStyle, minHeight: 50, fontSize: 16, marginBottom: 0 }}
+                name="email"
+                type="email"
+                placeholder="john@smithbuilding.co.uk"
+                value={form.email}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div>
+              <label style={{ ...labelStyle, fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', marginBottom: 4 }}>
+                Password
+              </label>
+              <input
+                style={{ ...inputStyle, minHeight: 50, fontSize: 16, marginBottom: 0 }}
+                name="password"
+                type="password"
+                placeholder="At least 8 characters"
+                value={form.password}
+                onChange={handleChange}
+                required
+                minLength={8}
+              />
+            </div>
+
+            <PrimaryCTA type="submit" disabled={loading} className="w-full">
+              {loading ? 'Creating account...' : 'Create account'}
             </PrimaryCTA>
           </form>
 
-          <div style={{ marginTop: 14 }}>
-            <SecondaryButton href="/login" style={{ width: '100%' }}>
+          <div style={{ marginTop: 16 }}>
+            <SecondaryButton href="/login" style={{ width: '100%', minHeight: 48, fontSize: 15, fontWeight: 600 }}>
               Already have an account? Sign in
             </SecondaryButton>
           </div>

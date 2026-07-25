@@ -173,19 +173,13 @@ body {
     font-size: 13px !important;
   }
 
-  .zlog-primary-cta.premium-primary-btn,
-  .premium-primary-btn.zlog-primary-cta {
-    min-height: 50px !important;
-    padding: 16px 18px !important;
-    font-size: 15px !important;
-  }
+  /* Primary CTAs inherit locked landing powder-coat tokens from PrimaryCTA — do not override surface here. */
 
   .dashboard-premium-bg form > button[type="submit"]:not(.zlog-primary-cta) {
-    min-height: 50px !important;
-    padding: 16px 18px !important;
-    font-size: 15px !important;
-    background: var(--action) !important;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+    /* Non-PrimaryCTA submits must not approximate orange — force shared class usage instead of flat --action. */
+    min-height: 40px !important;
+    padding: 8px 18px !important;
+    font-size: 16px !important;
   }
 
   .premium-back-btn {

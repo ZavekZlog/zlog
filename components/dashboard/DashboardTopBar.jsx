@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChevronRight, LogOut } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { ZlogWordmark } from '@/lib/premium-ui'
+import { ZlogBrandWordmark } from '@/lib/premium-ui'
 
 const UTILITY_RADIUS = 10
 
@@ -83,44 +83,9 @@ export function DashboardTopBar() {
         padding: '12px 16px 10px',
       }}
     >
-      {/* Centered wordmark + soft warm atmospheric glow */}
-      <div
-        style={{
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: 36,
-          marginBottom: 16,
-        }}
-      >
-        <div
-          aria-hidden
-          style={{
-            position: 'absolute',
-            left: '50%',
-            top: '50%',
-            width: 156,
-            height: 54,
-            transform: 'translate(-50%, -50%)',
-            borderRadius: '50%',
-            background:
-              'radial-gradient(ellipse at center, color-mix(in srgb, var(--rust), transparent 58%) 0%, color-mix(in srgb, var(--rust), transparent 80%) 44%, color-mix(in srgb, var(--rust), transparent 93%) 70%, transparent 84%)',
-            filter: 'blur(22px)',
-            pointerEvents: 'none',
-            opacity: 0.62,
-          }}
-        />
-        <ZlogWordmark
-          style={{
-            position: 'relative',
-            zIndex: 1,
-            fontSize: 30,
-            fontWeight: 700,
-            letterSpacing: '0.04em',
-            lineHeight: 1,
-          }}
-        />
+      {/* Centered brand masthead */}
+      <div style={{ marginBottom: 16, width: '100%' }}>
+        <ZlogBrandWordmark size="md" centered />
       </div>
 
       {/* Horizontal utility row */}
