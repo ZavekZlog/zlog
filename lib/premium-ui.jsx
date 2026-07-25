@@ -550,6 +550,7 @@ export function ZlogBrandWordmark({ size = 'lg', centered = true, style = {} }) 
         style={{
           position: 'relative',
           zIndex: 1,
+          fontFamily: 'var(--font-space-grotesk)',
           fontSize,
           fontWeight: 800,
           letterSpacing: '-0.03em',
