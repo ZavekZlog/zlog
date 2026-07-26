@@ -37,27 +37,25 @@ isn't a rule. Everything below is written to be decidable.
 Near-black background. Warm off-white text. Dark forged-steel borders. Orange
 only for actions. Warm glow only around things that matter right now.
 The orange split — approved
-Three oranges are in play: --rust: #B8431C, --premium-cta-orange: #F5762A,
-and the brand's Forge Orange #FF5000, which does not appear in the codebase at
-all.
-Three oranges is the "two oranges fighting" problem the landing page rework was
-meant to solve. It didn't get solved — it moved into the tokens.
-Two oranges, two jobs, never swapped:
---rust: #B8431C is a material. The colour of rusted steel. It belongs
-to the Z, the Z's glow, and nothing else. Never applied to a control.
---action: #FF5000 (Forge Orange) is an action. Every button, every
-live state, every tappable orange thing. Never applied to a surface, border, or
-decoration.
-This makes "orange only for actions, never decoration" structurally true without
-repainting the hero: the Z isn't decoration in orange, it's an object made of
-rust. Different substance, different token.
---premium-cta-orange: #F5762A is deleted and folded into --action.
-#FF5000 is the single source of truth for primary actions across the entire
-application. Every primary button changes from #F5762A to #FF5000.
-The distinction that makes this work: the logo is a brand asset; a button is an
-interface element. They are allowed to differ, because they are different kinds
-of object. What is not allowed is three near-identical oranges drifting into the
-UI over time because nobody could say which one was which.
+Two oranges were fighting: flat Forge Orange (#FF5000 / --action) and enamel
+--rust. That fight is closed. Primary CTAs are not flat --action fills.
+The official primary CTA is the rust powder-coat treatment in PrimaryCTA
+(lib/premium-ui.jsx): --rust enamel gradient, highlight overlay, noise overlay,
+depth shadow. That component is the single source of truth for every orange CTA
+in the app (landing, auth, dashboard, report saves).
+PrimaryCTA is LOCKED — do not flatten, do not approximate, do not alter without explicit sign-off. All orange CTAs render via PrimaryCTA.
+Token jobs after this lock:
+--rust: #B8431C — material for the Z, the Z's glow, and the locked PrimaryCTA
+enamel surface. Not a free-floating fill agents invent per screen.
+--action: #FF5000 (Forge Orange) — reserved live-state / accent token where a
+non-CTA orange signal is required. It is not the primary button fill and must
+not replace PrimaryCTA.
+--premium-cta-orange: #F5762A remains deleted (historical). Do not revive it as
+a third orange.
+The distinction that remains: the logo Z and the PrimaryCTA share --rust as
+material; they are still different objects (brand asset vs control). What is not
+allowed is a fourth local orange gradient or a flat --action button approximating
+PrimaryCTA.
 Warm over cool — approved
 The palette was fighting itself: warm text (#F4F2EF), warm rust, against cool
 blue-grey body text (#93a7b9, #8ea2b5, #A3B5C4) and a navy card gradient
@@ -305,7 +303,8 @@ the boilerplate :root (--background: #ffffff / --foreground: #171717)
 the prefers-color-scheme: dark block — Zlog is dark. Always. It is not a
 preference. Currently a light-mode phone gets a white body behind dark screens.
 font-family: Arial, Helvetica, sans-serif on body
---premium-cta-orange → folded into --action
+--premium-cta-orange → deleted (do not fold into flat --action buttons;
+PrimaryCTA is the orange CTA)
 --premium-text-muted → duplicate of --text-dim
 --premium-text-body (#93a7b9, cool) → --text-2
 --premium-card-bg navy gradient → --plate
@@ -313,6 +312,7 @@ all 16 rgba() literals → tokens
 #FFFFFF (×2), #A3B5C4, #FAFAF8 → the text ladder
 backdrop-filter / -webkit-backdrop-filter → removed
 14. Rules for agents
+PrimaryCTA is LOCKED — do not flatten, do not approximate, do not alter without explicit sign-off. All orange CTAs render via PrimaryCTA.
 Never type a colour. No hex, no rgba(), no named colours. Tokens only.
 Shadows and borders are colour too — that's where the leaks happen.
 Never type a radius. Use the §4 lookup.
@@ -362,8 +362,8 @@ Css
 Red is deliberate, not incidental: on a building site, danger is red. Our
 users already read red as "stop" before they read a single word. The constraint
 was never "avoid red" — it was avoid a red that reads as another orange beside
-#FF5000. Signal red (hue ~358°) sits cool of Forge Orange (hue ~19°) and
-separates cleanly in daylight; a warm brick red would not. This borrows site
+the PrimaryCTA rust enamel. Signal red (hue ~358°) sits cool of the CTA enamel
+and separates cleanly in daylight; a warm brick red would not. This borrows site
 language and satisfies the palette at once.
 The test: at arm's length, in sunlight, does it read as a different meaning
 or a different shade? If it's a shade, it's wrong.
@@ -381,8 +381,8 @@ Signal
 Meaning
 Token
 Orange
-Do this
---action #FF5000
+Do this (primary CTA)
+PrimaryCTA (--rust powder-coat enamel) — never flat --action
 Red
 This is wrong / gone
 --danger #E5484D
@@ -392,7 +392,7 @@ Be aware (non-blocking)
 On site, dayglo hi-vis yellow means visibility — "see me" — not danger. So
 amber is not a second danger colour; it's for the non-blocking warning that isn't
 an error: "offline, saving locally," "upload retrying." Red stops you; amber
-tells you.
+tells you. Forge Orange (#FF5000 / --action) is not a substitute for PrimaryCTA.
 --warn is reserved, not yet defined. Don't add it until a screen actually
 has a non-blocking warning to show — a token looking for a use is how palettes
 bloat. When one appears, define amber then, and mind that full-saturation hi-vis
