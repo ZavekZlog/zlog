@@ -8,6 +8,7 @@ import {
   ModuleHomeCard,
   RecentEntryCard,
   SecondaryButton,
+  DestructiveButton,
   dashboardCardInteractionCss,
   premiumScopedCss,
   typeTokens,
@@ -22,6 +23,7 @@ export default function ProjectPage() {
   const [project, setProject] = useState(null)
   const [diaries, setDiaries] = useState([])
   const [loading, setLoading] = useState(true)
+  const [deletingId, setDeletingId] = useState(null)
   const supabase = createClient()
   const router = useRouter()
   const { id } = useParams()
@@ -36,6 +38,84 @@ export default function ProjectPage() {
     }
     load()
   }, [id])
+
+  const handleDeleteDiary = async (report) => {
+    if (!report?.id) return
+    const label = report.report_date || 'this report'
+    if (!window.confirm(`Delete diary entry for ${label}? This cannot be undone.`)) return
+
+    setDeletingId(report.id)
+    try {
+      // Collect storage paths before DB deletes (best-effort cleanup after success)
+      const { data: photoRows, error: photoSelectError } = await supabase
+        .from('report_photos')
+        .select('url')
+        .eq('report_id', report.id)
+
+      if (photoSelectError) {
+        window.alert(photoSelectError.message || 'Failed to prepare photo cleanup')
+        return
+      }
+
+      const storagePaths = [
+        report.cover_photo_url,
+        report.signature_url,
+        ...(photoRows || []).map((row) => row.url),
+      ].filter(Boolean)
+
+      const { error: photosError } = await supabase
+        .from('report_photos')
+        .delete()
+        .eq('report_id', report.id)
+      if (photosError) {
+        window.alert(photosError.message || 'Failed to delete report photos')
+        return
+      }
+
+      const { error: labourError } = await supabase
+        .from('report_labour')
+        .delete()
+        .eq('report_id', report.id)
+      if (labourError) {
+        window.alert(labourError.message || 'Failed to delete labour rows')
+        return
+      }
+
+      const { error: plantError } = await supabase
+        .from('report_plant')
+        .delete()
+        .eq('report_id', report.id)
+      if (plantError) {
+        window.alert(plantError.message || 'Failed to delete plant rows')
+        return
+      }
+
+      const { error: reportError } = await supabase
+        .from('daily_reports')
+        .delete()
+        .eq('id', report.id)
+        .eq('project_id', id)
+
+      if (reportError) {
+        window.alert(reportError.message || 'Failed to delete report')
+        return
+      }
+
+      setDiaries((prev) => prev.filter((d) => d.id !== report.id))
+
+      // Best-effort: remove storage objects after the DB row is gone
+      if (storagePaths.length > 0) {
+        try {
+          const { error: storageError } = await supabase.storage.from('site-photos').remove(storagePaths)
+          void storageError // report row is already deleted — ignore storage failures
+        } catch {
+          // Ignore storage failures — report row is already deleted
+        }
+      }
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   if (loading) {
     return (
@@ -59,13 +139,22 @@ export default function ProjectPage() {
         <div className="premium-dash-card-wrap" style={{ animationDelay: '0ms' }}>
           <ModuleHomeCard
             title="New Report"
-            description="Pre-filled from last entry"
+            description="Start a blank diary entry"
             icon="📋"
+            accent={REPORT_THEMES.diary.accent}
+            onClick={() => router.push(`/dashboard/project/${id}/diary`)}
+          />
+        </div>
+        <div className="premium-dash-card-wrap" style={{ animationDelay: '70ms' }}>
+          <ModuleHomeCard
+            title="Continue from Last"
+            description="Pre-filled from last entry"
+            icon="↩️"
             accent={REPORT_THEMES.diary.accent}
             onClick={() => router.push(`/dashboard/project/${id}/diary?prefill=last`)}
           />
         </div>
-        <div className="premium-dash-card-wrap" style={{ animationDelay: '70ms' }}>
+        <div className="premium-dash-card-wrap" style={{ animationDelay: '140ms' }}>
           <ModuleHomeCard
             title="Snag List"
             description="Log issues"
@@ -116,6 +205,14 @@ export default function ProjectPage() {
               >
                 Duplicate
               </SecondaryButton>
+              <DestructiveButton
+                type="button"
+                disabled={deletingId === d.id}
+                onClick={() => handleDeleteDiary(d)}
+                style={recentEntryActionButtonStyle}
+              >
+                {deletingId === d.id ? 'Deleting…' : 'Delete'}
+              </DestructiveButton>
             </div>
           </RecentEntryCard>
         ))
