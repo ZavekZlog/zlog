@@ -17,7 +17,7 @@ import {
   recentEntryActionsStyle,
   recentEntryActionButtonStyle,
 } from '@/lib/premium-ui'
-import { REPORT_THEMES, formatProjectMeta } from '@/lib/report-theme'
+import { REPORT_THEMES } from '@/lib/report-theme'
 
 export default function ProjectPage() {
   const [project, setProject] = useState(null)
@@ -119,7 +119,7 @@ export default function ProjectPage() {
 
   if (loading) {
     return (
-      <PremiumShell title="Project" reportName="Loading…" backHref="/dashboard" accent={REPORT_THEMES.diary.accent}>
+      <PremiumShell title="Project" backHref="/dashboard" accent={REPORT_THEMES.diary.accent}>
         <p style={{ color: 'var(--text-2)' }}>Loading…</p>
       </PremiumShell>
     )
@@ -128,8 +128,6 @@ export default function ProjectPage() {
   return (
     <PremiumShell
       title="Project"
-      reportName={project?.name || 'Project'}
-      meta={formatProjectMeta(project)}
       backHref="/dashboard"
       accent={REPORT_THEMES.diary.accent}
     >

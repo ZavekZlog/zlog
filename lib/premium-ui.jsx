@@ -520,30 +520,31 @@ export function ZlogBrandWordmark({ size = 'lg', centered = true, style = {} }) 
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
+        width: '100%',
         marginLeft: centered ? 'auto' : undefined,
         marginRight: centered ? 'auto' : undefined,
         userSelect: 'none',
-        // Lifted upward to achieve precise visual vertical centering within the localized radial glow asset
         transform: 'translateY(-16px)',
         ...style,
       }}
     >
-      {/* Landing-Page Matched Atmospheric Radial Glow:
-        - Acts strictly as an accent light source centered around the wordmark.
-        - Radiates softly outward with smooth gradient falloff.
-        - Fades completely transparent into the natural dark page background (no hard boundaries, bars, or rectangular washes).
-      */}
+      {/* Full-Width Atmospheric Radial Glow spanning screen horizontally */}
       <div
         aria-hidden
         style={{
           position: 'absolute',
-          inset: -120,
-          borderRadius: '50%',
+          left: '50%',
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '100vw',
+          maxWidth: '100vw',
+          height: '180px',
           pointerEvents: 'none',
           opacity: 0.42,
           filter: 'blur(45px)',
           background:
             'radial-gradient(ellipse 65% 75% at 50% 50%, color-mix(in srgb, var(--rust), transparent 38%) 0%, color-mix(in srgb, var(--rust), transparent 72%) 48%, color-mix(in srgb, var(--rust), transparent 94%) 75%, rgba(13,15,18,0) 92%)',
+          zIndex: 0,
         }}
       />
       <h1
@@ -608,25 +609,24 @@ export function PremiumBackButton({ onClick, href, label = 'Back' }) {
 }
 
 /**
- * Branded internal page header — Back + Zlog identity + module/report hierarchy.
+ * LOCKED sub-page masthead — centered ZlogBrandWordmark + glow (login-matched).
+ * Do not put project names / debug strings (e.g. reportName) in this chrome.
  * Props:
- *   title       — module title (e.g. "Site Diary Report")
- *   reportName  — prominent project / report name (~19px)
- *   meta        — client · location (muted)
- *   subtitle    — legacy alias for reportName when reportName omitted
+ *   title     — optional module title in the nav row (e.g. "Site Diary Report")
+ *   onBack / backHref — PremiumBackButton
+ *   reportName / meta / subtitle — ignored (API compat only; never rendered)
  */
 export function ZlogInternalHeader({
   title,
-  reportName,
-  meta,
-  subtitle,
+  reportName: _reportName,
+  meta: _meta,
+  subtitle: _subtitle,
   onBack,
   backHref,
-  accent = DIARY_ACCENT,
+  accent: _accent = DIARY_ACCENT,
   trailing = null,
 }) {
-  const name = reportName || subtitle || ''
-  const metaLine = meta || ''
+  const showNavRow = Boolean(backHref || onBack || title || trailing)
 
   return (
     <header
@@ -634,58 +634,101 @@ export function ZlogInternalHeader({
       style={{
         position: 'relative',
         zIndex: 50,
-        background: 'color-mix(in srgb, var(--ink) 72%, var(--plate))',
-        borderBottom: '1px solid var(--edge-highlight)',
-        padding: '14px 24px 16px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        background: 'transparent',
+        borderBottom: 'none',
+        padding: '16px 16px 20px',
         pointerEvents: 'auto',
         overflow: 'hidden',
       }}
     >
-      <ModuleAccent accent={accent} height="3px" radius="0" />
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, position: 'relative' }}>
-        {(backHref || onBack) && <PremiumBackButton href={backHref} onClick={onBack} />}
-        <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
-          <ZlogWordmark style={{ marginBottom: 6, opacity: 0.92 }} />
-          {title ? <div style={{ ...typeTokens.moduleTitle, marginBottom: name ? 4 : 0 }}>{title}</div> : null}
-          {name ? <div style={{ ...typeTokens.reportName, marginBottom: metaLine ? 4 : 0 }}>{name}</div> : null}
-          {metaLine ? <div className="premium-shell-subtitle" style={typeTokens.meta}>{metaLine}</div> : null}
-        </div>
-        {trailing}
+      {/* Locked Zlog Brand Wordmark with Localized Atmospheric Glow */}
+      <div style={{ marginBottom: showNavRow ? 24 : 12, width: '100%', paddingTop: 12 }}>
+        <ZlogBrandWordmark size="lg" centered={true} />
       </div>
+
+      {/* Clean navigation / page title — no project name or legacy debug text */}
+      {showNavRow ? (
+        <div className="w-full flex items-center justify-between gap-4 mb-4 px-1">
+          {backHref ? (
+            <Link
+              href={backHref}
+              className="shrink-0 px-3 py-1.5 bg-[#14171c] border border-[#222731] hover:border-[#323846] rounded-lg text-xs font-semibold text-[#9ca3af] hover:text-[#f3f4f6] flex items-center gap-1.5 transition-all shadow-sm"
+              onClick={onBack}
+            >
+              <span aria-hidden>←</span> Back
+            </Link>
+          ) : onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              className="shrink-0 px-3 py-1.5 bg-[#14171c] border border-[#222731] hover:border-[#323846] rounded-lg text-xs font-semibold text-[#9ca3af] hover:text-[#f3f4f6] flex items-center gap-1.5 transition-all shadow-sm cursor-pointer font-inherit"
+            >
+              <span aria-hidden>←</span> Back
+            </button>
+          ) : (
+            <div className="w-10 shrink-0" aria-hidden />
+          )}
+          {title ? (
+            <h1 className="text-base font-bold text-[#f3f4f6] tracking-tight text-right m-0 min-w-0">{title}</h1>
+          ) : null}
+          {trailing || <div className="w-10 shrink-0" aria-hidden />}
+        </div>
+      ) : null}
     </header>
   )
 }
 
-export function PremiumShell({
+/** Canonical name for the locked sub-page header — all report views must use this via SubPageLayout */
+export const SubPageHeader = ZlogInternalHeader
+
+/**
+ * Sign-in-matched sub-page shell — flat #0d0f12, centered wordmark + glow, no legacy metadata.
+ * reportName / meta / subtitle are accepted but never painted (API compat only).
+ */
+export function SubPageLayout({
   title,
-  reportName,
-  meta,
-  subtitle,
+  reportName: _reportName,
+  meta: _meta,
+  subtitle: _subtitle,
   onBack,
-  backHref,
+  backHref = '/dashboard',
   accent = DIARY_ACCENT,
   children,
-  maxWidth = 640,
+  maxWidth,
   trailing = null,
 }) {
+  const contentMaxWidth = maxWidth ?? 448
+
   return (
-    <div className="dashboard-premium-bg" style={pageBackground}>
+    <div className="min-h-screen bg-[#0d0f12] text-[#f3f4f6] flex flex-col px-4 py-6 selection:bg-[#ff5500]/30">
       <style>{premiumScopedCss}</style>
-      <ZlogInternalHeader
-        title={title}
-        reportName={reportName}
-        meta={meta}
-        subtitle={subtitle}
-        onBack={onBack}
-        backHref={backHref}
-        accent={accent}
-        trailing={trailing}
-      />
-      <div style={{ position: 'relative', zIndex: 1, padding: '20px 24px 32px', maxWidth, margin: '0 auto' }}>
-        {children}
+
+      <div className="w-full max-w-md mx-auto flex flex-col items-center">
+        <SubPageHeader
+          title={title}
+          onBack={onBack}
+          backHref={backHref}
+          accent={accent}
+          trailing={trailing}
+        />
       </div>
+
+      <main className="w-full max-w-md mx-auto flex-1" style={{ maxWidth: contentMaxWidth }}>
+        {children}
+      </main>
     </div>
   )
+}
+
+/**
+ * Uniform report / sub-page shell. Delegates to SubPageLayout (login-matched header).
+ * reportName / meta / subtitle are accepted but never painted in the header (prevents legacy strings).
+ */
+export function PremiumShell(props) {
+  return <SubPageLayout {...props} />
 }
 
 /** Report editor section card — powder-coat plate + module top accent */

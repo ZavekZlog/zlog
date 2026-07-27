@@ -13,7 +13,7 @@ import {
   inputStyle,
   labelStyle,
 } from '@/lib/premium-ui'
-import { REPORT_THEMES, formatProjectMeta } from '@/lib/report-theme'
+import { REPORT_THEMES } from '@/lib/report-theme'
 
 const SNAG_THEME = REPORT_THEMES.snag
 
@@ -158,7 +158,6 @@ export default function SnagList() {
     return (
       <PremiumShell
         title={SNAG_THEME.title}
-        reportName="Loading…"
         backHref="/dashboard"
         accent={SNAG_THEME.accent}
       >
@@ -170,8 +169,6 @@ export default function SnagList() {
   return (
     <PremiumShell
       title={SNAG_THEME.title}
-      reportName={project?.name || 'Snag list'}
-      meta={formatProjectMeta(project)}
       backHref="/dashboard"
       accent={SNAG_THEME.accent}
       trailing={

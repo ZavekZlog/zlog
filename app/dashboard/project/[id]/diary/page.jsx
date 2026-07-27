@@ -978,18 +978,20 @@ export default function SiteDiaryPage() {
 
   if (loading) {
     return (
-      <div className="dashboard-premium-bg" style={{ ...pageBackground, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <style>{premiumScopedCss}</style>
-        Loading…
-      </div>
+      <PremiumShell
+        title={REPORT_THEMES.diary.title}
+        backHref="/dashboard"
+        accent={REPORT_THEMES.diary.accent}
+        maxWidth={720}
+      >
+        <p style={{ color: 'var(--text-2)' }}>Loading…</p>
+      </PremiumShell>
     )
   }
 
   return (
     <PremiumShell
       title={REPORT_THEMES.diary.title}
-      reportName={project?.name || 'Daily site record'}
-      meta={projectSubtitle}
       backHref="/dashboard"
       accent={REPORT_THEMES.diary.accent}
       maxWidth={720}

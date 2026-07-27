@@ -234,8 +234,6 @@ export default function BrandingSettingsPage() {
   return (
     <PremiumShell
       title="Company branding"
-      reportName="PDF report profiles"
-      meta="Logos and colours for PDF reports"
       backHref="/dashboard"
       accent={BRAND_ACCENT}
     >

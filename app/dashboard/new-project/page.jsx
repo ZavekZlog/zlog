@@ -45,8 +45,6 @@ export default function NewProject() {
   return (
     <PremiumShell
       title="New project"
-      reportName="Create a site"
-      meta="Add a project before opening reports"
       backHref="/dashboard"
       accent={BRAND_ACCENT}
       maxWidth={500}
