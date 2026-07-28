@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { labourFromOcrSheet, normalizeOcrSignInRows } from '@/lib/parse-signin-sheet'
+import { labourFromOcrSheet } from '@/lib/parse-signin-sheet'
 import { toDateKey } from '@/lib/labour-from-register'
 
 export const runtime = 'nodejs'
@@ -7,16 +7,19 @@ export const maxDuration = 60
 
 const SYSTEM_PROMPT = `You extract rows from construction site sign-in / attendance register photos.
 Return ONLY valid JSON with this shape:
-{"rows":[{"date":"YYYY-MM-DD","person_name":"string","trade":"string","company":"string","hours":number}]}
+{"visible_attendee_count":number,"rows":[{"date":"YYYY-MM-DD","person_name":"string","trade":"string","company":"string","time_in":"HH:MM","time_out":"HH:MM"}]}
 
 Rules:
-- One object per person / line on the sheet.
+- visible_attendee_count = how many distinct attendee / operative lines you can see on the sheet (including partially filled rows).
+- One object in rows per person / line on the sheet. Never merge two people into one row.
 - Prefer ISO dates. If the sheet uses DD/MM/YYYY, convert correctly (UK format).
 - company = employer / subcontractor if shown.
-- hours = hours worked for that person that day (number). If only time-in/time-out, estimate decimal hours.
-- If a field is missing, use null.
+- time_in / time_out = 24-hour clock strings as written on the sheet (e.g. "07:00", "16:00"). Use null if missing or unreadable.
+- Do NOT calculate, estimate, or invent hours. Never include an hours field. The application calculates hours from time_in and time_out.
+- If a field is missing, use null. Still return the row.
 - Do not invent people who are not on the sheet.
-- Include the date column value for EVERY row even when the sheet groups by date headers.`
+- Include the date column value for EVERY row even when the sheet groups by date headers.
+- Return every visible attendee row.`
 
 function extractJson(text) {
   if (!text) return null
@@ -35,6 +38,27 @@ function extractJson(text) {
     }
     return null
   }
+}
+
+function logOcrDiagnostics(payload) {
+  if (process.env.NODE_ENV === 'production') return
+  // No names, companies, or raw times in production; even in dev keep it structural
+  console.info('[parse-signin-sheet]', {
+    reportDate: payload.reportDate,
+    extractedCount: payload.extractedCount,
+    matchedCount: payload.matchedCount,
+    ignoredCount: payload.ignoredCount,
+    missingDateCount: payload.missingDateCount,
+    visibleAttendeeCount: payload.visibleAttendeeCount,
+    rowCountMismatch: payload.rowCountMismatch,
+    warningCount: payload.warnings?.length || 0,
+    sampleHours: (payload.operatives || []).slice(0, 5).map((o) => ({
+      dateStatus: o.dateStatus,
+      hasIn: Boolean(o.time_in),
+      hasOut: Boolean(o.time_out),
+      hours: o.hours,
+    })),
+  })
 }
 
 export async function POST(request) {
@@ -79,7 +103,7 @@ export async function POST(request) {
             content: [
               {
                 type: 'text',
-                text: `Extract all sign-in rows from this register photo. The site diary report date is ${reportDate}. Still return every visible row with its own date so the server can strictly filter.`,
+                text: `Extract all sign-in rows from this register photo. The site diary report date is ${reportDate}. Return every visible attendee with date, name, trade, company, time_in and time_out. Do not calculate hours.`,
               },
               { type: 'image_url', image_url: { url: image } },
             ],
@@ -97,21 +121,27 @@ export async function POST(request) {
     const content = visionJson?.choices?.[0]?.message?.content
     const parsed = extractJson(content)
     const rawRows = Array.isArray(parsed?.rows) ? parsed.rows : []
+    const visibleAttendeeCount = parsed?.visible_attendee_count ?? parsed?.visibleAttendeeCount ?? null
 
-    // Map OCR date field → work_date for shared filter helpers
-    const mapped = normalizeOcrSignInRows(
+    const result = labourFromOcrSheet(
       rawRows.map((r) => ({
         ...r,
         work_date: r.date ?? r.work_date,
       })),
+      reportDate,
+      { groupBy, visibleAttendeeCount },
     )
 
-    const result = labourFromOcrSheet(mapped, reportDate, { groupBy })
-
-    return NextResponse.json({
+    const responseBody = {
       reportDate,
+      extractedCount: result.extractedCount,
       matchedCount: result.matchedCount,
       ignoredCount: result.ignoredCount,
+      missingDateCount: result.missingDateCount,
+      visibleAttendeeCount: result.visibleAttendeeCount,
+      rowCountMismatch: result.rowCountMismatch,
+      warnings: result.warnings,
+      operatives: result.operatives,
       aggregated: result.aggregated,
       labour: result.rows.map(({ trade, company, headcount, hours, notes }) => ({
         trade,
@@ -120,7 +150,11 @@ export async function POST(request) {
         hours,
         notes,
       })),
-    })
+    }
+
+    logOcrDiagnostics(responseBody)
+
+    return NextResponse.json(responseBody)
   } catch (err) {
     return NextResponse.json({ error: err?.message || 'Failed to parse sign-in sheet' }, { status: 500 })
   }

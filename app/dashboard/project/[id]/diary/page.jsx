@@ -26,10 +26,12 @@ import {
 import { REPORT_THEMES } from '@/lib/report-theme'
 import {
   labourAggregateTotals,
+  labourRowsFromOperatives,
 } from '@/lib/labour-from-register'
 import { fileToVisionDataUrl, parseSignInSheetImage } from '@/lib/parse-signin-sheet'
 import { BrandingSelector, brandingPayload } from '@/components/branding/BrandingSelector'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
+import { SignInOperativeReview } from '@/components/diary/SignInOperativeReview'
 import {
   createBlankDiaryDraft,
   createTodaysDiaryDraft,
@@ -257,7 +259,10 @@ export default function SiteDiaryPage() {
   const [labourGroupBy, setLabourGroupBy] = useState('trade_company')
   const [scanLoading, setScanLoading] = useState(false)
   const [scanError, setScanError] = useState('')
-  const [scanMeta, setScanMeta] = useState({ matched: 0, ignored: 0 })
+  const [scanMeta, setScanMeta] = useState({ matched: 0, ignored: 0, extracted: 0 })
+  const [scanWarnings, setScanWarnings] = useState([])
+  const [scanOperatives, setScanOperatives] = useState([])
+  const [scanLastFile, setScanLastFile] = useState(null)
   const [scanSheetPreview, setScanSheetPreview] = useState(null)
   const [plantRows, setPlantRows] = useState([emptyPlant()])
   const [equipmentHireRows, setEquipmentHireRows] = useState([emptyEquipmentHire()])
@@ -724,7 +729,7 @@ export default function SiteDiaryPage() {
     if (signatureRef.current?.file && signatureRef.current.preview) {
       URL.revokeObjectURL(signatureRef.current.preview)
     }
-    if (scanSheetPreviewRef.current) {
+    if (scanSheetPreviewRef.current && String(scanSheetPreviewRef.current).startsWith('blob:')) {
       URL.revokeObjectURL(scanSheetPreviewRef.current)
     }
   }, [])
@@ -739,7 +744,9 @@ export default function SiteDiaryPage() {
 
   const clearScanPreview = useCallback(() => {
     setScanSheetPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev)
+      if (prev && String(prev).startsWith('blob:')) {
+        try { URL.revokeObjectURL(prev) } catch { /* ignore */ }
+      }
       return null
     })
   }, [])
@@ -756,52 +763,67 @@ export default function SiteDiaryPage() {
     setLabourMode('scan')
     setScanLoading(true)
     setScanError('')
+    setScanWarnings([])
+    setScanOperatives([])
+    setScanLastFile(file)
     clearScanPreview()
     let previewUrl = null
     try {
-      previewUrl = URL.createObjectURL(file)
+      const dataUrl = await fileToVisionDataUrl(file)
+      previewUrl = dataUrl
       setScanSheetPreview(previewUrl)
 
-      const dataUrl = await fileToVisionDataUrl(file)
       const result = await parseSignInSheetImage({
         dataUrl,
         reportDate,
         groupBy: labourGroupBy,
       })
 
+      const operatives = Array.isArray(result.operatives) ? result.operatives : []
+      setScanOperatives(operatives)
+      setScanWarnings(Array.isArray(result.warnings) ? result.warnings : [])
       setScanMeta({
         matched: result.matchedCount || 0,
         ignored: result.ignoredCount || 0,
+        extracted: result.extractedCount || operatives.length,
       })
 
-      const nextRows = (result.labour || []).map((row) => ({
-        key: makeUuid(),
-        trade: row.trade ?? '',
-        company: row.company ?? '',
-        headcount: row.headcount != null ? String(row.headcount) : '',
-        hours: row.hours != null ? String(row.hours) : '',
-        notes: row.notes ?? '',
-      }))
-      setLabourRows(nextRows.length > 0 ? nextRows : [emptyLabour()])
-      if (!nextRows.length) {
-        setScanError(`No rows matched report date ${reportDate}. Other dates on the sheet were ignored.`)
+      if (!operatives.length) {
+        setScanError('No attendee rows were read from this sheet. Try another photo or enter labour manually.')
       }
     } catch (err) {
-      if (previewUrl) {
-        try { URL.revokeObjectURL(previewUrl) } catch { /* ignore */ }
-        setScanSheetPreview(null)
-      }
+      setScanSheetPreview(null)
       setScanError(err?.message || 'Failed to scan sign-in sheet')
-      setScanMeta({ matched: 0, ignored: 0 })
+      setScanMeta({ matched: 0, ignored: 0, extracted: 0 })
+      setScanOperatives([])
+      setScanWarnings([])
     } finally {
       setScanLoading(false)
     }
   }, [reportDate, labourGroupBy, clearScanPreview])
 
+  const applyScanOperativesToLabour = useCallback(() => {
+    const nextRows = labourRowsFromOperatives(scanOperatives, {
+      groupBy: labourGroupBy,
+      makeKey: makeUuid,
+    })
+    setLabourRows(nextRows.length > 0 ? nextRows : [emptyLabour()])
+    setScanError('')
+  }, [scanOperatives, labourGroupBy])
+
+  const retrySignInScan = useCallback(() => {
+    if (scanLastFile) {
+      handleSignInSheetFiles([scanLastFile])
+    }
+  }, [scanLastFile, handleSignInSheetFiles])
+
   const startManualLabour = useCallback(() => {
     setLabourMode('manual')
     setScanError('')
-    setScanMeta({ matched: 0, ignored: 0 })
+    setScanMeta({ matched: 0, ignored: 0, extracted: 0 })
+    setScanWarnings([])
+    setScanOperatives([])
+    setScanLastFile(null)
     clearScanPreview()
     setLabourRows((rows) => (rows.some(labourRowHasData) ? rows : [emptyLabour()]))
   }, [clearScanPreview])
@@ -1492,7 +1514,7 @@ export default function SiteDiaryPage() {
                 disabled={scanLoading}
                 cameraLabel="Scan with camera"
                 galleryLabel="Upload sheet photo"
-                hint={`Only rows matching report date ${reportDate} are kept. Other days on the sheet are ignored.`}
+                hint="OCR extracts sign-in/out times only. Review every operative before applying to the labour summary."
               />
               {scanLoading && (
                 <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--text-2)' }}>
@@ -1508,20 +1530,32 @@ export default function SiteDiaryPage() {
                     marginTop: 12,
                     width: '100%',
                     maxHeight: 180,
-                    objectFit: 'cover',
+                    objectFit: 'contain',
                     borderRadius: 10,
                     border: '1px solid var(--edge)',
+                    background: 'var(--ink)',
                   }}
                 />
               )}
               {scanError && (
                 <p style={{ margin: '12px 0 0', fontSize: 13, color: '#ff6b6b' }}>{scanError}</p>
               )}
-              {!scanLoading && (scanMeta.matched > 0 || scanMeta.ignored > 0) && !scanError && (
+              {!scanLoading && scanMeta.extracted > 0 && !scanError && (
                 <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--text-2)' }}>
-                  Imported {scanMeta.matched} matching sign-in{scanMeta.matched === 1 ? '' : 's'}
-                  {scanMeta.ignored > 0 ? ` · ignored ${scanMeta.ignored} from other dates` : ''}.
+                  Extracted {scanMeta.extracted} operative{scanMeta.extracted === 1 ? '' : 's'}
+                  {scanMeta.ignored > 0 ? ` · ${scanMeta.ignored} flagged as other date` : ''}.
                 </p>
+              )}
+              {!scanLoading && scanOperatives.length > 0 && (
+                <SignInOperativeReview
+                  operatives={scanOperatives}
+                  onChange={setScanOperatives}
+                  onApply={applyScanOperativesToLabour}
+                  onRetry={scanLastFile ? retrySignInScan : undefined}
+                  warnings={scanWarnings}
+                  reportDate={reportDate}
+                  disabled={scanLoading}
+                />
               )}
             </div>
           )}
