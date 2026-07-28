@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChevronRight, LogOut } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { ZlogBrandWordmark } from '@/lib/premium-ui'
+import { ZlogBrandRegion, BRAND_HEADER_SPACE } from '@/lib/premium-ui'
 
 const UTILITY_RADIUS = 10
 
@@ -19,11 +19,12 @@ const utilityCardBase = {
   minHeight: 40,
   padding: '7px 10px',
   borderRadius: UTILITY_RADIUS,
-  border: '1px solid color-mix(in srgb, var(--edge) 85%, transparent)',
+  /* Secondary to report cards — lower surface contrast, finer edge, quieter highlight */
+  border: '1px solid color-mix(in srgb, var(--edge) 52%, transparent)',
   background:
-    'linear-gradient(165deg, color-mix(in srgb, var(--plate) 88%, var(--text) 4%) 0%, color-mix(in srgb, var(--ink) 55%, var(--plate)) 100%)',
+    'linear-gradient(165deg, color-mix(in srgb, var(--plate) 70%, var(--ink) 30%) 0%, color-mix(in srgb, var(--ink) 72%, var(--plate)) 100%)',
   boxShadow:
-    'inset 0 1px 0 var(--edge-highlight), 0 4px 14px color-mix(in srgb, var(--ink) 38%, transparent)',
+    'inset 0 1px 0 color-mix(in srgb, var(--edge-highlight) 40%, transparent), 0 2px 8px color-mix(in srgb, var(--ink) 22%, transparent)',
   color: 'var(--text)',
   fontFamily: 'inherit',
   textDecoration: 'none',
@@ -32,8 +33,8 @@ const utilityCardBase = {
 }
 
 /**
- * Landing-aligned dashboard masthead — centered glowing Zlog wordmark;
- * horizontal Reporting For + Sign out utility row beneath.
+ * Dashboard masthead — LOCKED ZlogBrandRegion, then Reporting For + Sign out.
+ * Brand spacing is owned by ZlogBrandRegion; do not add wordmark margins here.
  */
 export function DashboardTopBar() {
   const router = useRouter()
@@ -80,15 +81,12 @@ export function DashboardTopBar() {
         overflow: 'hidden',
         background: 'color-mix(in srgb, var(--ink) 72%, var(--plate))',
         borderBottom: '1px solid var(--edge-highlight)',
-        padding: '12px 16px 10px',
+        padding: `0 ${BRAND_HEADER_SPACE.headerPadX}px ${BRAND_HEADER_SPACE.headerPadX}px`,
       }}
     >
-      {/* Centered brand masthead */}
-      <div style={{ marginBottom: 16, width: '100%' }}>
-        <ZlogBrandWordmark size="md" centered />
-      </div>
+      <ZlogBrandRegion />
 
-      {/* Horizontal utility row */}
+      {/* Page-specific utility chrome — after canonical brand region */}
       <div
         className="zlog-header-utility-row"
         style={{

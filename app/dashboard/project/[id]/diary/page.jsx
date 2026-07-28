@@ -13,8 +13,15 @@ import {
   PrimaryCTA,
   SecondaryButton,
   DIARY_ACCENT,
-  pageBackground,
-  premiumScopedCss,
+  RecentEntryCard,
+  premiumDiaryEmptyClass,
+  premiumDiaryEmptyTitleClass,
+  premiumDiaryEmptyHintClass,
+  typeTokens,
+  recentEntryDateStyle,
+  recentEntrySummaryStyle,
+  recentEntryActionsStyle,
+  recentEntryActionButtonStyle,
 } from '@/lib/premium-ui'
 import { REPORT_THEMES } from '@/lib/report-theme'
 import {
@@ -23,6 +30,11 @@ import {
 import { fileToVisionDataUrl, parseSignInSheetImage } from '@/lib/parse-signin-sheet'
 import { BrandingSelector, brandingPayload } from '@/components/branding/BrandingSelector'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
+import {
+  createBlankDiaryDraft,
+  createTodaysDiaryDraft,
+  fetchOpenDraft,
+} from '@/lib/diary-draft'
 
 const SHIFT_OPTIONS = ['Day', 'Night', 'Weekend', 'Half day']
 
@@ -218,16 +230,23 @@ export default function SiteDiaryPage() {
   const prefillLast = searchParams.get('prefill') === 'last'
   const editingReportId = searchParams.get('report') || searchParams.get('diaryId') || null
   const duplicateReportId = (!editingReportId && searchParams.get('duplicate')) || null
+  const templateReportId = (!editingReportId && searchParams.get('template')) || duplicateReportId || null
   const router = useRouter()
   const supabase = createClient()
+
+  const showStartScreen = !editingReportId
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [startBusy, setStartBusy] = useState(false)
+  const [startError, setStartError] = useState('')
+  const [openDraft, setOpenDraft] = useState(null)
 
   const [projects, setProjects] = useState([])
   const [project, setProject] = useState(null)
+  const [recentDiaries, setRecentDiaries] = useState([])
 
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0])
   const [weather, setWeather] = useState('')
@@ -258,7 +277,78 @@ export default function SiteDiaryPage() {
   const [carriedVisitors, setCarriedVisitors] = useState(false)
   const [carriedDelaysIssues, setCarriedDelaysIssues] = useState(false)
 
+  const openReportForm = useCallback((reportId) => {
+    router.replace(`/dashboard/project/${projectId}/diary?report=${reportId}`)
+  }, [router, projectId])
+
+  const refreshStartData = useCallback(async () => {
+    const { data: proj } = await supabase.from('projects').select('*').eq('id', projectId).single()
+    setProject(proj)
+
+    let draft = null
+    try {
+      draft = await fetchOpenDraft(supabase, projectId)
+    } catch (err) {
+      if (!/is_draft/i.test(err?.message || '')) throw err
+    }
+    setOpenDraft(draft)
+
+    let logsQuery = supabase
+      .from('daily_reports')
+      .select('id, report_date')
+      .eq('project_id', projectId)
+      .order('report_date', { ascending: false })
+      .limit(5)
+    let { data: logs, error: logsError } = await logsQuery.eq('is_draft', false)
+    if (logsError && /is_draft/i.test(logsError.message || '')) {
+      const fallback = await supabase
+        .from('daily_reports')
+        .select('id, report_date')
+        .eq('project_id', projectId)
+        .order('report_date', { ascending: false })
+        .limit(5)
+      logs = fallback.data
+      logsError = fallback.error
+    }
+    if (logsError) throw logsError
+    setRecentDiaries(logs || [])
+  }, [supabase, projectId])
+
+  // Start screen bootstrap + auto-create from legacy prefill/template links
   useEffect(() => {
+    if (!projectId || editingReportId) return
+    let cancelled = false
+
+    const run = async () => {
+      setLoading(true)
+      setStartError('')
+      try {
+        // Legacy ?prefill=last must land on the start screen, not auto-open the form.
+        if (prefillLast) {
+          router.replace(`/dashboard/project/${projectId}/diary`)
+          await refreshStartData()
+          return
+        }
+        if (templateReportId) {
+          const id = await createTodaysDiaryDraft(supabase, projectId, templateReportId)
+          if (!cancelled) openReportForm(id)
+          return
+        }
+        await refreshStartData()
+      } catch (err) {
+        if (!cancelled) setStartError(err?.message || 'Could not load Site Diary start options')
+      } finally {
+        // Always clear — cancelled navigations (e.g. after camera) must not leave Loading stuck
+        setLoading(false)
+      }
+    }
+    run()
+    return () => { cancelled = true }
+  }, [projectId, editingReportId, prefillLast, templateReportId, supabase, openReportForm, refreshStartData, router])
+
+  useEffect(() => {
+    if (!editingReportId) return
+    let cancelled = false
     const load = async () => {
       setLoading(true)
       setError('')
@@ -267,68 +357,70 @@ export default function SiteDiaryPage() {
       setCarriedVisitors(false)
       setCarriedDelaysIssues(false)
 
-      const [{ data: proj }, { data: allProjects }] = await Promise.all([
-        supabase.from('projects').select('*').eq('id', projectId).single(),
-        supabase.from('projects').select('id, name, client_name, site_address, status').order('name'),
-      ])
-      setProject(proj)
-      setProjects(allProjects || [])
+      try {
+        const [{ data: proj }, { data: allProjects }] = await Promise.all([
+          supabase.from('projects').select('*').eq('id', projectId).single(),
+          supabase.from('projects').select('id, name, client_name, site_address, status').order('name'),
+        ])
+        if (cancelled) return
+        setProject(proj)
+        setProjects(allProjects || [])
 
-      const today = new Date().toISOString().slice(0, 10)
-      setReportDate(today)
-      setSiteSummary('')
-      setActionsRequired('')
-      setPhotos([])
-      setCoverPhoto(null)
-      setSignature(null)
-      setSignatureMode('draw')
-      setBrandingSelection(null)
-      setWeather('')
-      setShiftType('Day')
-      setVisitors('')
-      setDelaysIssues('')
-      setCompanyReportingFor('')
-      setCreatorName('')
-      setCreatorRole('')
-      setLabourRows([emptyLabour()])
-      setPlantRows([emptyPlant()])
-      setEquipmentHireRows([emptyEquipmentHire()])
+        const today = new Date().toISOString().slice(0, 10)
+        setReportDate(today)
+        setSiteSummary('')
+        setActionsRequired('')
+        setPhotos([])
+        setCoverPhoto(null)
+        setSignature(null)
+        setSignatureMode('draw')
+        setBrandingSelection(null)
+        setWeather('')
+        setShiftType('Day')
+        setVisitors('')
+        setDelaysIssues('')
+        setCompanyReportingFor('')
+        setCreatorName('')
+        setCreatorRole('')
+        setLabourRows([emptyLabour()])
+        setPlantRows([emptyPlant()])
+        setEquipmentHireRows([emptyEquipmentHire()])
 
-      const applyCover = async (storagePath) => {
-        if (!storagePath) return
-        const preview = await signedUrlForPath(supabase, storagePath)
-        if (!preview) return
-        setCoverPhoto({ file: null, preview, storagePath })
-      }
-
-      const applySignature = async (storagePath) => {
-        if (!storagePath) {
-          setSignature(null)
-          setSignatureMode('draw')
-          return
+        const applyCover = async (storagePath) => {
+          if (!storagePath) return
+          const preview = await signedUrlForPath(supabase, storagePath)
+          if (!preview || cancelled) return
+          setCoverPhoto({ file: null, preview, storagePath })
         }
-        const preview = await signedUrlForPath(supabase, storagePath)
-        if (!preview) {
-          setSignature(null)
-          setSignatureMode('draw')
-          return
-        }
-        setSignature({ file: null, preview, storagePath })
-        setSignatureMode('carried')
-      }
 
-      if (editingReportId || duplicateReportId) {
-        const sourceId = editingReportId || duplicateReportId
+        const applySignature = async (storagePath) => {
+          if (!storagePath) {
+            setSignature(null)
+            setSignatureMode('draw')
+            return
+          }
+          const preview = await signedUrlForPath(supabase, storagePath)
+          if (cancelled) return
+          if (!preview) {
+            setSignature(null)
+            setSignatureMode('draw')
+            return
+          }
+          setSignature({ file: null, preview, storagePath })
+          setSignatureMode('carried')
+        }
+
         const { data: existing, error: existingError } = await supabase
           .from('daily_reports')
           .select('*')
-          .eq('id', sourceId)
+          .eq('id', editingReportId)
           .eq('project_id', projectId)
           .maybeSingle()
 
+        if (cancelled) return
+
         if (existingError || !existing) {
           setError(existingError?.message || 'Diary entry not found')
-          setLoading(false)
           return
         }
 
@@ -338,22 +430,19 @@ export default function SiteDiaryPage() {
           supabase.from('report_photos').select('url, caption, sequence, layout').eq('report_id', existing.id).order('sequence'),
         ])
 
-        // Edit keeps the source date; duplicate always starts as today (CREATE mode — no id/created_at).
-        setReportDate(editingReportId ? (existing.report_date || today) : today)
-        setWeather(existing.weather ?? '')
-        setShiftType(existing.shift || 'Day')
-        setSiteSummary(existing.site_summary ?? '')
-        setVisitors(existing.visitors ?? '')
-        setDelaysIssues(existing.delays_issues ?? '')
-        setActionsRequired(existing.actions ?? '')
-        setCompanyReportingFor(existing.company_reporting_for ?? '')
-        setCreatorName(existing.creator_name ?? '')
-        setCreatorRole(existing.creator_role ?? '')
-        setLabourRows(labour?.length ? labour.map(labourFromDbRow) : [emptyLabour()])
-        setPlantRows(plant?.length ? plant.map(plantFromDbRow) : [emptyPlant()])
-        setEquipmentHireRows(equipmentHireFromDb(existing.equipment_hire))
-        if (duplicateReportId) setDuplicatedFromReport(true)
+        if (cancelled) return
 
+        setReportDate(existing.report_date || today)
+        setWeather(existing.weather || '')
+        setShiftType(existing.shift || existing.shift_type || 'Day')
+        setSiteSummary(existing.site_summary || '')
+        setVisitors(existing.visitors || '')
+        setDelaysIssues(existing.delays_issues || '')
+        setActionsRequired(existing.actions || existing.actions_required || '')
+        setCompanyReportingFor(existing.company_reporting_for || '')
+        setCreatorName(existing.creator_name || '')
+        setCreatorRole(existing.creator_role || '')
+        setEquipmentHireRows(equipmentHireFromDb(existing.equipment_hire))
         if (existing.branding_id || existing.brand_color || existing.brand_logo_url) {
           setBrandingSelection({
             brandingId: existing.branding_id || null,
@@ -362,65 +451,73 @@ export default function SiteDiaryPage() {
             companyName: '',
           })
         }
-
         await applyCover(existing.cover_photo_url)
         await applySignature(existing.signature_url)
+        if (cancelled) return
 
-        const loadedPhotos = []
-        for (const p of reportPhotos || []) {
-          if (!p?.url) continue
-          const preview = await signedUrlForPath(supabase, p.url)
-          if (!preview) continue
-          loadedPhotos.push({
+        if (labour?.length) {
+          setLabourRows(labour.map((row) => ({
             key: makeUuid(),
-            file: null,
-            preview,
-            storagePath: p.url,
-            caption: p.caption ?? '',
-            layout: p.layout === 'full' || p.layout === 'grid6' ? p.layout : 'grid4',
-            sequence_number: p.sequence ?? 0,
-          })
+            trade: row.trade || '',
+            company: row.company || '',
+            headcount: row.count != null ? String(row.count) : '',
+            hours: row.hours != null ? String(row.hours) : '',
+            notes: row.notes || '',
+          })))
         }
-        setPhotos(resequencePhotos(loadedPhotos))
-      } else if (prefillLast) {
-        const { data: lastReport } = await supabase
+        if (plant?.length) {
+          setPlantRows(plant.map((row) => ({
+            key: makeUuid(),
+            plant_type: row.item || '',
+            quantity: row.ref != null ? String(row.ref) : '',
+            hours: row.status != null ? String(row.status) : '',
+            notes: row.notes || '',
+          })))
+        }
+        if (reportPhotos?.length) {
+          const withPreview = await Promise.all(reportPhotos.map(async (p, index) => {
+            const preview = await signedUrlForPath(supabase, p.url)
+            return {
+              key: makeUuid(),
+              file: null,
+              preview,
+              storagePath: p.url,
+              caption: p.caption || '',
+              sequence_number: p.sequence ?? index + 1,
+              layout: p.layout || 'grid4',
+            }
+          }))
+          if (cancelled) return
+          setPhotos(withPreview)
+        }
+
+        let logsQuery = supabase
           .from('daily_reports')
-          .select('id, shift, weather, visitors, delays_issues, company_reporting_for, creator_name, creator_role, cover_photo_url, signature_url, equipment_hire')
+          .select('id, report_date')
           .eq('project_id', projectId)
           .order('report_date', { ascending: false })
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-
-        if (lastReport) {
-          const [{ data: labour }, { data: plant }] = await Promise.all([
-            supabase.from('report_labour').select('trade, company, count, hours, notes').eq('report_id', lastReport.id).order('sequence'),
-            supabase.from('report_plant').select('item, ref, status, notes').eq('report_id', lastReport.id).order('sequence'),
-          ])
-
-          setShiftType(lastReport.shift || 'Day')
-          setWeather(lastReport.weather ?? '')
-          setVisitors(lastReport.visitors ?? '')
-          setDelaysIssues(lastReport.delays_issues ?? '')
-          setCarriedVisitors(!!lastReport.visitors?.trim())
-          setCarriedDelaysIssues(!!lastReport.delays_issues?.trim())
-          setCompanyReportingFor(lastReport.company_reporting_for ?? '')
-          setCreatorName(lastReport.creator_name ?? '')
-          setCreatorRole(lastReport.creator_role ?? '')
-          setLabourRows(labour?.length ? labour.map(labourFromDbRow) : [emptyLabour()])
-          setPlantRows(plant?.length ? plant.map(plantFromDbRow) : [emptyPlant()])
-          setEquipmentHireRows(equipmentHireFromDb(lastReport.equipment_hire))
-          setPrefilledFromLast(true)
-
-          await applyCover(lastReport.cover_photo_url)
-          await applySignature(lastReport.signature_url)
+          .limit(5)
+        let { data: logs, error: logsError } = await logsQuery.eq('is_draft', false)
+        if (logsError && /is_draft/i.test(logsError.message || '')) {
+          const fallback = await supabase
+            .from('daily_reports')
+            .select('id, report_date')
+            .eq('project_id', projectId)
+            .order('report_date', { ascending: false })
+            .limit(5)
+          logs = fallback.data
         }
+        if (!cancelled) setRecentDiaries(logs || [])
+      } catch (err) {
+        if (!cancelled) setError(err?.message || 'Failed to load diary entry')
+      } finally {
+        // Camera cancel / Back mid-load remounts must not leave Loading stuck
+        setLoading(false)
       }
-
-      setLoading(false)
     }
     load()
-  }, [projectId, prefillLast, editingReportId, duplicateReportId])
+    return () => { cancelled = true }
+  }, [projectId, editingReportId])
 
   const addPhotosForLayout = useCallback((layout) => (accepted) => {
     const next = accepted.map((file) => ({
@@ -649,7 +746,8 @@ export default function SiteDiaryPage() {
 
   const handleSignInSheetFiles = useCallback(async (files) => {
     const file = files?.[0]
-    if (!file) return
+    // Camera cancel / empty picker — do not touch loading or draft state
+    if (!file || !(file instanceof Blob)) return
     if (!reportDate) {
       setScanError('Set the report date before scanning a sign-in sheet.')
       return
@@ -659,9 +757,11 @@ export default function SiteDiaryPage() {
     setScanLoading(true)
     setScanError('')
     clearScanPreview()
-    setScanSheetPreview(URL.createObjectURL(file))
-
+    let previewUrl = null
     try {
+      previewUrl = URL.createObjectURL(file)
+      setScanSheetPreview(previewUrl)
+
       const dataUrl = await fileToVisionDataUrl(file)
       const result = await parseSignInSheetImage({
         dataUrl,
@@ -687,10 +787,15 @@ export default function SiteDiaryPage() {
         setScanError(`No rows matched report date ${reportDate}. Other dates on the sheet were ignored.`)
       }
     } catch (err) {
+      if (previewUrl) {
+        try { URL.revokeObjectURL(previewUrl) } catch { /* ignore */ }
+        setScanSheetPreview(null)
+      }
       setScanError(err?.message || 'Failed to scan sign-in sheet')
       setScanMeta({ matched: 0, ignored: 0 })
+    } finally {
+      setScanLoading(false)
     }
-    setScanLoading(false)
   }, [reportDate, labourGroupBy, clearScanPreview])
 
   const startManualLabour = useCallback(() => {
@@ -744,6 +849,50 @@ export default function SiteDiaryPage() {
 
   const plantHasData = (row) =>
     row.plant_type.trim() || row.quantity || row.hours || row.notes.trim()
+
+  const handleContinueDraft = async () => {
+    if (!openDraft?.id || startBusy) return
+    openReportForm(openDraft.id)
+  }
+
+  const handleCreateTodaysDiary = async () => {
+    if (startBusy) return
+    setStartBusy(true)
+    setStartError('')
+    try {
+      const id = await createTodaysDiaryDraft(supabase, projectId)
+      openReportForm(id)
+    } catch (err) {
+      setStartError(err?.message || 'Could not create today’s diary')
+      setStartBusy(false)
+    }
+  }
+
+  const handleStartBlankDiary = async () => {
+    if (startBusy) return
+    setStartBusy(true)
+    setStartError('')
+    try {
+      const id = await createBlankDiaryDraft(supabase, projectId)
+      openReportForm(id)
+    } catch (err) {
+      setStartError(err?.message || 'Could not start blank diary')
+      setStartBusy(false)
+    }
+  }
+
+  const handleUseAsTemplate = async (sourceId) => {
+    if (!sourceId || startBusy) return
+    setStartBusy(true)
+    setStartError('')
+    try {
+      const id = await createTodaysDiaryDraft(supabase, projectId, sourceId)
+      openReportForm(id)
+    } catch (err) {
+      setStartError(err?.message || 'Could not create diary from template')
+      setStartBusy(false)
+    }
+  }
 
   const handleSave = async (e) => {
     e.preventDefault()
@@ -809,6 +958,7 @@ export default function SiteDiaryPage() {
       cover_photo_url: coverPhotoUrl,
       signature_url: signatureUrl,
       equipment_hire: equipmentHirePayload(equipmentHireRows),
+      is_draft: false,
       ...brandingPayload(brandingSelection),
     }
 
@@ -979,7 +1129,7 @@ export default function SiteDiaryPage() {
   if (loading) {
     return (
       <PremiumShell
-        title={REPORT_THEMES.diary.title}
+        title="Site Diary"
         backHref="/dashboard"
         accent={REPORT_THEMES.diary.accent}
         maxWidth={720}
@@ -989,10 +1139,122 @@ export default function SiteDiaryPage() {
     )
   }
 
+  if (showStartScreen) {
+    return (
+      <PremiumShell
+        title="Site Diary"
+        backHref="/dashboard"
+        accent={REPORT_THEMES.diary.accent}
+        maxWidth={720}
+      >
+        {(startError || error) && (
+          <div style={{ background: 'rgba(220,50,50,0.1)', border: '1px solid rgba(220,50,50,0.3)', color: '#ff6b6b', padding: '12px 14px', fontSize: 14, marginBottom: 16, borderRadius: 10 }}>
+            {startError || error}
+          </div>
+        )}
+
+        <h2
+          style={{
+            ...typeTokens.sectionTitle,
+            marginTop: 0,
+            marginBottom: 16,
+            color: 'var(--text)',
+            fontSize: 18,
+            letterSpacing: '0.02em',
+            textTransform: 'none',
+          }}
+        >
+          Today’s Site Diary
+        </h2>
+
+        {openDraft ? (
+          <GlassSection title="Continue existing draft" accent={DIARY_ACCENT}>
+            <p style={{ margin: '0 0 14px', fontSize: 14, lineHeight: 1.5, color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))' }}>
+              Continue where you left off.
+            </p>
+            <SecondaryButton type="button" disabled={startBusy} onClick={handleContinueDraft}>
+              Continue Draft
+            </SecondaryButton>
+          </GlassSection>
+        ) : null}
+
+        <GlassSection title="Create today’s diary" accent={DIARY_ACCENT}>
+          <p style={{ margin: '0 0 14px', fontSize: 14, lineHeight: 1.5, color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))' }}>
+            Start a new diary for today using reusable details from your most recent saved entry. Your previous diary stays unchanged.
+          </p>
+          <PrimaryCTA type="button" disabled={startBusy} accent={DIARY_ACCENT} onClick={handleCreateTodaysDiary}>
+            {startBusy ? 'Working…' : 'Create Today’s Diary'}
+          </PrimaryCTA>
+        </GlassSection>
+
+        <GlassSection title="Start blank diary" accent={DIARY_ACCENT}>
+          <p style={{ margin: '0 0 14px', fontSize: 14, lineHeight: 1.5, color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))' }}>
+            Create a completely new empty draft for today.
+          </p>
+          <SecondaryButton type="button" disabled={startBusy} onClick={handleStartBlankDiary}>
+            Start Blank Diary
+          </SecondaryButton>
+        </GlassSection>
+
+        <h2
+          style={{
+            ...typeTokens.sectionTitle,
+            marginTop: 32,
+            marginBottom: 12,
+            color: 'color-mix(in srgb, var(--text) 78%, var(--text-2))',
+            fontSize: 16,
+            letterSpacing: '0.072em',
+          }}
+        >
+          Recent diary entries
+        </h2>
+
+        {recentDiaries.length === 0 ? (
+          <div className={premiumDiaryEmptyClass}>
+            <p className={premiumDiaryEmptyTitleClass}>No entries yet</p>
+            <p className={premiumDiaryEmptyHintClass}>Create today’s diary to add your first saved entry</p>
+          </div>
+        ) : (
+          recentDiaries.map((d) => (
+            <RecentEntryCard key={d.id} accent={REPORT_THEMES.diary.accent}>
+              <div style={recentEntryDateStyle}>{project?.name || 'Project'}</div>
+              <div style={recentEntrySummaryStyle}>
+                {d.report_date
+                  ? new Date(`${d.report_date}T12:00:00`).toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    })
+                  : ''}
+              </div>
+              <div style={recentEntryActionsStyle}>
+                <SecondaryButton
+                  type="button"
+                  onClick={() => openReportForm(d.id)}
+                  style={recentEntryActionButtonStyle}
+                >
+                  View / Edit
+                </SecondaryButton>
+                <SecondaryButton
+                  type="button"
+                  disabled={startBusy}
+                  onClick={() => handleUseAsTemplate(d.id)}
+                  style={recentEntryActionButtonStyle}
+                >
+                  Use as Template
+                </SecondaryButton>
+              </div>
+            </RecentEntryCard>
+          ))
+        )}
+      </PremiumShell>
+    )
+  }
+
   return (
     <PremiumShell
-      title={REPORT_THEMES.diary.title}
-      backHref="/dashboard"
+      title="Site Diary"
+      backHref={`/dashboard/project/${projectId}/diary`}
       accent={REPORT_THEMES.diary.accent}
       maxWidth={720}
     >
@@ -1006,16 +1268,6 @@ export default function SiteDiaryPage() {
           {success}
         </div>
       )}
-      {prefilledFromLast && !editingReportId && !duplicatedFromReport && (
-        <div style={{ background: `rgba(${DIARY_ACCENT}, 0.08)`, border: `1px solid rgba(${DIARY_ACCENT}, 0.25)`, color: '#F0EDE8', padding: '12px 14px', fontSize: 13, marginBottom: 16, borderRadius: 10, lineHeight: 1.5 }}>
-          Standing crew, plant, weather and report details copied from your last report. Progress notes and work photos start blank — saving creates a new entry.
-        </div>
-      )}
-      {duplicatedFromReport && !editingReportId && (
-        <div style={{ background: `rgba(${DIARY_ACCENT}, 0.08)`, border: `1px solid rgba(${DIARY_ACCENT}, 0.25)`, color: '#F0EDE8', padding: '12px 14px', fontSize: 13, marginBottom: 16, borderRadius: 10, lineHeight: 1.5 }}>
-          Duplicated from an existing entry. Report date is set to today — saving creates a new independent report.
-        </div>
-      )}
       {editingReportId && (
         <div style={{ background: `rgba(${DIARY_ACCENT}, 0.08)`, border: `1px solid rgba(${DIARY_ACCENT}, 0.25)`, color: '#F0EDE8', padding: '12px 14px', fontSize: 13, marginBottom: 16, borderRadius: 10, lineHeight: 1.5 }}>
           Editing an existing diary entry. Saving updates this record.
@@ -1027,7 +1279,7 @@ export default function SiteDiaryPage() {
           value={brandingSelection}
           onChange={setBrandingSelection}
           accent={DIARY_ACCENT}
-          autoSelectDefault={!editingReportId && !duplicateReportId}
+          autoSelectDefault={!editingReportId}
         />
 
         <GlassSection title="Project" accent={DIARY_ACCENT}>
@@ -1610,6 +1862,58 @@ export default function SiteDiaryPage() {
           {saving ? 'Saving…' : (editingReportId ? 'Save changes' : 'Save site diary')}
         </PrimaryCTA>
       </form>
+
+      <h2
+        style={{
+          ...typeTokens.sectionTitle,
+          marginTop: 32,
+          marginBottom: 12,
+          color: 'color-mix(in srgb, var(--text) 78%, var(--text-2))',
+          fontSize: 16,
+          letterSpacing: '0.072em',
+        }}
+      >
+        Recent diary entries
+      </h2>
+
+      {recentDiaries.length === 0 ? (
+        <div className={premiumDiaryEmptyClass}>
+          <p className={premiumDiaryEmptyTitleClass}>No entries yet</p>
+          <p className={premiumDiaryEmptyHintClass}>Save a diary report to see it listed here</p>
+        </div>
+      ) : (
+        recentDiaries.map((d) => (
+          <RecentEntryCard key={d.id} accent={REPORT_THEMES.diary.accent}>
+            <div style={recentEntryDateStyle}>{project?.name || 'Project'}</div>
+            <div style={recentEntrySummaryStyle}>
+              {d.report_date
+                ? new Date(`${d.report_date}T12:00:00`).toLocaleDateString('en-GB', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })
+                : ''}
+            </div>
+            <div style={recentEntryActionsStyle}>
+              <SecondaryButton
+                type="button"
+                onClick={() => router.push(`/dashboard/project/${projectId}/diary?report=${d.id}`)}
+                style={recentEntryActionButtonStyle}
+              >
+                View / Edit
+              </SecondaryButton>
+              <SecondaryButton
+                type="button"
+                disabled={startBusy}
+                onClick={() => handleUseAsTemplate(d.id)}
+                style={recentEntryActionButtonStyle}
+              >
+                Use as Template
+              </SecondaryButton>
+            </div>
+          </RecentEntryCard>
+        ))
+      )}
     </PremiumShell>
   )
 }

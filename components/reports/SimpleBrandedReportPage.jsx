@@ -3,14 +3,13 @@
 /**
  * Shared create/edit form for branding-ready report types that only need
  * date + summary today (site survey, weekly progress, weekly H&S).
+ * Brand chrome via PremiumShell → ZlogBrandRegion (LOCKED).
  */
-import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import {
-  ZlogBrandWordmark,
-  premiumScopedCss,
+  PremiumShell,
   GlassSection,
   labelStyle,
   inputStyle,
@@ -18,40 +17,6 @@ import {
   PrimaryCTA,
 } from '@/lib/premium-ui'
 import { BrandingSelector, brandingPayload } from '@/components/branding/BrandingSelector'
-
-/** Sign-in-matched shell — wordmark + glow, standalone back button, prominent title */
-function BrandedReportShell({ title, backHref = '/dashboard', children }) {
-  return (
-    <div className="min-h-screen bg-[#0d0f12] text-[#f3f4f6] flex flex-col px-4 py-6 selection:bg-[#ff5500]/30">
-      <style>{premiumScopedCss}</style>
-
-      <div className="w-full max-w-md mx-auto flex flex-col items-center">
-        <div style={{ marginBottom: 24, width: '100%', paddingTop: 12 }}>
-          <ZlogBrandWordmark size="lg" centered={true} />
-        </div>
-
-        <div className="w-full flex items-center justify-between mb-6 px-1">
-          <Link
-            href={backHref}
-            className="px-3 py-1.5 bg-[#14171c] border border-[#222731] hover:border-[#323846] rounded-lg text-xs font-semibold text-[#9ca3af] hover:text-[#f3f4f6] flex items-center gap-1.5 transition-all shadow-sm"
-          >
-            <span>←</span> Back
-          </Link>
-
-          {title ? (
-            <h1 className="text-base font-bold text-[#f3f4f6] tracking-tight text-right m-0">
-              {title}
-            </h1>
-          ) : null}
-        </div>
-      </div>
-
-      <main className="w-full max-w-md mx-auto flex-1">
-        {children}
-      </main>
-    </div>
-  )
-}
 
 export function SimpleBrandedReportPage({
   title,
@@ -163,14 +128,14 @@ export function SimpleBrandedReportPage({
 
   if (loading) {
     return (
-      <BrandedReportShell title={title} backHref="/dashboard">
+      <PremiumShell title={title} backHref="/dashboard" accent={accent}>
         <p style={{ color: 'var(--text-2)' }}>Loading…</p>
-      </BrandedReportShell>
+      </PremiumShell>
     )
   }
 
   return (
-    <BrandedReportShell title={title} backHref="/dashboard">
+    <PremiumShell title={title} backHref="/dashboard" accent={accent}>
       {error && (
         <div style={{ background: 'rgba(220,50,50,0.1)', border: '1px solid rgba(220,50,50,0.3)', color: '#ff6b6b', padding: '12px 14px', fontSize: 14, marginBottom: 16, borderRadius: 10 }}>
           {error}
@@ -218,6 +183,6 @@ export function SimpleBrandedReportPage({
           {saving ? 'Saving…' : (editingReportId ? 'Save changes' : 'Save report')}
         </PrimaryCTA>
       </form>
-    </BrandedReportShell>
+    </PremiumShell>
   )
 }

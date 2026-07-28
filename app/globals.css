@@ -38,7 +38,8 @@ body {
   --premium-text-muted: #8ea2b5;
   --premium-accent-strip: 2.5px;
   --module-accent-thickness: 2.5px;
-  --category-rail-thickness: 5.5px;
+  /* Same canonical thickness as horizontal ModuleAccent — do not diverge */
+  --category-rail-thickness: var(--module-accent-thickness);
 }
 
 .premium-diary-empty {
@@ -127,7 +128,13 @@ body {
   }
 
   .premium-category-rail {
-    width: var(--category-rail-thickness, 5.5px) !important;
+    width: var(--module-accent-thickness, 2.5px) !important;
+    min-width: var(--module-accent-thickness, 2.5px) !important;
+    max-width: var(--module-accent-thickness, 2.5px) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    filter: none !important;
+    border: none !important;
   }
 
   .premium-glass-panel {
@@ -208,7 +215,7 @@ body {
   }
 
   .zlog-dashboard-topbar.premium-shell-header {
-    padding-bottom: 0 !important;
+    /* Brand spacing owned by ZlogBrandRegion — do not collapse header air */
     margin-bottom: 0 !important;
   }
 

@@ -31,7 +31,12 @@ export default function ProjectPage() {
   useEffect(() => {
     const load = async () => {
       const { data: proj } = await supabase.from('projects').select('*').eq('id', id).single()
-      const { data: logs } = await supabase.from('daily_reports').select('*').eq('project_id', id).order('report_date', { ascending: false })
+      const { data: logs } = await supabase
+        .from('daily_reports')
+        .select('*')
+        .eq('project_id', id)
+        .eq('is_draft', false)
+        .order('report_date', { ascending: false })
       setProject(proj)
       setDiaries(logs || [])
       setLoading(false)
@@ -136,23 +141,14 @@ export default function ProjectPage() {
       <div className="premium-dash-cards-grid" style={{ marginBottom: 32 }}>
         <div className="premium-dash-card-wrap" style={{ animationDelay: '0ms' }}>
           <ModuleHomeCard
-            title="New Report"
-            description="Start a blank diary entry"
+            title="Site Diary"
+            description="Create, continue, or start blank"
             icon="📋"
             accent={REPORT_THEMES.diary.accent}
             onClick={() => router.push(`/dashboard/project/${id}/diary`)}
           />
         </div>
         <div className="premium-dash-card-wrap" style={{ animationDelay: '70ms' }}>
-          <ModuleHomeCard
-            title="Continue from Last"
-            description="Pre-filled from last entry"
-            icon="↩️"
-            accent={REPORT_THEMES.diary.accent}
-            onClick={() => router.push(`/dashboard/project/${id}/diary?prefill=last`)}
-          />
-        </div>
-        <div className="premium-dash-card-wrap" style={{ animationDelay: '140ms' }}>
           <ModuleHomeCard
             title="Snag List"
             description="Log issues"
@@ -178,15 +174,20 @@ export default function ProjectPage() {
       {diaries.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 40, color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))' }}>
           <p style={{ margin: '0 0 8px', color: 'var(--text)', fontWeight: 600, fontSize: 16 }}>No entries yet</p>
-          <p style={{ margin: 0, fontSize: 16, lineHeight: 1.45 }}>Tap New Report to add your first entry</p>
+          <p style={{ margin: 0, fontSize: 16, lineHeight: 1.45 }}>Tap Site Diary to add your first entry</p>
         </div>
       ) : (
         diaries.map((d) => (
           <RecentEntryCard key={d.id} accent={REPORT_THEMES.diary.accent}>
-            <div style={recentEntryDateStyle}>{d.report_date}</div>
+            <div style={recentEntryDateStyle}>{project?.name || 'Project'}</div>
             <div style={recentEntrySummaryStyle}>
-              {(d.site_summary || d.notes || '')?.slice(0, 100)}
-              {((d.site_summary || d.notes || '').length > 100) ? '...' : ''}
+              {d.report_date
+                ? new Date(`${d.report_date}T12:00:00`).toLocaleDateString('en-GB', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })
+                : ''}
             </div>
             <div style={recentEntryActionsStyle}>
               <SecondaryButton
@@ -198,10 +199,10 @@ export default function ProjectPage() {
               </SecondaryButton>
               <SecondaryButton
                 type="button"
-                onClick={() => router.push(`/dashboard/project/${id}/diary?duplicate=${d.id}`)}
+                onClick={() => router.push(`/dashboard/project/${id}/diary?template=${d.id}`)}
                 style={recentEntryActionButtonStyle}
               >
-                Duplicate
+                Use as Template
               </SecondaryButton>
               <DestructiveButton
                 type="button"

@@ -186,11 +186,11 @@ export const sectionTitleStyle = {
 
 /**
  * Locked Zlog industrial powder-coat design tokens.
- * Report-card top accents stay thin; history/list category rails use the thicker mobile-visible strip.
+ * ONE canonical accent thickness for horizontal report accents AND vertical history rails.
  */
 export const MODULE_ACCENT_THICKNESS = 2.5
-/** History / item listing left rail — locked mobile-visible powder-coat strip */
-export const CATEGORY_RAIL_THICKNESS = 5.5
+/** Vertical history/list rails — same token as ModuleAccent (never diverge) */
+export const CATEGORY_RAIL_THICKNESS = MODULE_ACCENT_THICKNESS
 
 /** Module-coloured top-edge highlight (dashboard card language) */
 export function ModuleAccent({
@@ -213,6 +213,8 @@ export const accentBarStyle = (accent, height = `${MODULE_ACCENT_THICKNESS}px`, 
   left: 0,
   right: 0,
   height,
+  boxSizing: 'border-box',
+  border: 'none',
   background: `linear-gradient(90deg, transparent 0%, rgba(${accent}, 0.95) 22%, color-mix(in srgb, var(--text) 55%, transparent) 50%, rgba(${accent}, 0.95) 78%, transparent 100%)`,
   boxShadow: `0 0 12px rgba(${accent}, 0.32), 0 2px 6px rgba(${accent}, 0.2)`,
   pointerEvents: 'none',
@@ -220,34 +222,42 @@ export const accentBarStyle = (accent, height = `${MODULE_ACCENT_THICKNESS}px`, 
 })
 
 /**
- * Vertical category rail for history / list cards (Survey / Diary / Progress / Snag / H&S).
- * Locked at CATEGORY_RAIL_THICKNESS (5.5px): deep module colour → pale specular → soft falloff.
+ * Vertical category rail — crisp solid strip at MODULE_ACCENT_THICKNESS.
+ * No radius/shadow/filter: radius ≫ width was antialiasing into a fat soft bloom.
+ * Parent .premium-recent-entry-card (overflow:hidden + radius) clips corners.
  */
 export const categoryRailStyle = (
   accent,
-  width = CATEGORY_RAIL_THICKNESS,
-  radius = '12px 0 0 12px',
+  width = `${MODULE_ACCENT_THICKNESS}px`,
 ) => ({
   position: 'absolute',
   top: 0,
   left: 0,
   bottom: 0,
   width,
-  borderRadius: radius,
+  minWidth: width,
+  maxWidth: width,
+  boxSizing: 'border-box',
+  margin: 0,
+  padding: 0,
+  border: 'none',
+  borderRadius: 0,
+  outline: 'none',
   pointerEvents: 'none',
-  background: `linear-gradient(180deg, transparent 0%, rgba(${accent}, 0.88) 18%, color-mix(in srgb, var(--text) 52%, transparent) 50%, rgba(${accent}, 0.88) 82%, transparent 100%)`,
-  boxShadow: `inset 1px 0 0 color-mix(in srgb, var(--text) 22%, transparent), 1px 0 5px rgba(${accent}, 0.16)`,
+  filter: 'none',
+  transform: 'none',
+  boxShadow: 'none',
+  background: `rgba(${accent}, 0.95)`,
 })
 
 export function ModuleCategoryRail({
   accent = DIARY_ACCENT,
-  width = CATEGORY_RAIL_THICKNESS,
-  radius = '12px 0 0 12px',
+  width = `${MODULE_ACCENT_THICKNESS}px`,
 }) {
   return (
     <div
       className="premium-category-rail"
-      style={categoryRailStyle(accent, width, radius)}
+      style={categoryRailStyle(accent, width)}
       aria-hidden
     />
   )
@@ -500,12 +510,39 @@ const BRAND_WORDMARK_SIZES = {
   sm: 24,
   md: 30,
   default: 38,
-  lg: 57, // Enlarged 50% from default 38px
+  lg: 57, // Auth mastheads only — authenticated app locks md via ZlogBrandRegion
+}
+
+/**
+ * LOCKED spacing for ZlogBrandRegion + page chrome beneath it (8px grid).
+ * Do not invent per-page wordmark/glow margins.
+ */
+export const BRAND_HEADER_SPACE = {
+  /**
+   * Top offset of the canonical brand region (safe-area / dark air above glow+wordmark).
+   * Moves the entire authenticated composition down — not wordmark-only margin.
+   */
+  regionPadTop: 48,
+  /**
+   * Bottom of brand region = clear air before next chrome (Reporting For / Back+title).
+   * Target ~40–48px; must stay larger than belowControls / headerToContent.
+   */
+  regionPadBottom: 40,
+  /** Minimum brand-region height (wordmark + atmospheric glow breathing) */
+  regionMinHeight: 88,
+  /** Gap after page nav / utility row before first content (~24–32) */
+  belowControls: 24,
+  /** Shared report-module nav row height (Back + title baseline) */
+  navRowMinHeight: 40,
+  /** Dashboard: utility row → report-card grid */
+  headerToContent: 28,
+  headerPadX: 16,
 }
 
 /**
  * FINAL LOCKED brand masthead — --rust Z + warm log; opacity 0.42 glow.
- * size: 'sm' | 'md' | 'default' | 'lg' (lg = 57px, preferred for auth mastheads)
+ * Authenticated screens consume this only via ZlogBrandRegion (size md).
+ * size lg remains for public auth pages (login/signup).
  */
 export function ZlogBrandWordmark({ size = 'lg', centered = true, style = {} }) {
   const fontSize = BRAND_WORDMARK_SIZES[size] ?? BRAND_WORDMARK_SIZES.lg
@@ -528,7 +565,7 @@ export function ZlogBrandWordmark({ size = 'lg', centered = true, style = {} }) 
         ...style,
       }}
     >
-      {/* Full-Width Atmospheric Radial Glow spanning screen horizontally */}
+      {/* Approved atmospheric radial glow — do not restyle per page */}
       <div
         aria-hidden
         style={{
@@ -561,6 +598,36 @@ export function ZlogBrandWordmark({ size = 'lg', centered = true, style = {} }) 
       >
         <span style={{ color: 'var(--rust)' }}>Z</span>log
       </h1>
+    </div>
+  )
+}
+
+/**
+ * LOCKED ZLOG BRAND REGION — canonical authenticated-app wordmark, glow and vertical spacing.
+ * Do not reproduce or override per page.
+ *
+ * Owns: centred ZlogBrandWordmark (md), approved --rust glow, region pad top/bottom,
+ * min height, and spacing to chrome immediately below.
+ * Page nav (Back / title) and dashboard utilities are NOT part of this region.
+ */
+export function ZlogBrandRegion({ style = {} } = {}) {
+  return (
+    <div
+      className="zlog-brand-region"
+      style={{
+        boxSizing: 'border-box',
+        width: '100%',
+        minHeight: BRAND_HEADER_SPACE.regionMinHeight,
+        paddingTop: BRAND_HEADER_SPACE.regionPadTop,
+        paddingBottom: BRAND_HEADER_SPACE.regionPadBottom,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        ...style,
+      }}
+    >
+      <ZlogBrandWordmark size="md" centered />
     </div>
   )
 }
@@ -609,12 +676,85 @@ export function PremiumBackButton({ onClick, href, label = 'Back' }) {
 }
 
 /**
- * LOCKED sub-page masthead — centered ZlogBrandWordmark + glow (login-matched).
- * Do not put project names / debug strings (e.g. reportName) in this chrome.
- * Props:
- *   title     — optional module title in the nav row (e.g. "Site Diary Report")
- *   onBack / backHref — PremiumBackButton
- *   reportName / meta / subtitle — ignored (API compat only; never rendered)
+ * LOCKED report-module navigation — Back + page title as one workspace header row.
+ * Sits beneath ZlogBrandRegion. Used by all report modules via ZlogInternalHeader / PremiumShell.
+ * Do not reinvent Back/title chrome per page.
+ */
+export function ReportModuleNav({
+  title,
+  onBack,
+  backHref,
+  trailing = null,
+}) {
+  const backClassName =
+    'zlog-report-nav-back shrink-0 inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-xs font-semibold tracking-wide transition-colors border cursor-pointer font-inherit no-underline'
+  const backStyle = {
+    borderColor: 'color-mix(in srgb, var(--edge) 48%, transparent)',
+    color: 'color-mix(in srgb, var(--text) 68%, var(--text-2))',
+    background: 'color-mix(in srgb, var(--ink) 55%, var(--plate))',
+    boxShadow: 'none',
+  }
+
+  const backControl = backHref ? (
+    <Link href={backHref} className={backClassName} style={backStyle} onClick={onBack}>
+      <span aria-hidden>←</span> Back
+    </Link>
+  ) : onBack ? (
+    <button type="button" className={backClassName} style={backStyle} onClick={onBack}>
+      <span aria-hidden>←</span> Back
+    </button>
+  ) : (
+    <div className="shrink-0 w-[4.5rem]" aria-hidden />
+  )
+
+  return (
+    <nav
+      className="zlog-report-module-nav"
+      aria-label="Report navigation"
+      style={{
+        boxSizing: 'border-box',
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        minHeight: BRAND_HEADER_SPACE.navRowMinHeight,
+        paddingTop: 4,
+        paddingBottom: 12,
+        marginBottom: BRAND_HEADER_SPACE.belowControls,
+      }}
+    >
+      {backControl}
+
+      {title ? (
+        <h1
+          className="zlog-report-module-title"
+          style={{
+            flex: 1,
+            margin: 0,
+            minWidth: 0,
+            textAlign: 'center',
+            fontSize: 16,
+            fontWeight: 700,
+            letterSpacing: '-0.02em',
+            lineHeight: 1.25,
+            color: 'var(--text)',
+          }}
+        >
+          {title}
+        </h1>
+      ) : (
+        <div style={{ flex: 1 }} aria-hidden />
+      )}
+
+      {trailing || <div className="shrink-0 w-[4.5rem]" aria-hidden />}
+    </nav>
+  )
+}
+
+/**
+ * Sub-page chrome: ZlogBrandRegion + ReportModuleNav (Back / title).
+ * Brand spacing comes only from ZlogBrandRegion — do not add wordmark margins here.
+ * reportName / meta / subtitle — ignored (API compat only; never rendered)
  */
 export function ZlogInternalHeader({
   title,
@@ -637,45 +777,22 @@ export function ZlogInternalHeader({
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
+        width: '100%',
         background: 'transparent',
         borderBottom: 'none',
-        padding: '16px 16px 20px',
+        padding: `0 ${BRAND_HEADER_SPACE.headerPadX}px 0`,
         pointerEvents: 'auto',
-        overflow: 'hidden',
       }}
     >
-      {/* Locked Zlog Brand Wordmark with Localized Atmospheric Glow */}
-      <div style={{ marginBottom: showNavRow ? 24 : 12, width: '100%', paddingTop: 12 }}>
-        <ZlogBrandWordmark size="lg" centered={true} />
-      </div>
+      <ZlogBrandRegion />
 
-      {/* Clean navigation / page title — no project name or legacy debug text */}
       {showNavRow ? (
-        <div className="w-full flex items-center justify-between gap-4 mb-4 px-1">
-          {backHref ? (
-            <Link
-              href={backHref}
-              className="shrink-0 px-3 py-1.5 bg-[#14171c] border border-[#222731] hover:border-[#323846] rounded-lg text-xs font-semibold text-[#9ca3af] hover:text-[#f3f4f6] flex items-center gap-1.5 transition-all shadow-sm"
-              onClick={onBack}
-            >
-              <span aria-hidden>←</span> Back
-            </Link>
-          ) : onBack ? (
-            <button
-              type="button"
-              onClick={onBack}
-              className="shrink-0 px-3 py-1.5 bg-[#14171c] border border-[#222731] hover:border-[#323846] rounded-lg text-xs font-semibold text-[#9ca3af] hover:text-[#f3f4f6] flex items-center gap-1.5 transition-all shadow-sm cursor-pointer font-inherit"
-            >
-              <span aria-hidden>←</span> Back
-            </button>
-          ) : (
-            <div className="w-10 shrink-0" aria-hidden />
-          )}
-          {title ? (
-            <h1 className="text-base font-bold text-[#f3f4f6] tracking-tight text-right m-0 min-w-0">{title}</h1>
-          ) : null}
-          {trailing || <div className="w-10 shrink-0" aria-hidden />}
-        </div>
+        <ReportModuleNav
+          title={title}
+          onBack={onBack}
+          backHref={backHref}
+          trailing={trailing}
+        />
       ) : null}
     </header>
   )
@@ -703,7 +820,7 @@ export function SubPageLayout({
   const contentMaxWidth = maxWidth ?? 448
 
   return (
-    <div className="min-h-screen bg-[#0d0f12] text-[#f3f4f6] flex flex-col px-4 py-6 selection:bg-[#ff5500]/30">
+    <div className="min-h-screen bg-[#0d0f12] text-[#f3f4f6] flex flex-col px-4 pb-6 pt-0 selection:bg-[#ff5500]/30">
       <style>{premiumScopedCss}</style>
 
       <div className="w-full max-w-md mx-auto flex flex-col items-center">

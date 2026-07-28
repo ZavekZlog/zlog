@@ -8,33 +8,21 @@ import {
   premiumScopedCss,
   dashboardCardInteractionCss,
   ModuleHomeCard,
-  RecentEntryCard,
-  SecondaryButton,
   PrimaryCTA,
-  premiumDiaryEmptyClass,
-  premiumDiaryEmptyTitleClass,
-  premiumDiaryEmptyHintClass,
-  typeTokens,
-  recentEntryDateStyle,
-  recentEntrySummaryStyle,
-  recentEntryActionsStyle,
-  recentEntryActionButtonStyle,
+  BRAND_HEADER_SPACE,
 } from '@/lib/premium-ui'
-import { REPORT_THEME_LIST, REPORT_THEMES } from '@/lib/report-theme'
+import { REPORT_THEME_LIST } from '@/lib/report-theme'
 import { DashboardTopBar } from '@/components/dashboard/DashboardTopBar'
 
-/** Dashboard vertical rhythm (8px grid) */
+/** Dashboard vertical rhythm (8px grid) — clear air under header before report cards */
 const SPACE = {
-  contentTop: 12,
+  contentTop: BRAND_HEADER_SPACE.headerToContent,
   contentX: 20,
   contentBottom: 24,
-  sectionAfterCards: 16,
-  headingToList: 12,
 }
 
 export default function DashboardPage() {
   const [project, setProject] = useState(null)
-  const [diaries, setDiaries] = useState([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
   const router = useRouter()
@@ -48,15 +36,6 @@ export default function DashboardPage() {
         .limit(1)
         .maybeSingle()
       setProject(proj)
-      if (proj?.id) {
-        const { data: logs } = await supabase
-          .from('daily_reports')
-          .select('id, report_date, site_summary')
-          .eq('project_id', proj.id)
-          .order('report_date', { ascending: false })
-          .limit(5)
-        setDiaries(logs || [])
-      }
       setLoading(false)
     }
     load()
@@ -135,56 +114,6 @@ export default function DashboardPage() {
             ),
           )}
         </div>
-
-        {project && (
-          <>
-            <h2
-              style={{
-                ...typeTokens.sectionTitle,
-                marginTop: SPACE.sectionAfterCards,
-                marginBottom: SPACE.headingToList,
-                color: 'color-mix(in srgb, var(--text) 78%, var(--text-2))',
-                fontSize: 16,
-                letterSpacing: '0.072em',
-              }}
-            >
-              Recent diary entries
-            </h2>
-
-            {diaries.length === 0 ? (
-              <div className={premiumDiaryEmptyClass}>
-                <p className={premiumDiaryEmptyTitleClass}>No entries yet</p>
-                <p className={premiumDiaryEmptyHintClass}>Tap Site Diary Report to add your first entry</p>
-              </div>
-            ) : (
-              diaries.map((d) => (
-                <RecentEntryCard key={d.id} accent={REPORT_THEMES.diary.accent}>
-                  <div style={recentEntryDateStyle}>{d.report_date}</div>
-                  <div style={recentEntrySummaryStyle}>
-                    {d.site_summary?.slice(0, 100)}
-                    {(d.site_summary?.length || 0) > 100 ? '...' : ''}
-                  </div>
-                  <div style={recentEntryActionsStyle}>
-                    <SecondaryButton
-                      type="button"
-                      onClick={() => router.push(`/dashboard/project/${project.id}/diary?report=${d.id}`)}
-                      style={recentEntryActionButtonStyle}
-                    >
-                      View / Edit
-                    </SecondaryButton>
-                    <SecondaryButton
-                      type="button"
-                      onClick={() => router.push(`/dashboard/project/${project.id}/diary?duplicate=${d.id}`)}
-                      style={recentEntryActionButtonStyle}
-                    >
-                      Duplicate
-                    </SecondaryButton>
-                  </div>
-                </RecentEntryCard>
-              ))
-            )}
-          </>
-        )}
       </div>
     </div>
   )
