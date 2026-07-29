@@ -11,22 +11,71 @@ import {
   labelStyle,
   inputStyle,
 } from '@/lib/premium-ui'
+import {
+  passwordInputType,
+  passwordVisibilityLabel,
+  readLoginFormCredentials,
+} from '@/lib/auth/login-form'
 
 /**
  * Sign-in — inherits re-centred ZlogBrandWordmark glow.
- * Auth: Supabase signInWithPassword → /dashboard + refresh.
+ * Auth: FormData from the live form → Supabase signInWithPassword → /dashboard.
+ *
+ * Inputs stay uncontrolled so password-manager autofill is not wiped by React state.
+ * Form uses noValidate: Android Chrome often shows autofill before input.value is set;
+ * native `required` can block submit and dismiss the preview (fields look cleared).
  */
 export default function Login() {
   const supabase = createClient()
   const router = useRouter()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
   const handleLogin = async (e) => {
-    e?.preventDefault?.()
+    e.preventDefault()
+
+    const form = e.currentTarget
+    if (!form) return
+
+    // Submission source of truth: FormData from the actual form DOM — not React state.
+    let formData = new FormData(form)
+    let email = String(formData.get('email') ?? '')
+    let password = String(formData.get('password') ?? '')
+
+    // Android Chrome may not have flushed autofill into input.value yet.
+    if (!email.trim() || !password) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      formData = new FormData(form)
+      email = String(formData.get('email') ?? '')
+      password = String(formData.get('password') ?? '')
+    }
+
+    // Prefer live element values if FormData is still empty after flush.
+    if (!email.trim() || !password) {
+      const fromDom = readLoginFormCredentials(form)
+      if (!email.trim()) email = fromDom.email
+      if (!password) password = fromDom.password
+    }
+
+    email = email.trim()
+
+    // Cement non-empty values into the DOM before any re-render so autofill
+    // preview dismissal cannot leave blank fields.
+    const emailInput = form.elements.namedItem('email')
+    const passwordInput = form.elements.namedItem('password')
+    if (email && emailInput && 'value' in emailInput) {
+      emailInput.value = email
+    }
+    if (password && passwordInput && 'value' in passwordInput) {
+      passwordInput.value = password
+    }
+
+    if (!email || !password) {
+      setErrorMsg('Enter your email and password.')
+      return
+    }
+
     setLoading(true)
     setErrorMsg('')
 
@@ -88,19 +137,17 @@ export default function Login() {
             </div>
           ) : null}
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-4" noValidate>
             <div>
               <label style={{ ...labelStyle, fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', marginBottom: 4 }}>
                 Email
               </label>
               <input
+                name="email"
                 type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="username"
                 placeholder="name@company.com"
                 style={{ ...inputStyle, minHeight: 50, fontSize: 16, marginBottom: 0 }}
-                autoComplete="email"
               />
             </div>
 
@@ -110,40 +157,47 @@ export default function Login() {
               </label>
               <div style={{ position: 'relative' }}>
                 <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  name="password"
+                  type={passwordInputType(showPassword)}
+                  autoComplete="current-password"
                   placeholder="••••••••"
                   style={{
                     ...inputStyle,
                     minHeight: 50,
                     fontSize: 16,
                     marginBottom: 0,
-                    paddingRight: 64,
+                    paddingRight: 128,
                   }}
-                  autoComplete="current-password"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={passwordVisibilityLabel(showPassword)}
+                  aria-pressed={showPassword}
                   style={{
                     position: 'absolute',
-                    right: 12,
+                    right: 4,
                     top: '50%',
                     transform: 'translateY(-50%)',
-                    padding: '4px 8px',
-                    border: 'none',
-                    background: 'transparent',
+                    zIndex: 2,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: 48,
+                    minHeight: 48,
+                    padding: '8px 10px',
+                    border: '1px solid color-mix(in srgb, var(--text) 28%, transparent)',
+                    borderRadius: 8,
+                    background: 'color-mix(in srgb, var(--ink) 55%, var(--plate))',
                     fontSize: 13,
-                    fontWeight: 500,
+                    fontWeight: 600,
                     fontFamily: 'inherit',
-                    color: 'color-mix(in srgb, var(--text) 78%, var(--text-2))',
+                    lineHeight: 1.2,
+                    color: '#F4F2EF',
                     cursor: 'pointer',
                   }}
                 >
-                  {showPassword ? 'Hide' : 'Show'}
+                  {passwordVisibilityLabel(showPassword)}
                 </button>
               </div>
             </div>

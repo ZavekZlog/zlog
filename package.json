@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test lib/labour-from-register.test.js lib/photo-schedule.test.js"
+    "test": "node --test lib/labour-from-register.test.js lib/photo-schedule.test.js lib/photo-annotations/model.test.js lib/ai-annotation/area-groups.test.js lib/auth/login-form.test.js"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",

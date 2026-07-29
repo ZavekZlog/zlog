@@ -39,6 +39,8 @@ export function ImageSourceButtons({
   hint = null,
   cameraLabel = 'Take Photo',
   galleryLabel = 'Upload from Gallery',
+  /** Stack full-width buttons (site one-handed use). Default side-by-side keeps OCR UIs unchanged. */
+  stacked = false,
 }) {
   const uid = useId()
   const cameraId = `${uid}-camera`
@@ -72,7 +74,11 @@ export function ImageSourceButtons({
       <div
         role="group"
         aria-label="Choose image source"
-        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: stacked ? '1fr' : '1fr 1fr',
+          gap: 12,
+        }}
       >
         <label
           className="zlog-secondary-btn"

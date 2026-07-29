@@ -32,7 +32,12 @@ import { fileToVisionDataUrl, parseSignInSheetImage } from '@/lib/parse-signin-s
 import { BrandingSelector, brandingPayload } from '@/components/branding/BrandingSelector'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
 import { SignInOperativeReview } from '@/components/diary/SignInOperativeReview'
-import { PhotoAnnotationEditor, PhotoAnnotationViewer } from '@/components/photo-annotations'
+import { AiLocationWalk } from '@/components/ai-annotation'
+import {
+  flattenAreaGroups,
+  groupPhotosByArea,
+  photosMissingDescription,
+} from '@/lib/ai-annotation/area-groups'
 import { hasAnnotations } from '@/lib/photo-annotations'
 import {
   createBlankDiaryDraft,
@@ -295,7 +300,9 @@ export default function SiteDiaryPage() {
   const [delaysIssues, setDelaysIssues] = useState('')
   const [actionsRequired, setActionsRequired] = useState('')
   const [photos, setPhotos] = useState([])
-  const [annotatingPhotoKey, setAnnotatingPhotoKey] = useState(null)
+  const [locationWalk, setLocationWalk] = useState([])
+  const signatureSectionRef = useRef(null)
+  const locationWalkRef = useRef(null)
   const [prefilledFromLast, setPrefilledFromLast] = useState(false)
   const [duplicatedFromReport, setDuplicatedFromReport] = useState(false)
   const [companyReportingFor, setCompanyReportingFor] = useState('')
@@ -402,6 +409,7 @@ export default function SiteDiaryPage() {
         setSiteSummary('')
         setActionsRequired('')
         setPhotos([])
+        setLocationWalk([])
         setCoverPhoto(null)
         setSignature(null)
         setSignatureMode('draw')
@@ -462,7 +470,7 @@ export default function SiteDiaryPage() {
           const results = await Promise.all([
             supabase.from('report_labour').select('trade, company, count, hours, notes').eq('report_id', existing.id).order('sequence'),
             supabase.from('report_plant').select('item, ref, status, notes').eq('report_id', existing.id).order('sequence'),
-            supabase.from('report_photos').select('url, caption, sequence, layout, annotations, overlay_path').eq('report_id', existing.id).order('sequence'),
+            supabase.from('report_photos').select('url, caption, sequence, layout, location, annotations, overlay_path').eq('report_id', existing.id).order('sequence'),
           ])
           labour = results[0].data
           plant = results[1].data
@@ -535,6 +543,7 @@ export default function SiteDiaryPage() {
               caption: p.caption || '',
               sequence_number: p.sequence ?? index + 1,
               layout: p.layout || 'grid4',
+              location: p.location || '',
               annotations: p.annotations || null,
               overlayPath: p.overlay_path || null,
               overlayPreview,
@@ -543,6 +552,9 @@ export default function SiteDiaryPage() {
           }))
           if (cancelled) return
           setPhotos(withPreview)
+          setLocationWalk(groupPhotosByArea(withPreview))
+        } else {
+          setLocationWalk([])
         }
 
         let logsQuery = supabase
@@ -573,40 +585,14 @@ export default function SiteDiaryPage() {
     return () => { cancelled = true }
   }, [projectId, editingReportId])
 
-  const addPhotosForLayout = useCallback((layout) => (accepted) => {
-    const next = accepted.map((file) => ({
-      key: makeUuid(),
-      file,
-      preview: URL.createObjectURL(file),
-      caption: '',
-      layout,
-      sequence_number: 0,
-      annotations: null,
-      overlayPath: null,
-      overlayPreview: null,
-      overlayDirty: false,
-    }))
-    setPhotos((prev) => resequencePhotos([...prev, ...next]))
+  const handleLocationWalkChange = useCallback((next) => {
+    setLocationWalk(next)
+    setPhotos(flattenAreaGroups(next))
   }, [])
 
-  const savePhotoAnnotations = useCallback(async ({ annotations, overlayDataUrl }) => {
-    if (!annotatingPhotoKey) return
-    setPhotos((prev) =>
-      prev.map((p) => {
-        if (p.key !== annotatingPhotoKey) return p
-        if (p.overlayPreview && String(p.overlayPreview).startsWith('blob:')) {
-          try { URL.revokeObjectURL(p.overlayPreview) } catch { /* ignore */ }
-        }
-        return {
-          ...p,
-          annotations,
-          overlayPreview: overlayDataUrl || null,
-          overlayDirty: true,
-        }
-      }),
-    )
-    setAnnotatingPhotoKey(null)
-  }, [annotatingPhotoKey])
+  const continueToSignature = useCallback(() => {
+    signatureSectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  }, [])
 
   const onCoverDrop = useCallback((accepted) => {
     const file = accepted[0]
@@ -813,10 +799,6 @@ export default function SiteDiaryPage() {
   }, [project])
 
   const labourTotals = useMemo(() => labourAggregateTotals(labourRows), [labourRows])
-  const annotatingPhoto = useMemo(
-    () => photos.find((p) => p.key === annotatingPhotoKey) || null,
-    [photos, annotatingPhotoKey],
-  )
 
   const clearScanPreview = useCallback(() => {
     setScanSheetPreview((prev) => {
@@ -916,18 +898,6 @@ export default function SiteDiaryPage() {
     setEquipmentHireRows((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)))
   }
 
-  const removePhoto = (key) => {
-    setPhotos((prev) => {
-      const removed = prev.find((p) => p.key === key)
-      if (removed?.file && removed.preview) URL.revokeObjectURL(removed.preview)
-      return resequencePhotos(prev.filter((p) => p.key !== key))
-    })
-  }
-
-  const updatePhotoCaption = (key, caption) => {
-    setPhotos((prev) => prev.map((p) => (p.key === key ? { ...p, caption } : p)))
-  }
-
   const handleProjectChange = (newId) => {
     if (newId && newId !== projectId) {
       let query = ''
@@ -996,6 +966,18 @@ export default function SiteDiaryPage() {
     e.preventDefault()
     if (!siteSummary.trim()) {
       setError('Site summary is required')
+      return
+    }
+
+    const missingDescriptions = photosMissingDescription(locationWalk)
+    if (missingDescriptions.length > 0) {
+      const n = missingDescriptions.length
+      setError(
+        n === 1
+          ? '1 photo still needs a description.'
+          : `${n} photos still need descriptions.`,
+      )
+      locationWalkRef.current?.openFirstIncompletePhoto?.()
       return
     }
 
@@ -1135,7 +1117,7 @@ export default function SiteDiaryPage() {
       }
     }
 
-    const sequenced = resequencePhotos(photos)
+    const sequenced = flattenAreaGroups(locationWalk)
     const keptStoragePaths = sequenced
       .filter((p) => !p.file && p.storagePath)
       .map((p) => p.storagePath)
@@ -1203,9 +1185,10 @@ export default function SiteDiaryPage() {
         photoRecords.push({
           report_id: report.id,
           url: storagePath,
-          caption: photo.caption.trim() || null,
+          caption: (photo.caption || '').trim() || null,
           sequence: photo.sequence_number,
           layout: photo.layout || 'grid4',
+          location: photo.location || photo.area || null,
           annotations: annotationPayload,
           overlay_path: overlayPath,
         })
@@ -1214,9 +1197,10 @@ export default function SiteDiaryPage() {
         photoRecords.push({
           report_id: report.id,
           url: photo.storagePath,
-          caption: photo.caption.trim() || null,
+          caption: (photo.caption || '').trim() || null,
           sequence: photo.sequence_number,
           layout: photo.layout || 'grid4',
+          location: photo.location || photo.area || null,
           annotations: annotationPayload,
           overlay_path: overlayPath,
         })
@@ -1224,9 +1208,10 @@ export default function SiteDiaryPage() {
         await supabase
           .from('report_photos')
           .update({
-            caption: photo.caption.trim() || null,
+            caption: (photo.caption || '').trim() || null,
             sequence: photo.sequence_number,
             layout: photo.layout || 'grid4',
+            location: photo.location || photo.area || null,
             annotations: annotationPayload,
             overlay_path: overlayPath,
           })
@@ -1240,7 +1225,10 @@ export default function SiteDiaryPage() {
       if (photosError) {
         // Retry without annotation columns if migration not applied yet
         if (/annotations|overlay_path/i.test(photosError.message || '')) {
-          const stripped = photoRecords.map(({ annotations, overlay_path, ...rest }) => rest)
+          const stripped = photoRecords.map((row) => {
+            const { annotations: _ann, overlay_path: _ov, ...rest } = row
+            return rest
+          })
           const { error: retryError } = await supabase.from('report_photos').insert(stripped)
           if (retryError) {
             setError(retryError.message)
@@ -1476,6 +1464,7 @@ export default function SiteDiaryPage() {
             </div>
           )}
 
+          <div ref={signatureSectionRef}>
           <label style={labelStyle}>Signature</label>
           {(signatureMode === 'carried' || signatureMode === 'accepted') && signature?.preview ? (
             <div style={{ marginBottom: 0 }}>
@@ -1516,6 +1505,7 @@ export default function SiteDiaryPage() {
               </SecondaryButton>
             </div>
           )}
+          </div>
         </GlassSection>
 
         <GlassSection title="Report details" accent={DIARY_ACCENT}>
@@ -1917,96 +1907,15 @@ export default function SiteDiaryPage() {
           />
         </GlassSection>
 
-        <GlassSection title="Work photos" accent={DIARY_ACCENT}>
-          {PHOTO_LAYOUT_SECTIONS.map((section) => {
-            const sectionPhotos = resequencePhotos(photos).filter(
-              (p) => (p.layout || 'grid4') === section.id,
-            )
-            return (
-              <div
-                key={section.id}
-                style={{
-                  marginBottom: 22,
-                  paddingBottom: 18,
-                  borderBottom: '1px solid rgba(255,255,255,0.08)',
-                }}
-              >
-                <div style={{ fontWeight: 700, fontSize: 14, color: '#F0EDE8', marginBottom: 6 }}>
-                  {section.title}
-                </div>
-                <div style={{ marginBottom: 12 }}>
-                  <ImageSourceButtons
-                    onFiles={addPhotosForLayout(section.id)}
-                    multiple
-                    hint={section.hint}
-                  />
-                </div>
-                {sectionPhotos.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                    {sectionPhotos.map((photo) => (
-                      <div
-                        key={photo.key}
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: '88px 1fr auto',
-                          gap: 14,
-                          alignItems: 'start',
-                          padding: 12,
-                          background: 'rgba(0,0,0,0.2)',
-                          borderRadius: 12,
-                          border: '1px solid rgba(255,255,255,0.08)',
-                        }}
-                      >
-                        <div>
-                          <PhotoAnnotationViewer
-                            imageSrc={photo.preview}
-                            overlaySrc={photo.overlayPreview}
-                            alt={`Photo ${photo.sequence_number}`}
-                            width={88}
-                            height={88}
-                          />
-                          <div
-                            style={{
-                              marginTop: 6,
-                              fontSize: 11,
-                              fontWeight: 600,
-                              color: 'var(--text)',
-                              letterSpacing: '0.02em',
-                            }}
-                          >
-                            Photo {photo.sequence_number}
-                          </div>
-                        </div>
-                        <div>
-                          <label style={{ ...labelStyle, fontSize: 10 }}>Caption</label>
-                          <input
-                            style={{ ...cellInputStyle, width: '100%', marginBottom: 8 }}
-                            value={photo.caption}
-                            onChange={(e) => updatePhotoCaption(photo.key, e.target.value)}
-                            placeholder={`Caption for Photo ${photo.sequence_number}`}
-                          />
-                          <SecondaryButton
-                            type="button"
-                            onClick={() => setAnnotatingPhotoKey(photo.key)}
-                          >
-                            {hasAnnotations(photo.annotations) ? 'Edit annotations' : 'Annotate'}
-                          </SecondaryButton>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removePhoto(photo.key)}
-                          style={{ ...removeRowStyle, marginBottom: 0, marginTop: 24 }}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </GlassSection>
+        <AiLocationWalk
+          ref={locationWalkRef}
+          accent={DIARY_ACCENT}
+          projectId={projectId}
+          value={locationWalk}
+          onChange={handleLocationWalkChange}
+          title="Work Photos"
+          onContinueToSignature={continueToSignature}
+        />
 
         <PrimaryCTA type="submit" disabled={saving} accent={REPORT_THEMES.diary.accent}>
           {saving ? 'Saving…' : (editingReportId ? 'Save changes' : 'Save site diary')}
@@ -2063,16 +1972,6 @@ export default function SiteDiaryPage() {
             </div>
           </RecentEntryCard>
         ))
-      )}
-      {annotatingPhoto?.preview && (
-        <PhotoAnnotationEditor
-          imageSrc={annotatingPhoto.preview}
-          initialAnnotations={annotatingPhoto.annotations}
-          accent={REPORT_THEMES.diary.accent}
-          title={`Annotate Photo ${annotatingPhoto.sequence_number || ''}`}
-          onCancel={() => setAnnotatingPhotoKey(null)}
-          onSave={savePhotoAnnotations}
-        />
       )}
     </PremiumShell>
   )

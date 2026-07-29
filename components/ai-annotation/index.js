@@ -2,6 +2,8 @@
  * Reusable AI annotation UI for all Zlog report modules.
  */
 export { AiLocationWalk } from '@/components/ai-annotation/AiLocationWalk'
+export { AreaPhotoViewer, PhotosPerPagePicker } from '@/components/ai-annotation/AreaPhotoViewer'
+export { PhotoStatusBadges } from '@/components/ai-annotation/PhotoStatusBadges'
 export { AnnotationPhotoCard } from '@/components/ai-annotation/AnnotationPhotoCard'
 export { AnnotationLocationBar } from '@/components/ai-annotation/AnnotationLocationBar'
 export { AnnotationPendingReview } from '@/components/ai-annotation/AnnotationPendingReview'

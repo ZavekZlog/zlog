@@ -1,14 +1,24 @@
 'use client'
 
 /**
- * Location Walk — area-group workflow for all report modules.
- *
- * Phases: name area → capture photos → Save Area → Add Next / Finish → summary
- * Photos belong permanently to their area group (not one global Current Area).
+ * Location Walk = Work Photos workflow (named areas).
+ * Active create → Save Area confirmation → Add Another / Continue to Signature.
+ * Saved areas stay visible as expandable cards.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
-import { AnnotationPhotoCard } from '@/components/ai-annotation/AnnotationPhotoCard'
+import { PhotoAnnotationEditor } from '@/components/photo-annotations'
+import { AreaPhotoViewer, PhotosPerPagePicker } from '@/components/ai-annotation/AreaPhotoViewer'
+import { PhotoStatusBadges } from '@/components/ai-annotation/PhotoStatusBadges'
+import { useSpeechDictation } from '@/components/ai-annotation/useSpeechDictation'
 import {
   GlassSection,
   PrimaryCTA,
@@ -16,207 +26,282 @@ import {
   inputStyle,
   labelStyle,
 } from '@/lib/premium-ui'
-import { getAnnotationContext } from '@/lib/ai-annotation/contexts'
-import { annotatePhotoFile } from '@/lib/ai-annotation/client'
 import {
   collectRecentAreaNames,
   createAreaGroup,
   createAreaPhoto,
+  firstIncompletePhoto,
+  flattenAreaGroups,
+  layoutToPerPage,
+  moveItem,
+  perPageToLayout,
+  photoHasDescription,
+  photosMissingDescription,
   readRecentAreas,
   rememberRecentArea,
 } from '@/lib/ai-annotation/area-groups'
 
-/** @typedef {'name' | 'active' | 'after_save' | 'summary'} WalkPhase */
+/** @typedef {'create' | 'after_save' | 'review'} WalkPhase */
 
-function useSpeechDictation(onResult) {
-  const [listening, setListening] = useState(false)
-  const recognitionRef = useRef(null)
-
-  const stop = useCallback(() => {
-    try {
-      recognitionRef.current?.stop?.()
-    } catch {
-      // ignore
-    }
-    recognitionRef.current = null
-    setListening(false)
-  }, [])
-
-  const start = useCallback(() => {
-    const SpeechRecognition = typeof window !== 'undefined'
-      && (window.SpeechRecognition || window.webkitSpeechRecognition)
-    if (!SpeechRecognition) return false
-
-    stop()
-    const recognition = new SpeechRecognition()
-    recognition.lang = 'en-GB'
-    recognition.interimResults = false
-    recognition.maxAlternatives = 1
-    recognition.onresult = (event) => {
-      const text = event?.results?.[0]?.[0]?.transcript
-      if (text) onResult(String(text).trim())
-    }
-    recognition.onerror = () => setListening(false)
-    recognition.onend = () => setListening(false)
-    recognitionRef.current = recognition
-    try {
-      recognition.start()
-      setListening(true)
-      return true
-    } catch {
-      setListening(false)
-      return false
-    }
-  }, [onResult, stop])
-
-  useEffect(() => () => stop(), [stop])
-
-  const supported = typeof window !== 'undefined'
-    && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)
-
-  return { start, stop, listening, supported }
+const fieldErrorStyle = {
+  margin: '6px 0 0',
+  fontSize: 13,
+  color: '#ff6b6b',
+  lineHeight: 1.35,
 }
 
-function AreaNamePrompt({
+const primaryTap = {
+  minHeight: 48,
+  width: '100%',
+}
+
+function SavedAreaCard({
+  group,
+  expanded,
+  onToggle,
+  onEdit,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+  onOpenPhoto,
+  onRename,
+  onLayoutChange,
+  onAddPhotos,
+  onRemovePhoto,
+  onMovePhoto,
+  globalOffset,
+  isFirst,
+  isLast,
   accent,
-  draft,
-  onDraftChange,
-  recentAreas,
-  onConfirm,
-  onPickRecent,
-  error,
+  capturing,
 }) {
-  const applyDictation = useCallback((text) => {
-    if (text) onDraftChange(text)
-  }, [onDraftChange])
-  const { start, listening, supported } = useSpeechDictation(applyDictation)
+  const [renaming, setRenaming] = useState(false)
+  const [nameDraft, setNameDraft] = useState(group.areaName)
+  const perPage = layoutToPerPage(group.layout)
 
   return (
-    <div>
-      <div style={{ ...labelStyle, marginBottom: 8 }}>Name this area</div>
-      <input
-        type="text"
-        value={draft}
-        onChange={(e) => onDraftChange(e.target.value)}
-        placeholder="e.g. Ground Floor Reception"
-        style={{ ...inputStyle, marginBottom: 10 }}
-        autoComplete="off"
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            onConfirm()
-          }
+    <div
+      style={{
+        borderRadius: 12,
+        border: '1px solid var(--edge)',
+        background: 'var(--plate)',
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 10,
+          padding: '12px 14px',
         }}
-      />
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: recentAreas.length ? 14 : 0 }}>
-        <PrimaryCTA type="button" accent={accent} onClick={onConfirm}>
-          Continue
-        </PrimaryCTA>
-        {supported && (
-          <SecondaryButton type="button" onClick={() => (listening ? null : start())}>
-            {listening ? 'Listening…' : 'Dictate'}
-          </SecondaryButton>
-        )}
-      </div>
-      {recentAreas.length > 0 && (
-        <div>
-          <div style={{ ...labelStyle, marginBottom: 8, marginTop: 4 }}>Recently used</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {recentAreas.map((name) => (
-              <SecondaryButton key={name} type="button" onClick={() => onPickRecent(name)}>
-                {name}
-              </SecondaryButton>
-            ))}
-          </div>
-        </div>
-      )}
-      {error && (
-        <p style={{ margin: '12px 0 0', fontSize: 13, color: '#ff6b6b' }}>{error}</p>
-      )}
-    </div>
-  )
-}
-
-function SavedAreasSummary({ groups, onEdit }) {
-  if (!groups.length) return null
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {groups.map((group) => (
-        <div
-          key={group.id}
+      >
+        <button
+          type="button"
+          onClick={onToggle}
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            padding: '12px 14px',
-            borderRadius: 10,
-            border: '1px solid var(--edge)',
-            background: 'var(--plate)',
+            flex: 1,
+            textAlign: 'left',
+            border: 'none',
+            background: 'transparent',
+            padding: '4px 0',
+            minHeight: 48,
+            cursor: 'pointer',
+            color: 'inherit',
+            fontFamily: 'inherit',
           }}
         >
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)' }}>
-              {group.areaName}
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 2 }}>
-              {group.photos.length} photo{group.photos.length === 1 ? '' : 's'}
-            </div>
+          <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)' }}>
+            {group.areaName}
           </div>
-          <SecondaryButton type="button" onClick={() => onEdit(group.id)}>
-            Edit
+          <div style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 3 }}>
+            {group.photos.length} photo{group.photos.length === 1 ? '' : 's'} · {perPage} per page
+          </div>
+        </button>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <SecondaryButton type="button" onClick={onEdit}>Edit</SecondaryButton>
+          <SecondaryButton type="button" onClick={onToggle}>
+            {expanded ? 'Collapse' : 'Expand'}
           </SecondaryButton>
         </div>
-      ))}
+      </div>
+
+      {expanded && (
+        <div style={{ padding: '0 14px 14px', borderTop: '1px solid var(--edge)' }}>
+          {renaming ? (
+            <div style={{ marginTop: 12 }}>
+              <input
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                style={{ ...inputStyle, marginBottom: 8, minHeight: 48 }}
+              />
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <PrimaryCTA
+                  type="button"
+                  accent={accent}
+                  onClick={() => {
+                    onRename(nameDraft.trim())
+                    setRenaming(false)
+                  }}
+                >
+                  Save name
+                </PrimaryCTA>
+                <SecondaryButton type="button" onClick={() => { setNameDraft(group.areaName); setRenaming(false) }}>
+                  Cancel
+                </SecondaryButton>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+              <SecondaryButton type="button" onClick={() => setRenaming(true)}>Rename</SecondaryButton>
+              <SecondaryButton type="button" disabled={isFirst} onClick={onMoveUp}>Move area up</SecondaryButton>
+              <SecondaryButton type="button" disabled={isLast} onClick={onMoveDown}>Move area down</SecondaryButton>
+              <SecondaryButton type="button" onClick={onDelete}>Delete area</SecondaryButton>
+            </div>
+          )}
+
+          <div style={{ marginTop: 14 }}>
+            <div style={{ ...labelStyle, marginBottom: 8 }}>Photos per page</div>
+            <PhotosPerPagePicker layout={group.layout} onChange={onLayoutChange} />
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <ImageSourceButtons
+              onFiles={onAddPhotos}
+              multiple
+              disabled={capturing}
+              stacked
+              cameraLabel="Take Photo"
+              galleryLabel="Add Multiple Photos"
+            />
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
+              gap: 8,
+              marginTop: 14,
+            }}
+          >
+            {group.photos.map((photo, pi) => {
+              const photoNumber = globalOffset + pi + 1
+              const incomplete = !photoHasDescription(photo)
+              return (
+                <div key={photo.id}>
+                  <button
+                    type="button"
+                    onClick={() => onOpenPhoto(pi)}
+                    aria-label={`Photo ${photoNumber}${incomplete ? ', description missing' : ', description complete'}`}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      padding: 4,
+                      border: incomplete
+                        ? '2px solid rgba(251, 146, 60, 0.75)'
+                        : '1px solid var(--edge)',
+                      borderRadius: 10,
+                      background: 'var(--plate)',
+                      cursor: 'pointer',
+                      minHeight: 48,
+                      color: 'inherit',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    <div style={{ position: 'relative' }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photo.preview || photo.imageUrl || ''}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        style={{
+                          width: '100%',
+                          height: 72,
+                          objectFit: 'contain',
+                          display: 'block',
+                          background: '#0b0d12',
+                          borderRadius: 6,
+                        }}
+                      />
+                      <div style={{ position: 'absolute', top: 4, right: 4 }}>
+                        <PhotoStatusBadges photo={photo} size={12} />
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: 'var(--text)',
+                        marginTop: 6,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 4,
+                      }}
+                    >
+                      <span>Photo {photoNumber}</span>
+                    </div>
+                  </button>
+                  <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                    <button type="button" disabled={pi === 0} onClick={() => onMovePhoto(pi, pi - 1)} aria-label={`Move Photo ${photoNumber} up`} style={{ minHeight: 32, minWidth: 32, fontSize: 12, cursor: 'pointer' }}>↑</button>
+                    <button type="button" disabled={pi === group.photos.length - 1} onClick={() => onMovePhoto(pi, pi + 1)} aria-label={`Move Photo ${photoNumber} down`} style={{ minHeight: 32, minWidth: 32, fontSize: 12, cursor: 'pointer' }}>↓</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (typeof window === 'undefined' || window.confirm(`Delete Photo ${photoNumber}?`)) {
+                          onRemovePhoto(photo.id)
+                        }
+                      }}
+                      aria-label={`Delete Photo ${photoNumber}`}
+                      style={{ minHeight: 32, minWidth: 32, fontSize: 12, cursor: 'pointer' }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-/**
- * @param {object} props
- * @param {string} props.accent
- * @param {string} props.projectId
- * @param {import('@/lib/ai-annotation/contexts').AnnotationContextId} props.contextId
- * @param {Array} [props.value] — locationWalk area groups
- * @param {(next: Array) => void} props.onChange
- * @param {string} [props.title]
- * @param {() => void} [props.onFinish] — after Finish Site Walk
- * @param {(group: object) => void} [props.onAreaSaved] — after Save Area
- */
-export function AiLocationWalk({
+export const AiLocationWalk = forwardRef(function AiLocationWalk({
   accent,
   projectId,
-  contextId = 'diary',
   value = [],
   onChange,
-  title,
-  onFinish,
+  title = 'Work Photos',
+  onContinueToSignature,
   onAreaSaved,
-}) {
-  const ctx = getAnnotationContext(contextId)
-  const sectionTitle = title || ctx.sectionTitle
-
-  const locationWalk = useMemo(
-    () => (Array.isArray(value) ? value : []),
-    [value],
-  )
+}, ref) {
+  const locationWalk = useMemo(() => (Array.isArray(value) ? value : []), [value])
   const walkRef = useRef(locationWalk)
+  useEffect(() => { walkRef.current = locationWalk }, [locationWalk])
 
-  useEffect(() => {
-    walkRef.current = locationWalk
-  }, [locationWalk])
-
-  /** @type {[WalkPhase, Function]} */
-  const [phase, setPhase] = useState(() => (locationWalk.length ? 'summary' : 'name'))
+  const [phase, setPhase] = useState(() => (locationWalk.length ? 'review' : 'create'))
   const [nameDraft, setNameDraft] = useState('')
-  const [activeGroupId, setActiveGroupId] = useState(null)
-  const [renaming, setRenaming] = useState(false)
-  const [renameDraft, setRenameDraft] = useState('')
-  const [error, setError] = useState('')
-  const [busyPhotoId, setBusyPhotoId] = useState(null)
+  const [perPageDraft, setPerPageDraft] = useState(4)
+  const [editingGroupId, setEditingGroupId] = useState(null)
+  /** Photos for a brand-new area — not in locationWalk until Save Area */
+  const [draftPhotos, setDraftPhotos] = useState([])
+  const [nameError, setNameError] = useState('')
+  const [layoutError, setLayoutError] = useState('')
+  const [photoError, setPhotoError] = useState('')
   const [capturing, setCapturing] = useState(false)
-  const [lastSavedName, setLastSavedName] = useState('')
-  const [lastSavedCount, setLastSavedCount] = useState(0)
+  const [lastSaved, setLastSaved] = useState(null)
+  const [expandedIds, setExpandedIds] = useState(() => new Set())
+  const [viewer, setViewer] = useState(null)
+  const [annotating, setAnnotating] = useState(null)
+  const [draftViewerIndex, setDraftViewerIndex] = useState(null)
+  const [walkError, setWalkError] = useState('')
+  const replaceInputRef = useRef(null)
+  const replacePhotoIdRef = useRef(null)
+  const sectionRef = useRef(null)
   const [storedRecent, setStoredRecent] = useState(() => (
     projectId ? readRecentAreas(projectId) : []
   ))
@@ -226,10 +311,13 @@ export function AiLocationWalk({
     [locationWalk, storedRecent],
   )
 
-  const activeGroup = useMemo(
-    () => locationWalk.find((g) => g.id === activeGroupId) || null,
-    [locationWalk, activeGroupId],
+  const editingGroup = useMemo(
+    () => locationWalk.find((g) => g.id === editingGroupId) || null,
+    [locationWalk, editingGroupId],
   )
+
+  const activePhotos = editingGroup ? editingGroup.photos : draftPhotos
+  const isEditing = Boolean(editingGroupId)
 
   const updateWalk = useCallback((updater) => {
     const prev = walkRef.current
@@ -244,301 +332,652 @@ export function AiLocationWalk({
     setStoredRecent(readRecentAreas(projectId))
   }, [projectId])
 
-  const openNamePhase = useCallback(() => {
+  const applyDictation = useCallback((text) => {
+    if (text) {
+      setNameDraft(text)
+      setNameError('')
+    }
+  }, [])
+  const { start: startDictation, listening, supported: dictationSupported } = useSpeechDictation(applyDictation)
+
+  const clearFieldErrors = () => {
+    setNameError('')
+    setLayoutError('')
+    setPhotoError('')
+  }
+
+  const beginCreate = useCallback(() => {
     setNameDraft('')
-    setActiveGroupId(null)
-    setRenaming(false)
-    setError('')
-    setPhase('name')
+    // Retain most recent photos-per-page setting
+    setEditingGroupId(null)
+    setDraftPhotos([])
+    clearFieldErrors()
+    setPhase('create')
   }, [])
 
-  const startArea = useCallback((areaName) => {
-    const name = String(areaName || '').trim()
+  const validateSave = () => {
+    let ok = true
+    const name = nameDraft.trim()
     if (!name) {
-      setError('Enter an area name to continue.')
-      return
+      setNameError('Enter an area name')
+      ok = false
+    } else {
+      setNameError('')
     }
-    const group = createAreaGroup(name)
-    updateWalk((prev) => [...prev, group])
-    rememberArea(name)
-    setActiveGroupId(group.id)
-    setRenameDraft(name)
-    setRenaming(false)
-    setError('')
-    setPhase('active')
-  }, [rememberArea, updateWalk])
+    if (![1, 4, 6].includes(Number(perPageDraft))) {
+      setLayoutError('Choose a photo layout')
+      ok = false
+    } else {
+      setLayoutError('')
+    }
+    const photos = isEditing ? (editingGroup?.photos || []) : draftPhotos
+    if (!photos.length) {
+      setPhotoError('Add at least one photo')
+      ok = false
+    } else {
+      setPhotoError('')
+    }
+    return ok
+  }
 
-  const editGroup = useCallback((groupId) => {
-    const group = locationWalk.find((g) => g.id === groupId)
-    if (!group) return
-    setActiveGroupId(groupId)
-    setRenameDraft(group.areaName)
-    setRenaming(false)
-    setError('')
-    setPhase('active')
-  }, [locationWalk])
-
-  const commitRename = useCallback(() => {
-    const name = renameDraft.trim()
-    if (!name || !activeGroupId) return
-    updateWalk((prev) => prev.map((g) => (
-      g.id === activeGroupId ? { ...g, areaName: name } : g
-    )))
-    rememberArea(name)
-    setRenaming(false)
-  }, [renameDraft, activeGroupId, updateWalk, rememberArea])
-
-  const handleFiles = async (files) => {
-    if (!activeGroup) return
+  const handleFiles = async (files, groupId = null) => {
     const list = Array.from(files || []).filter((f) => f instanceof Blob)
     if (!list.length) return
-
     setCapturing(true)
-    setError('')
-    const areaName = activeGroup.areaName
-
+    setPhotoError('')
+    const nextPhotos = []
     for (const file of list) {
       const preview = URL.createObjectURL(file)
-      let description = ''
-      try {
-        const result = await annotatePhotoFile({
-          file,
-          contextId: ctx.id,
-          area: areaName,
-        })
-        description = result.description || ''
-      } catch (err) {
-        setError(err?.message || 'AI description failed — you can type one manually.')
-      }
-
-      const photo = createAreaPhoto({ file, preview, description })
-      updateWalk((prev) => prev.map((g) => (
-        g.id === activeGroup.id
-          ? { ...g, photos: [...g.photos, photo] }
-          : g
-      )))
+      nextPhotos.push(createAreaPhoto({ file, preview, description: '' }))
     }
 
+    if (groupId || isEditing) {
+      const targetId = groupId || editingGroupId
+      updateWalk((prev) => prev.map((g) => (
+        g.id === targetId ? { ...g, photos: [...g.photos, ...nextPhotos] } : g
+      )))
+    } else {
+      setDraftPhotos((prev) => [...prev, ...nextPhotos])
+    }
     setCapturing(false)
   }
 
-  const updatePhotoDescription = (photoId, text) => {
-    if (!activeGroupId) return
-    updateWalk((prev) => prev.map((g) => {
-      if (g.id !== activeGroupId) return g
-      return {
-        ...g,
-        photos: g.photos.map((p) => (
-          p.id === photoId ? { ...p, acceptedDescription: text } : p
-        )),
-      }
-    }))
-  }
-
-  const removePhoto = (photoId) => {
-    if (!activeGroupId) return
-    updateWalk((prev) => prev.map((g) => {
-      if (g.id !== activeGroupId) return g
-      const target = g.photos.find((p) => p.id === photoId)
-      if (target?.file && target.preview) {
-        try { URL.revokeObjectURL(target.preview) } catch { /* ignore */ }
-      }
-      return { ...g, photos: g.photos.filter((p) => p.id !== photoId) }
-    }))
-  }
-
-  const regeneratePhoto = async (photoId) => {
-    if (!activeGroup) return
-    const photo = activeGroup.photos.find((p) => p.id === photoId)
-    if (!photo?.file && !photo?.preview) return
-
-    setBusyPhotoId(photoId)
-    setError('')
-    try {
-      let file = photo.file
-      if (!file && photo.preview) {
-        const res = await fetch(photo.preview)
-        const blob = await res.blob()
-        file = new File([blob], 'photo.jpg', { type: blob.type || 'image/jpeg' })
-      }
-      const result = await annotatePhotoFile({
-        file,
-        contextId: ctx.id,
-        area: activeGroup.areaName,
-      })
-      updatePhotoDescription(photoId, result.description || '')
-    } catch (err) {
-      setError(err?.message || 'Could not regenerate description')
-    } finally {
-      setBusyPhotoId(null)
-    }
-  }
-
   const saveArea = () => {
-    if (!activeGroup) return
-    if (!activeGroup.photos.length) {
-      setError('Add at least one photo before saving this area.')
-      return
+    if (!validateSave()) return
+    const name = nameDraft.trim()
+    const layout = perPageToLayout(perPageDraft)
+
+    let saved
+    if (isEditing && editingGroupId) {
+      updateWalk((prev) => prev.map((g) => (
+        g.id === editingGroupId
+          ? { ...g, areaName: name, layout }
+          : g
+      )))
+      saved = walkRef.current.find((g) => g.id === editingGroupId)
+    } else {
+      const group = {
+        ...createAreaGroup(name, perPageDraft),
+        layout,
+        photos: draftPhotos,
+      }
+      updateWalk((prev) => [...prev, group])
+      saved = group
+      setDraftPhotos([])
     }
-    const saved = walkRef.current.find((g) => g.id === activeGroup.id) || activeGroup
-    setLastSavedName(saved.areaName)
-    setLastSavedCount(saved.photos.length)
-    setActiveGroupId(null)
-    setError('')
+
+    if (!saved) return
+
+    rememberArea(name)
+    setLastSaved({
+      name: saved.areaName,
+      count: (saved.photos || []).length,
+      perPage: layoutToPerPage(saved.layout),
+    })
+    setExpandedIds((prev) => new Set([...prev, saved.id]))
+    setEditingGroupId(null)
+    clearFieldErrors()
     setPhase('after_save')
     onAreaSaved?.(saved)
   }
 
-  const finishWalk = () => {
-    setActiveGroupId(null)
-    setPhase('summary')
-    setError('')
-    onFinish?.()
+  const editGroup = (groupId) => {
+    const group = locationWalk.find((g) => g.id === groupId)
+    if (!group) return
+    setEditingGroupId(groupId)
+    setNameDraft(group.areaName)
+    setPerPageDraft(layoutToPerPage(group.layout))
+    setDraftPhotos([])
+    clearFieldErrors()
+    setPhase('create')
   }
 
-  const startWalkAgain = () => {
-    openNamePhase()
+  const openViewer = (groupId, index) => {
+    setWalkError('')
+    setViewer({
+      groupId,
+      index,
+      scrollY: typeof window !== 'undefined' ? window.scrollY : 0,
+    })
+  }
+
+  const openFirstIncompletePhoto = useCallback(() => {
+    const target = firstIncompletePhoto(walkRef.current)
+    if (!target) return false
+    setExpandedIds((prev) => new Set([...prev, target.groupId]))
+    openViewer(target.groupId, target.index)
+    requestAnimationFrame(() => {
+      sectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    })
+    return true
+  }, [])
+
+  useImperativeHandle(ref, () => ({
+    openFirstIncompletePhoto,
+  }), [openFirstIncompletePhoto])
+
+  const closeViewer = () => {
+    const scrollY = viewer?.scrollY || 0
+    const groupId = viewer?.groupId
+    setViewer(null)
+    setDraftViewerIndex(null)
+    if (groupId) {
+      setExpandedIds((prev) => new Set([...prev, groupId]))
+    }
+    requestAnimationFrame(() => {
+      if (typeof window !== 'undefined') window.scrollTo(0, scrollY)
+    })
+  }
+
+  const patchPhoto = (groupId, photoId, patch) => {
+    if (groupId === '__draft__') {
+      setDraftPhotos((prev) => prev.map((p) => (p.id === photoId ? { ...p, ...patch } : p)))
+      return
+    }
+    updateWalk((prev) => prev.map((g) => {
+      if (g.id !== groupId) return g
+      return {
+        ...g,
+        photos: g.photos.map((p) => (p.id === photoId ? { ...p, ...patch } : p)),
+      }
+    }))
+  }
+
+  const removePhoto = (groupId, photoId) => {
+    const revoke = (target) => {
+      if (target?.file && target.preview) {
+        try { URL.revokeObjectURL(target.preview) } catch { /* ignore */ }
+      }
+    }
+    if (groupId === '__draft__') {
+      setDraftPhotos((prev) => {
+        const target = prev.find((p) => p.id === photoId)
+        revoke(target)
+        return prev.filter((p) => p.id !== photoId)
+      })
+      if (draftViewerIndex != null) {
+        setDraftViewerIndex((i) => {
+          const nextLen = draftPhotos.length - 1
+          if (nextLen <= 0) return null
+          return Math.min(i, nextLen - 1)
+        })
+      }
+      return
+    }
+    updateWalk((prev) => prev.map((g) => {
+      if (g.id !== groupId) return g
+      const target = g.photos.find((p) => p.id === photoId)
+      revoke(target)
+      return { ...g, photos: g.photos.filter((p) => p.id !== photoId) }
+    }))
+    if (viewer?.groupId === groupId) {
+      const g = walkRef.current.find((x) => x.id === groupId)
+      if (!g?.photos?.length) closeViewer()
+      else setViewer((v) => v && ({ ...v, index: Math.min(v.index, g.photos.length - 1) }))
+    }
+  }
+
+  const replacePhoto = (groupId, photoId) => {
+    replacePhotoIdRef.current = { groupId, photoId }
+    replaceInputRef.current?.click()
+  }
+
+  const onReplaceFile = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    const target = replacePhotoIdRef.current
+    replacePhotoIdRef.current = null
+    if (!file || !target) return
+    const preview = URL.createObjectURL(file)
+    const list = target.groupId === '__draft__'
+      ? draftPhotos
+      : walkRef.current.find((g) => g.id === target.groupId)?.photos || []
+    const prev = list.find((p) => p.id === target.photoId)
+    if (prev?.file && prev.preview) {
+      try { URL.revokeObjectURL(prev.preview) } catch { /* ignore */ }
+    }
+    patchPhoto(target.groupId, target.photoId, {
+      file,
+      preview,
+      imageUrl: null,
+      annotations: null,
+      overlayPreview: null,
+      overlayPath: null,
+      overlayDirty: true,
+    })
+  }
+
+  const annotatingPhoto = useMemo(() => {
+    if (!annotating) return null
+    if (annotating.groupId === '__draft__') {
+      const p = draftPhotos.find((x) => x.id === annotating.photoId)
+      return p ? { groupId: '__draft__', photo: p } : null
+    }
+    const g = locationWalk.find((x) => x.id === annotating.groupId)
+    const p = g?.photos.find((x) => x.id === annotating.photoId)
+    return p ? { groupId: annotating.groupId, photo: p } : null
+  }, [annotating, locationWalk, draftPhotos])
+
+  const viewerGroup = viewer?.groupId === '__draft__'
+    ? { id: '__draft__', areaName: nameDraft.trim() || 'New area', photos: draftPhotos }
+    : (viewer ? locationWalk.find((g) => g.id === viewer.groupId) : null)
+
+  const globalNumbersForGroup = (groupId) => {
+    if (groupId === '__draft__') {
+      const base = flattenAreaGroups(locationWalk).length
+      return draftPhotos.map((_, i) => base + i + 1)
+    }
+    const rows = flattenAreaGroups(locationWalk)
+    return rows.filter((r) => r.areaId === groupId).map((r) => r.sequence)
+  }
+
+  const areaOffset = (groupId) => {
+    let offset = 0
+    for (const g of locationWalk) {
+      if (g.id === groupId) return offset
+      offset += g.photos.length
+    }
+    return offset
+  }
+
+  const draftPhotoOffset = flattenAreaGroups(locationWalk).length
+
+  const continueToSignature = () => {
+    if (!locationWalk.length) return
+    const missing = photosMissingDescription(locationWalk)
+    if (missing.length > 0) {
+      const n = missing.length
+      setWalkError(
+        n === 1
+          ? '1 photo still needs a description.'
+          : `${n} photos still need descriptions.`,
+      )
+      openFirstIncompletePhoto()
+      return
+    }
+    setWalkError('')
+    setPhase('review')
+    onContinueToSignature?.()
   }
 
   return (
-    <GlassSection title={sectionTitle} accent={accent}>
-      {phase === 'name' && (
-        <AreaNamePrompt
-          accent={accent}
-          draft={nameDraft}
-          onDraftChange={setNameDraft}
-          recentAreas={recentAreas}
-          onConfirm={() => startArea(nameDraft)}
-          onPickRecent={(name) => startArea(name)}
-          error={error}
-        />
-      )}
+    <GlassSection title={title} accent={accent}>
+      <div ref={sectionRef}>
+      <input
+        ref={replaceInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: 'none' }}
+        onChange={onReplaceFile}
+      />
 
-      {phase === 'active' && activeGroup && (
-        <div>
-          <div style={{ ...labelStyle, marginBottom: 6 }}>Area</div>
-          {renaming ? (
-            <div style={{ marginBottom: 14 }}>
-              <input
-                type="text"
-                value={renameDraft}
-                onChange={(e) => setRenameDraft(e.target.value)}
-                style={{ ...inputStyle, marginBottom: 10 }}
-                autoComplete="off"
-              />
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <PrimaryCTA type="button" accent={accent} onClick={commitRename}>
-                  Save name
-                </PrimaryCTA>
-                <SecondaryButton type="button" onClick={() => { setRenaming(false); setRenameDraft(activeGroup.areaName) }}>
-                  Cancel
-                </SecondaryButton>
-              </div>
-            </div>
-          ) : (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-                marginBottom: 14,
-                flexWrap: 'wrap',
-              }}
-            >
-              <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>
-                {activeGroup.areaName}
-              </div>
-              <SecondaryButton type="button" onClick={() => { setRenameDraft(activeGroup.areaName); setRenaming(true) }}>
-                Change name
-              </SecondaryButton>
-            </div>
-          )}
+      {walkError ? (
+        <p style={{ ...fieldErrorStyle, marginBottom: 12 }}>{walkError}</p>
+      ) : null}
 
-          <ImageSourceButtons
-            onFiles={handleFiles}
-            multiple
-            disabled={capturing || Boolean(busyPhotoId)}
-            cameraLabel="Take Photo"
-            galleryLabel="Add Photos"
+      {capturing ? (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            marginBottom: 12,
+            padding: '10px 12px',
+            borderRadius: 10,
+            border: '1px solid var(--edge)',
+            background: 'var(--plate)',
+            color: 'var(--text)',
+            fontSize: 14,
+          }}
+        >
+          <span
+            aria-hidden
+            style={{
+              width: 16,
+              height: 16,
+              borderRadius: 999,
+              border: '2px solid rgba(255,255,255,0.25)',
+              borderTopColor: 'var(--action, #FF5000)',
+              animation: 'zlog-spin 0.8s linear infinite',
+            }}
           />
-
-          {capturing && (
-            <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--text-2)' }}>
-              Adding photo…
-            </p>
-          )}
-
-          <div style={{ margin: '14px 0 10px', fontSize: 13, color: 'var(--text-2)' }}>
-            {activeGroup.photos.length} photo{activeGroup.photos.length === 1 ? '' : 's'} added
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-            {activeGroup.photos.map((photo) => (
-              <AnnotationPhotoCard
-                key={photo.id}
-                photo={photo}
-                regenerating={busyPhotoId === photo.id}
-                onDescriptionChange={(text) => updatePhotoDescription(photo.id, text)}
-                onRegenerate={() => regeneratePhoto(photo.id)}
-                onRemove={() => removePhoto(photo.id)}
-              />
-            ))}
-          </div>
-
-          {error && (
-            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#ff6b6b' }}>{error}</p>
-          )}
-
-          <PrimaryCTA
-            type="button"
-            accent={accent}
-            disabled={capturing || !activeGroup.photos.length}
-            onClick={saveArea}
-          >
-            Save Area
-          </PrimaryCTA>
+          Preparing photo…
+          <style>{`@keyframes zlog-spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      ) : null}
+      {/* Saved areas always visible — never hide stored data behind confirmation */}
+      {locationWalk.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+          {locationWalk.map((group, gi) => (
+            <SavedAreaCard
+              key={group.id}
+              group={group}
+              expanded={expandedIds.has(group.id)}
+              accent={accent}
+              capturing={capturing}
+              globalOffset={areaOffset(group.id)}
+              isFirst={gi === 0}
+              isLast={gi === locationWalk.length - 1}
+              onToggle={() => setExpandedIds((prev) => {
+                const next = new Set(prev)
+                if (next.has(group.id)) next.delete(group.id)
+                else next.add(group.id)
+                return next
+              })}
+              onEdit={() => editGroup(group.id)}
+              onDelete={() => {
+                updateWalk((prev) => prev.filter((g) => g.id !== group.id))
+                setExpandedIds((prev) => {
+                  const next = new Set(prev)
+                  next.delete(group.id)
+                  return next
+                })
+              }}
+              onMoveUp={() => updateWalk((prev) => moveItem(prev, gi, gi - 1))}
+              onMoveDown={() => updateWalk((prev) => moveItem(prev, gi, gi + 1))}
+              onOpenPhoto={(pi) => openViewer(group.id, pi)}
+              onRename={(name) => {
+                if (!name) return
+                updateWalk((prev) => prev.map((g) => (g.id === group.id ? { ...g, areaName: name } : g)))
+                rememberArea(name)
+              }}
+              onLayoutChange={(n) => {
+                updateWalk((prev) => prev.map((g) => (
+                  g.id === group.id ? { ...g, layout: perPageToLayout(n) } : g
+                )))
+              }}
+              onAddPhotos={(files) => handleFiles(files, group.id)}
+              onRemovePhoto={(photoId) => removePhoto(group.id, photoId)}
+              onMovePhoto={(from, to) => {
+                updateWalk((prev) => prev.map((g) => (
+                  g.id === group.id
+                    ? { ...g, photos: moveItem(g.photos, from, to) }
+                    : g
+                )))
+              }}
+            />
+          ))}
         </div>
       )}
 
-      {phase === 'after_save' && (
+      {phase === 'create' && (
         <div>
-          <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)', marginBottom: 4 }}>
-            Area saved
+          <div style={{ ...labelStyle, marginBottom: 8 }}>Area name</div>
+          <input
+            type="text"
+            value={nameDraft}
+            onChange={(e) => {
+              setNameDraft(e.target.value)
+              if (e.target.value.trim()) setNameError('')
+            }}
+            placeholder="Ground Floor Reception"
+            style={{ ...inputStyle, marginBottom: nameError ? 0 : 14, minHeight: 48 }}
+            autoComplete="off"
+          />
+          {nameError ? <p style={{ ...fieldErrorStyle, marginBottom: 12 }}>{nameError}</p> : null}
+
+          {dictationSupported || recentAreas.length > 0 ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+              {dictationSupported && (
+                <SecondaryButton type="button" onClick={() => (listening ? null : startDictation())}>
+                  {listening ? 'Listening…' : 'Dictate'}
+                </SecondaryButton>
+              )}
+              {recentAreas.map((name) => (
+                <SecondaryButton key={name} type="button" onClick={() => { setNameDraft(name); setNameError('') }}>
+                  {name}
+                </SecondaryButton>
+              ))}
+            </div>
+          ) : null}
+
+          <div style={{ ...labelStyle, marginBottom: 8 }}>Photos per page</div>
+          <PhotosPerPagePicker
+            layout={perPageToLayout(perPageDraft)}
+            onChange={(n) => {
+              setPerPageDraft(n)
+              setLayoutError('')
+            }}
+            disabled={capturing}
+          />
+          {layoutError ? <p style={fieldErrorStyle}>{layoutError}</p> : null}
+
+          <div style={{ marginTop: 16 }}>
+            <ImageSourceButtons
+              onFiles={(files) => handleFiles(files, null)}
+              multiple
+              disabled={capturing}
+              stacked
+              cameraLabel="Take Photo"
+              galleryLabel="Add Multiple Photos"
+            />
           </div>
-          <div style={{ fontSize: 14, color: 'var(--text-2)', marginBottom: 16 }}>
-            {lastSavedName} · {lastSavedCount} photo{lastSavedCount === 1 ? '' : 's'}
-          </div>
-          <div style={{ ...labelStyle, marginBottom: 10 }}>Add another area?</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <PrimaryCTA type="button" accent={accent} onClick={openNamePhase}>
-              + Add Next Area
+
+          {activePhotos.length > 0 && (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
+                gap: 8,
+                marginTop: 16,
+              }}
+            >
+              {activePhotos.map((photo, pi) => {
+                const photoNumber = isEditing
+                  ? areaOffset(editingGroupId) + pi + 1
+                  : draftPhotoOffset + pi + 1
+                const incomplete = !photoHasDescription(photo)
+                return (
+                  <button
+                    key={photo.id}
+                    type="button"
+                    onClick={() => {
+                      if (isEditing) openViewer(editingGroupId, pi)
+                      else setDraftViewerIndex(pi)
+                    }}
+                    aria-label={`Photo ${photoNumber}${incomplete ? ', description missing' : ''}`}
+                    style={{
+                      border: incomplete
+                        ? '2px solid rgba(251, 146, 60, 0.75)'
+                        : '1px solid var(--edge)',
+                      borderRadius: 10,
+                      background: 'var(--plate)',
+                      padding: 4,
+                      cursor: 'pointer',
+                      minHeight: 48,
+                      color: 'inherit',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    <div style={{ position: 'relative' }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photo.preview || photo.imageUrl || ''}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        style={{
+                          width: '100%',
+                          height: 72,
+                          objectFit: 'contain',
+                          display: 'block',
+                          background: '#0b0d12',
+                          borderRadius: 6,
+                        }}
+                      />
+                      <div style={{ position: 'absolute', top: 4, right: 4 }}>
+                        <PhotoStatusBadges photo={photo} size={12} />
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginTop: 6 }}>
+                      Photo {photoNumber}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          {photoError ? <p style={fieldErrorStyle}>{photoError}</p> : null}
+
+          <div style={{ marginTop: 18 }}>
+            <PrimaryCTA
+              type="button"
+              accent={accent}
+              disabled={capturing}
+              onClick={saveArea}
+              style={primaryTap}
+            >
+              Save Area
             </PrimaryCTA>
-            <SecondaryButton type="button" onClick={finishWalk}>
-              Finish Site Walk
+          </div>
+
+          {locationWalk.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <SecondaryButton
+                type="button"
+                onClick={() => {
+                  setEditingGroupId(null)
+                  setDraftPhotos([])
+                  clearFieldErrors()
+                  setPhase('review')
+                }}
+              >
+                Cancel
+              </SecondaryButton>
+            </div>
+          )}
+        </div>
+      )}
+
+      {phase === 'after_save' && lastSaved && (
+        <div
+          style={{
+            padding: '16px 14px',
+            borderRadius: 12,
+            border: '1px solid var(--edge)',
+            background: 'var(--plate)',
+          }}
+        >
+          <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)', marginBottom: 12 }}>
+            ✓ Area Saved
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
+            {lastSaved.name}
+          </div>
+          <div style={{ fontSize: 14, color: 'var(--text-2)', marginBottom: 2 }}>
+            {lastSaved.count} photo{lastSaved.count === 1 ? '' : 's'}
+          </div>
+          <div style={{ fontSize: 14, color: 'var(--text-2)', marginBottom: 18 }}>
+            {lastSaved.perPage} per page
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <PrimaryCTA type="button" accent={accent} onClick={beginCreate} style={primaryTap}>
+              Add Another Area
+            </PrimaryCTA>
+            <SecondaryButton
+              type="button"
+              disabled={!locationWalk.length}
+              onClick={continueToSignature}
+              style={{ ...primaryTap, opacity: locationWalk.length ? 1 : 0.45 }}
+            >
+              Continue to Signature
             </SecondaryButton>
           </div>
         </div>
       )}
 
-      {phase === 'summary' && (
+      {phase === 'review' && (
         <div>
           {locationWalk.length === 0 ? (
-            <PrimaryCTA type="button" accent={accent} onClick={startWalkAgain}>
-              Start Location Walk
+            <PrimaryCTA type="button" accent={accent} onClick={beginCreate} style={primaryTap}>
+              Create Area
             </PrimaryCTA>
           ) : (
-            <>
-              <SavedAreasSummary groups={locationWalk} onEdit={editGroup} />
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 14 }}>
-                <PrimaryCTA type="button" accent={accent} onClick={openNamePhase}>
-                  + Add Next Area
-                </PrimaryCTA>
-              </div>
-            </>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+              <PrimaryCTA type="button" accent={accent} onClick={beginCreate} style={primaryTap}>
+                Add Another Area
+              </PrimaryCTA>
+              <SecondaryButton type="button" onClick={continueToSignature} style={primaryTap}>
+                Continue to Signature
+              </SecondaryButton>
+            </div>
           )}
         </div>
       )}
+
+      {viewer && viewerGroup && (
+        <AreaPhotoViewer
+          key={viewer.groupId}
+          photos={viewerGroup.photos}
+          startIndex={viewer.index}
+          areaName={viewerGroup.areaName}
+          globalNumbers={globalNumbersForGroup(viewer.groupId)}
+          accent={accent}
+          onClose={closeViewer}
+          onCaptionChange={(photoId, text) => patchPhoto(viewer.groupId, photoId, { acceptedDescription: text })}
+          onAnnotate={(photoId) => setAnnotating({ groupId: viewer.groupId, photoId })}
+          onReplace={(photoId) => replacePhoto(viewer.groupId, photoId)}
+          onDelete={(photoId) => removePhoto(viewer.groupId, photoId)}
+        />
+      )}
+
+      {draftViewerIndex != null && !isEditing && (
+        <AreaPhotoViewer
+          key="__draft__"
+          photos={draftPhotos}
+          startIndex={draftViewerIndex}
+          areaName={nameDraft.trim() || 'New area'}
+          globalNumbers={globalNumbersForGroup('__draft__')}
+          accent={accent}
+          onClose={() => setDraftViewerIndex(null)}
+          onCaptionChange={(photoId, text) => patchPhoto('__draft__', photoId, { acceptedDescription: text })}
+          onAnnotate={(photoId) => setAnnotating({ groupId: '__draft__', photoId })}
+          onReplace={(photoId) => replacePhoto('__draft__', photoId)}
+          onDelete={(photoId) => removePhoto('__draft__', photoId)}
+        />
+      )}
+
+      {annotatingPhoto?.photo?.preview && (
+        <PhotoAnnotationEditor
+          imageSrc={annotatingPhoto.photo.preview}
+          initialAnnotations={annotatingPhoto.photo.annotations}
+          accent={accent}
+          title="Annotate photo"
+          onCancel={() => setAnnotating(null)}
+          onSave={async ({ annotations, overlayDataUrl }) => {
+            patchPhoto(annotating.groupId, annotating.photoId, {
+              annotations,
+              overlayPreview: overlayDataUrl || null,
+              overlayDirty: true,
+            })
+            setAnnotating(null)
+          }}
+        />
+      )}
+      </div>
     </GlassSection>
   )
-}
+})

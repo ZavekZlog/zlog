@@ -5,7 +5,7 @@
  * (site survey, weekly progress, weekly H&S).
  * Location Walk via area-group AiLocationWalk.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import {
@@ -23,6 +23,7 @@ import { getAnnotationContext } from '@/lib/ai-annotation/contexts'
 import {
   flattenAreaGroups,
   groupPhotosByArea,
+  photosMissingDescription,
 } from '@/lib/ai-annotation/area-groups'
 
 async function signedUrlForPath(supabase, path) {
@@ -55,6 +56,7 @@ export function SimpleBrandedReportPage({
   const [brandingSelection, setBrandingSelection] = useState(null)
   const [duplicatedFromReport, setDuplicatedFromReport] = useState(false)
   const [locationWalk, setLocationWalk] = useState([])
+  const locationWalkRef = useRef(null)
 
   useEffect(() => {
     const load = async () => {
@@ -122,6 +124,19 @@ export function SimpleBrandedReportPage({
       setError('Summary is required')
       return
     }
+
+    const missingDescriptions = photosMissingDescription(locationWalk)
+    if (missingDescriptions.length > 0) {
+      const n = missingDescriptions.length
+      setError(
+        n === 1
+          ? '1 photo still needs a description.'
+          : `${n} photos still need descriptions.`,
+      )
+      locationWalkRef.current?.openFirstIncompletePhoto?.()
+      return
+    }
+
     setSaving(true)
     setError('')
     setSuccess('')
@@ -235,6 +250,7 @@ export function SimpleBrandedReportPage({
         </GlassSection>
 
         <AiLocationWalk
+          ref={locationWalkRef}
           accent={accent}
           projectId={projectId}
           contextId={ctx.id}

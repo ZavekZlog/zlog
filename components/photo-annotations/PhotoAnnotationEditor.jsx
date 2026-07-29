@@ -25,17 +25,51 @@ const TOOLS = [
   { id: 'text', label: 'Text' },
 ]
 
-const toolBtn = (active) => ({
-  padding: '8px 10px',
-  borderRadius: 8,
-  border: active ? '1px solid color-mix(in srgb, var(--action) 55%, transparent)' : '1px solid var(--edge)',
+/** Simple one-tap palette — Orange is the default (DEFAULT_STROKE). */
+const COLOUR_SWATCHES = [
+  { id: 'red', label: 'Red', value: '#E53935' },
+  { id: 'orange', label: 'Orange', value: '#FF5000' },
+  { id: 'yellow', label: 'Yellow', value: '#FDD835' },
+  { id: 'green', label: 'Green', value: '#43A047' },
+  { id: 'blue', label: 'Blue', value: '#1E88E5' },
+  { id: 'purple', label: 'Purple', value: '#8E24AA' },
+  { id: 'black', label: 'Black', value: '#111111' },
+  { id: 'white', label: 'White', value: '#FFFFFF' },
+]
+
+const toolBtn = (active, danger = false) => ({
+  minHeight: 48,
+  minWidth: 48,
+  padding: '10px 14px',
+  borderRadius: 10,
+  border: active
+    ? '1px solid color-mix(in srgb, var(--action) 55%, transparent)'
+    : danger
+      ? '1px solid rgba(229,72,77,0.45)'
+      : '1px solid var(--edge)',
   background: active ? 'color-mix(in srgb, var(--action) 18%, transparent)' : 'transparent',
-  color: 'var(--text)',
-  fontSize: 12,
-  fontWeight: active ? 600 : 400,
+  color: danger ? '#ff8a8a' : 'var(--text)',
+  fontSize: 14,
+  fontWeight: active ? 700 : 500,
   cursor: 'pointer',
   fontFamily: 'inherit',
+  opacity: undefined,
+  WebkitTapHighlightColor: 'transparent',
 })
+
+const fieldStyle = {
+  width: '100%',
+  minHeight: 48,
+  padding: '12px 14px',
+  borderRadius: 10,
+  border: '1px solid var(--edge)',
+  background: 'var(--ink)',
+  color: 'var(--text)',
+  fontSize: 16,
+  fontFamily: 'inherit',
+  boxSizing: 'border-box',
+  outline: 'none',
+}
 
 /**
  * Transparent annotation overlay editor.
@@ -52,6 +86,7 @@ export function PhotoAnnotationEditor({
 }) {
   const stageRef = useRef(null)
   const overlayRef = useRef(null)
+  const textInputRef = useRef(null)
   const [naturalSize, setNaturalSize] = useState({ w: 0, h: 0 })
   const [fit, setFit] = useState({ x: 0, y: 0, w: 0, h: 0, scale: 1 })
   const [doc, setDoc] = useState(() => normalizeAnnotationDoc(initialAnnotations))
@@ -77,6 +112,12 @@ export function PhotoAnnotationEditor({
     }
     img.src = imageSrc
   }, [imageSrc, initialAnnotations])
+
+  useEffect(() => {
+    if (tool === 'text') {
+      requestAnimationFrame(() => textInputRef.current?.focus?.())
+    }
+  }, [tool])
 
   const measure = useCallback(() => {
     const el = stageRef.current
@@ -107,7 +148,6 @@ export function PhotoAnnotationEditor({
     const ctx = canvas.getContext('2d')
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, cssW, cssH)
-    // Draw in display pixel space that maps 1:1 to normalized via cssW/cssH
     const live = draftRef.current
       ? upsertShape(doc, draftRef.current)
       : doc
@@ -122,10 +162,15 @@ export function PhotoAnnotationEditor({
     const canvas = overlayRef.current
     if (!canvas || !fit.w || !fit.h) return null
     const rect = canvas.getBoundingClientRect()
+    if (!rect.width || !rect.height) return null
+    // Slight padding helps finger accuracy on mobile.
     const x = (e.clientX - rect.left) / rect.width
     const y = (e.clientY - rect.top) / rect.height
-    if (x < 0 || y < 0 || x > 1 || y > 1) return null
-    return { x, y }
+    if (x < -0.04 || y < -0.04 || x > 1.04 || y > 1.04) return null
+    return {
+      x: Math.min(1, Math.max(0, x)),
+      y: Math.min(1, Math.max(0, y)),
+    }
   }
 
   const onPointerDown = (e) => {
@@ -137,6 +182,8 @@ export function PhotoAnnotationEditor({
       const hit = hitTestShape(doc, pt.x, pt.y, fit.w, fit.h)
       setSelectedId(hit?.id || null)
       if (hit) {
+        if (hit.stroke) setStroke(hit.stroke)
+        if (hit.type === 'text') setTextDraft(hit.text || '')
         dragRef.current = {
           id: hit.id,
           start: pt,
@@ -158,6 +205,7 @@ export function PhotoAnnotationEditor({
       }
       setDoc((d) => upsertShape(d, shape))
       setSelectedId(shape.id)
+      setTool('select')
       return
     }
 
@@ -245,8 +293,24 @@ export function PhotoAnnotationEditor({
   }
 
   const clearAll = () => {
+    if (!doc.shapes.length) return
+    const ok = typeof window === 'undefined'
+      ? true
+      : window.confirm('Clear all annotations on this photo?')
+    if (!ok) return
     setDoc((d) => createEmptyAnnotationDoc(d.imageWidth || naturalSize.w, d.imageHeight || naturalSize.h))
     setSelectedId(null)
+  }
+
+  const setActiveColour = (value) => {
+    setStroke(value)
+    if (selectedId) {
+      setDoc((d) => {
+        const shape = d.shapes.find((s) => s.id === selectedId)
+        if (!shape) return d
+        return upsertShape(d, { ...shape, stroke: value })
+      })
+    }
   }
 
   const handleSave = async () => {
@@ -274,6 +338,7 @@ export function PhotoAnnotationEditor({
   }
 
   const selected = doc.shapes.find((s) => s.id === selectedId) || null
+  const editingText = selected?.type === 'text'
 
   return (
     <div
@@ -281,112 +346,220 @@ export function PhotoAnnotationEditor({
         position: 'fixed',
         inset: 0,
         zIndex: 80,
-        background: 'rgba(0,0,0,0.72)',
+        background: '#0b0d12',
         display: 'flex',
         flexDirection: 'column',
-        padding: 16,
+        padding: 0,
+        overflow: 'hidden',
       }}
     >
       <div
         style={{
-          maxWidth: 960,
           width: '100%',
+          maxWidth: 960,
           margin: '0 auto',
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
           minHeight: 0,
           background: 'var(--plate)',
-          border: '1px solid var(--edge)',
-          borderRadius: 14,
           overflow: 'hidden',
         }}
       >
+        {/* Top: title + Cancel / Save */}
         <div
           style={{
-            padding: '12px 16px',
+            padding: '10px 14px',
+            paddingTop: 'max(10px, env(safe-area-inset-top, 0px))',
             borderBottom: '1px solid var(--edge)',
             display: 'flex',
-            flexWrap: 'wrap',
             gap: 10,
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexShrink: 0,
+            background: 'var(--plate)',
           }}
         >
-          <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)' }}>{title}</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <SecondaryButton type="button" onClick={onCancel} disabled={saving}>
+          <div
+            style={{
+              fontWeight: 600,
+              fontSize: 16,
+              color: 'var(--text)',
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {title}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <SecondaryButton
+              type="button"
+              onClick={onCancel}
+              disabled={saving}
+              style={{ minHeight: 48, minWidth: 88, padding: '10px 16px' }}
+            >
               Cancel
             </SecondaryButton>
-            <PrimaryCTA type="button" accent={accent} onClick={handleSave} disabled={saving}>
-              {saving ? 'Saving…' : 'Save annotations'}
+            <PrimaryCTA
+              type="button"
+              accent={accent}
+              onClick={handleSave}
+              disabled={saving}
+              style={{ minHeight: 48, minWidth: 88, padding: '10px 18px' }}
+            >
+              {saving ? 'Saving…' : 'Save'}
             </PrimaryCTA>
           </div>
         </div>
 
+        {/* Tools + colour */}
         <div
           style={{
-            padding: '10px 16px',
+            padding: '10px 14px 12px',
             borderBottom: '1px solid var(--edge)',
             display: 'flex',
-            flexWrap: 'wrap',
-            gap: 8,
-            alignItems: 'center',
+            flexDirection: 'column',
+            gap: 12,
+            flexShrink: 0,
+            background: 'var(--plate)',
           }}
         >
-          {TOOLS.map((t) => (
-            <button key={t.id} type="button" style={toolBtn(tool === t.id)} onClick={() => setTool(t.id)}>
-              {t.label}
+          <div
+            role="toolbar"
+            aria-label="Annotation tools"
+            style={{
+              display: 'flex',
+              gap: 8,
+              alignItems: 'center',
+              overflowX: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              paddingBottom: 2,
+            }}
+          >
+            {TOOLS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                aria-pressed={tool === t.id}
+                aria-label={t.label}
+                style={{ ...toolBtn(tool === t.id), flexShrink: 0 }}
+                onClick={() => setTool(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              aria-label="Delete selected annotation"
+              style={{ ...toolBtn(false, true), flexShrink: 0, opacity: selectedId ? 1 : 0.45 }}
+              onClick={deleteSelected}
+              disabled={!selectedId}
+            >
+              Delete
             </button>
-          ))}
-          <label style={{ ...labelStyle, margin: '0 0 0 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
-            Colour
-            <input
-              type="color"
-              value={stroke}
-              onChange={(e) => setStroke(e.target.value)}
-              style={{ width: 32, height: 28, border: 'none', background: 'transparent', cursor: 'pointer' }}
-            />
-          </label>
-          {tool === 'text' && (
-            <input
-              value={textDraft}
-              onChange={(e) => setTextDraft(e.target.value)}
-              placeholder="Label text"
+            <button
+              type="button"
+              aria-label="Clear all annotations"
+              style={{ ...toolBtn(false, true), flexShrink: 0, opacity: doc.shapes.length ? 1 : 0.45 }}
+              onClick={clearAll}
+              disabled={!doc.shapes.length}
+            >
+              Clear
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span
               style={{
-                minWidth: 140,
-                padding: '7px 10px',
-                borderRadius: 8,
-                border: '1px solid var(--edge)',
-                background: 'var(--ink)',
-                color: 'var(--text)',
-                fontSize: 13,
+                ...labelStyle,
+                margin: 0,
+                letterSpacing: '0.06em',
+                flexShrink: 0,
+                color: 'color-mix(in srgb, var(--text) 80%, var(--text-2))',
               }}
-            />
-          )}
-          <button type="button" style={toolBtn(false)} onClick={deleteSelected} disabled={!selectedId}>
-            Delete
-          </button>
-          <button type="button" style={toolBtn(false)} onClick={clearAll} disabled={!doc.shapes.length}>
-            Clear all
-          </button>
+            >
+              Colour
+            </span>
+            <div
+              role="listbox"
+              aria-label="Annotation colour"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                overflowX: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                flex: 1,
+                minWidth: 0,
+                padding: '2px 0',
+              }}
+            >
+              {COLOUR_SWATCHES.map((c) => {
+                const active = String(stroke).toLowerCase() === c.value.toLowerCase()
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    aria-label={c.label}
+                    title={c.label}
+                    onClick={() => setActiveColour(c.value)}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      minWidth: 44,
+                      minHeight: 44,
+                      padding: 0,
+                      borderRadius: 999,
+                      border: active ? '3px solid #FF5000' : '2px solid rgba(255,255,255,0.28)',
+                      background: c.value,
+                      boxShadow: active
+                        ? '0 0 0 2px rgba(0,0,0,0.55)'
+                        : c.id === 'white'
+                          ? 'inset 0 0 0 1px rgba(0,0,0,0.28)'
+                          : 'none',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      WebkitTapHighlightColor: 'transparent',
+                    }}
+                  />
+                )
+              })}
+            </div>
+          </div>
+
+          {tool === 'text' && !editingText ? (
+            <div>
+              <label htmlFor="zlog-ann-text-draft" style={{ ...labelStyle, marginBottom: 6 }}>
+                Text label
+              </label>
+              <input
+                ref={textInputRef}
+                id="zlog-ann-text-draft"
+                value={textDraft}
+                onChange={(e) => setTextDraft(e.target.value)}
+                placeholder="Type label, then tap the photo to place it"
+                aria-label="Text label to place"
+                style={fieldStyle}
+              />
+            </div>
+          ) : null}
         </div>
 
-        <p style={{ margin: '8px 16px 0', fontSize: 12, color: 'var(--text-2)' }}>
-          Original photo stays untouched. Marks are a transparent overlay (arrows, shapes, freehand, text).
-        </p>
-
+        {/* Canvas — primary visual */}
         <div
           ref={stageRef}
           style={{
             flex: 1,
-            minHeight: 280,
-            margin: 16,
-            borderRadius: 10,
-            border: '1px solid var(--edge)',
-            background: '#1a1a1a',
+            minHeight: 200,
+            margin: 0,
+            background: '#111318',
             position: 'relative',
             overflow: 'hidden',
+            touchAction: 'none',
           }}
         >
           {imageSrc && fit.w > 0 && (
@@ -409,6 +582,7 @@ export function PhotoAnnotationEditor({
               />
               <canvas
                 ref={overlayRef}
+                aria-label="Annotation canvas"
                 style={{
                   position: 'absolute',
                   left: fit.x,
@@ -427,26 +601,32 @@ export function PhotoAnnotationEditor({
           )}
         </div>
 
-        {selected?.type === 'text' && (
-          <div style={{ padding: '0 16px 16px' }}>
-            <label style={labelStyle}>Edit label</label>
+        {/* Edit selected text — bottom for thumb reach */}
+        {editingText ? (
+          <div
+            style={{
+              padding: '12px 14px',
+              paddingBottom: 'max(12px, env(safe-area-inset-bottom, 0px))',
+              borderTop: '1px solid var(--edge)',
+              flexShrink: 0,
+              background: 'var(--plate)',
+            }}
+          >
+            <label htmlFor="zlog-ann-text-edit" style={{ ...labelStyle, marginBottom: 6 }}>
+              Edit text
+            </label>
             <input
+              id="zlog-ann-text-edit"
               value={selected.text}
-              onChange={(e) =>
-                setDoc((d) => upsertShape(d, { ...selected, text: e.target.value }))
-              }
-              style={{
-                width: '100%',
-                padding: '8px 10px',
-                borderRadius: 8,
-                border: '1px solid var(--edge)',
-                background: 'var(--ink)',
-                color: 'var(--text)',
-                fontSize: 14,
+              onChange={(e) => {
+                const next = e.target.value
+                setTextDraft(next)
+                setDoc((d) => upsertShape(d, { ...selected, text: next || 'Note' }))
               }}
+              style={fieldStyle}
             />
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   )
