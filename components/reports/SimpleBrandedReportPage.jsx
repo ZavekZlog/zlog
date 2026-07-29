@@ -1,9 +1,9 @@
 'use client'
 
 /**
- * Shared create/edit form for branding-ready report types that only need
- * date + summary today (site survey, weekly progress, weekly H&S).
- * Brand chrome via PremiumShell → ZlogBrandRegion (LOCKED).
+ * Shared create/edit form for branding-ready report types
+ * (site survey, weekly progress, weekly H&S).
+ * Location Walk via area-group AiLocationWalk.
  */
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -17,16 +17,31 @@ import {
   PrimaryCTA,
 } from '@/lib/premium-ui'
 import { BrandingSelector, brandingPayload } from '@/components/branding/BrandingSelector'
+import { AiLocationWalk } from '@/components/ai-annotation'
+import { persistAnnotationItems } from '@/lib/ai-annotation/persist'
+import { getAnnotationContext } from '@/lib/ai-annotation/contexts'
+import {
+  flattenAreaGroups,
+  groupPhotosByArea,
+} from '@/lib/ai-annotation/area-groups'
+
+async function signedUrlForPath(supabase, path) {
+  if (!path) return null
+  const { data } = await supabase.storage.from('site-photos').createSignedUrl(path, 3600)
+  return data?.signedUrl ?? null
+}
 
 export function SimpleBrandedReportPage({
   title,
   tableName,
   accent,
+  contextId = 'survey',
 }) {
   const { id: projectId } = useParams()
   const searchParams = useSearchParams()
   const router = useRouter()
   const supabase = createClient()
+  const ctx = getAnnotationContext(contextId)
 
   const editingReportId = searchParams.get('report') || null
   const duplicateReportId = (!editingReportId && searchParams.get('duplicate')) || null
@@ -39,6 +54,7 @@ export function SimpleBrandedReportPage({
   const [summary, setSummary] = useState('')
   const [brandingSelection, setBrandingSelection] = useState(null)
   const [duplicatedFromReport, setDuplicatedFromReport] = useState(false)
+  const [locationWalk, setLocationWalk] = useState([])
 
   useEffect(() => {
     const load = async () => {
@@ -47,6 +63,7 @@ export function SimpleBrandedReportPage({
       setDuplicatedFromReport(false)
       setBrandingSelection(null)
       setSummary('')
+      setLocationWalk([])
       const today = new Date().toISOString().slice(0, 10)
       setReportDate(today)
 
@@ -76,6 +93,22 @@ export function SimpleBrandedReportPage({
             companyName: '',
           })
         }
+
+        const stored = Array.isArray(existing.photos) ? existing.photos : []
+        const withPreview = await Promise.all(
+          stored.map(async (p, index) => {
+            const preview = p.url ? await signedUrlForPath(supabase, p.url) : null
+            return {
+              key: p.key || `photo-${index}`,
+              file: null,
+              preview,
+              description: p.description || p.caption || '',
+              location: p.location || p.area || '',
+              storagePath: p.url || null,
+            }
+          }),
+        )
+        setLocationWalk(groupPhotosByArea(withPreview))
       }
 
       setLoading(false)
@@ -93,10 +126,32 @@ export function SimpleBrandedReportPage({
     setError('')
     setSuccess('')
 
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setError('You must be signed in to save')
+      setSaving(false)
+      return
+    }
+
+    let photoPayload = []
+    try {
+      photoPayload = await persistAnnotationItems(supabase, {
+        userId: user.id,
+        projectId,
+        folder: tableName,
+        items: flattenAreaGroups(locationWalk),
+      })
+    } catch (uploadErr) {
+      setError(uploadErr?.message || 'Photo upload failed')
+      setSaving(false)
+      return
+    }
+
     const payload = {
       project_id: projectId,
       report_date: reportDate,
       summary: summary.trim(),
+      photos: photoPayload,
       ...brandingPayload(brandingSelection),
     }
 
@@ -178,6 +233,14 @@ export function SimpleBrandedReportPage({
             placeholder="Key observations and notes…"
           />
         </GlassSection>
+
+        <AiLocationWalk
+          accent={accent}
+          projectId={projectId}
+          contextId={ctx.id}
+          value={locationWalk}
+          onChange={setLocationWalk}
+        />
 
         <PrimaryCTA type="submit" disabled={saving} accent={accent}>
           {saving ? 'Saving…' : (editingReportId ? 'Save changes' : 'Save report')}

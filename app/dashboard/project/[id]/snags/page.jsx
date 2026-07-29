@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { BrandingSelector, brandingPayload } from '@/components/branding/BrandingSelector'
+import { AiLocationWalk } from '@/components/ai-annotation'
+import { uploadAnnotationImage } from '@/lib/ai-annotation/persist'
 import {
   PremiumShell,
   GlassSection,
@@ -26,37 +28,41 @@ export default function SnagList() {
   const [saving, setSaving] = useState(false)
   const [duplicatedFromSnag, setDuplicatedFromSnag] = useState(false)
   const [brandingSelection, setBrandingSelection] = useState(null)
+  const [locationWalk, setLocationWalk] = useState([])
+  const persistedWalkPhotoIds = useRef(new Set())
   const [error, setError] = useState('')
-  const [project, setProject] = useState(null)
   const supabase = createClient()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { id } = useParams()
   const duplicateSnagId = searchParams.get('duplicate') || null
 
-  useEffect(() => {
-    fetchSnags()
-  }, [id])
+  const fetchSnags = useCallback(async () => {
+    const { data } = await supabase.from('snags').select('*').eq('project_id', id).order('created_at', { ascending: false })
+    setSnags(data || [])
+    setLoading(false)
+  }, [supabase, id])
 
   useEffect(() => {
-    const loadProject = async () => {
-      const { data: proj } = await supabase
-        .from('projects')
-        .select('name, client_name, site_address')
-        .eq('id', id)
-        .single()
-      setProject(proj)
-    }
-    loadProject()
-  }, [id])
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('snags')
+        .select('*')
+        .eq('project_id', id)
+        .order('created_at', { ascending: false })
+      if (cancelled) return
+      setSnags(data || [])
+      setLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [id, supabase])
 
   useEffect(() => {
-    const loadDuplicate = async () => {
-      if (!duplicateSnagId) {
-        setDuplicatedFromSnag(false)
-        return
-      }
+    if (!duplicateSnagId) return
 
+    let cancelled = false
+    ;(async () => {
       setError('')
       const { data: source, error: sourceError } = await supabase
         .from('snags')
@@ -64,6 +70,8 @@ export default function SnagList() {
         .eq('id', duplicateSnagId)
         .eq('project_id', id)
         .maybeSingle()
+
+      if (cancelled) return
 
       if (sourceError || !source) {
         setError(sourceError?.message || 'Snag not found')
@@ -83,16 +91,10 @@ export default function SnagList() {
           companyName: '',
         })
       }
-    }
+    })()
 
-    loadDuplicate()
-  }, [duplicateSnagId, id])
-
-  const fetchSnags = async () => {
-    const { data } = await supabase.from('snags').select('*').eq('project_id', id).order('created_at', { ascending: false })
-    setSnags(data || [])
-    setLoading(false)
-  }
+    return () => { cancelled = true }
+  }, [duplicateSnagId, id, supabase])
 
   const clearForm = () => {
     setDescription('')
@@ -144,6 +146,46 @@ export default function SnagList() {
     fetchSnags()
   }
 
+  const handleAreaSaved = useCallback(async (group) => {
+    setError('')
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setError('You must be signed in to save a snag')
+      return
+    }
+
+    for (const photo of group.photos || []) {
+      if (persistedWalkPhotoIds.current.has(photo.id)) continue
+      if (!photo.file && !photo.imageUrl) continue
+      try {
+        let storagePath = photo.imageUrl || null
+        if (photo.file) {
+          storagePath = await uploadAnnotationImage(supabase, {
+            userId: user.id,
+            projectId: id,
+            folder: 'snags',
+            file: photo.file,
+          })
+        }
+        const { error: insertError } = await supabase.from('snags').insert({
+          project_id: id,
+          user_id: user.id,
+          description: photo.acceptedDescription || '',
+          location: group.areaName,
+          photo_url: storagePath,
+          status: 'open',
+          ...brandingPayload(brandingSelection),
+        })
+        if (insertError) throw new Error(insertError.message)
+        persistedWalkPhotoIds.current.add(photo.id)
+      } catch (err) {
+        setError(err?.message || 'Could not save snag photos')
+        return
+      }
+    }
+    fetchSnags()
+  }, [supabase, id, brandingSelection, fetchSnags])
+
   const toggleStatus = async (snag) => {
     const next = snag.status === 'open' ? 'resolved' : 'open'
     await supabase.from('snags').update({ status: next }).eq('id', snag.id)
@@ -193,22 +235,32 @@ export default function SnagList() {
         </div>
       )}
 
+      <div style={{ marginBottom: 16 }}>
+        <BrandingSelector
+          value={brandingSelection}
+          onChange={setBrandingSelection}
+          accent={SNAG_THEME.accent}
+          autoSelectDefault
+          compact
+        />
+      </div>
+
+      <AiLocationWalk
+        accent={SNAG_THEME.accent}
+        projectId={id}
+        contextId="snag"
+        value={locationWalk}
+        onChange={setLocationWalk}
+        onAreaSaved={handleAreaSaved}
+      />
+
       {showForm && (
-        <GlassSection title={duplicatedFromSnag ? 'Duplicate snag' : 'New snag'} accent={SNAG_THEME.accent}>
+        <GlassSection title={duplicatedFromSnag ? 'Duplicate snag' : 'New snag (manual)'} accent={SNAG_THEME.accent}>
           {duplicatedFromSnag && (
             <div style={{ background: `rgba(${SNAG_THEME.accent}, 0.1)`, border: `1px solid rgba(${SNAG_THEME.accent}, 0.35)`, color: 'var(--text)', padding: '10px 12px', fontSize: 13, marginBottom: 14, borderRadius: 8, lineHeight: 1.5 }}>
               Duplicated from an existing snag — saving creates a new independent entry.
             </div>
           )}
-          <div style={{ marginBottom: 16 }}>
-            <BrandingSelector
-              value={brandingSelection}
-              onChange={setBrandingSelection}
-              accent={SNAG_THEME.accent}
-              autoSelectDefault={!duplicatedFromSnag}
-              compact
-            />
-          </div>
           <label style={labelStyle}>Description</label>
           <input
             value={description}

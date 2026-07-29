@@ -9,6 +9,7 @@ export default function WeeklyHsPage() {
       title={REPORT_THEMES.healthSafety.title}
       tableName="weekly_hs_reports"
       accent={REPORT_THEMES.healthSafety.accent}
+      contextId="healthSafety"
     />
   )
 }

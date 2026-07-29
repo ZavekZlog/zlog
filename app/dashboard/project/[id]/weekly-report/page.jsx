@@ -9,6 +9,7 @@ export default function WeeklyProgressPage() {
       title={REPORT_THEMES.progress.title}
       tableName="weekly_progress_reports"
       accent={REPORT_THEMES.progress.accent}
+      contextId="progress"
     />
   )
 }

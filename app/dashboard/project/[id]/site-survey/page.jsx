@@ -9,6 +9,7 @@ export default function SiteSurveyPage() {
       title={REPORT_THEMES.survey.title}
       tableName="site_survey_reports"
       accent={REPORT_THEMES.survey.accent}
+      contextId="survey"
     />
   )
 }

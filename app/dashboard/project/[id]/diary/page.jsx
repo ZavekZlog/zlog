@@ -32,6 +32,8 @@ import { fileToVisionDataUrl, parseSignInSheetImage } from '@/lib/parse-signin-s
 import { BrandingSelector, brandingPayload } from '@/components/branding/BrandingSelector'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
 import { SignInOperativeReview } from '@/components/diary/SignInOperativeReview'
+import { PhotoAnnotationEditor, PhotoAnnotationViewer } from '@/components/photo-annotations'
+import { hasAnnotations } from '@/lib/photo-annotations'
 import {
   createBlankDiaryDraft,
   createTodaysDiaryDraft,
@@ -147,6 +149,7 @@ const removeRowStyle = {
 }
 
 function resequencePhotos(photos) {
+  // Continuous Photo 1..N across the whole report (all layouts), recalculated on add/remove/reorder.
   const layoutOrder = { full: 0, grid4: 1, grid6: 2 }
   const sorted = [...photos].sort((a, b) => {
     const la = layoutOrder[a.layout] ?? 1
@@ -226,6 +229,28 @@ async function signedUrlForPath(supabase, path) {
   return data?.signedUrl ?? null
 }
 
+function dataUrlToBlob(dataUrl) {
+  if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return null
+  const [header, body] = dataUrl.split(',')
+  const mime = /data:([^;]+)/.exec(header)?.[1] || 'image/png'
+  const binary = atob(body || '')
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+  return new Blob([bytes], { type: mime })
+}
+
+/** Upload transparent overlay PNG; returns storage path or null. */
+async function uploadOverlayPng(supabase, { userId, reportId, sequence, dataUrl }) {
+  const blob = dataUrlToBlob(dataUrl)
+  if (!blob) return null
+  const storagePath = `${userId}/${reportId}/overlay-${sequence}-${Date.now()}.png`
+  const { error } = await supabase.storage
+    .from('site-photos')
+    .upload(storagePath, blob, { contentType: 'image/png', upsert: false })
+  if (error) throw error
+  return storagePath
+}
+
 export default function SiteDiaryPage() {
   const { id: projectId } = useParams()
   const searchParams = useSearchParams()
@@ -270,6 +295,7 @@ export default function SiteDiaryPage() {
   const [delaysIssues, setDelaysIssues] = useState('')
   const [actionsRequired, setActionsRequired] = useState('')
   const [photos, setPhotos] = useState([])
+  const [annotatingPhotoKey, setAnnotatingPhotoKey] = useState(null)
   const [prefilledFromLast, setPrefilledFromLast] = useState(false)
   const [duplicatedFromReport, setDuplicatedFromReport] = useState(false)
   const [companyReportingFor, setCompanyReportingFor] = useState('')
@@ -429,11 +455,27 @@ export default function SiteDiaryPage() {
           return
         }
 
-        const [{ data: labour }, { data: plant }, { data: reportPhotos }] = await Promise.all([
-          supabase.from('report_labour').select('trade, company, count, hours, notes').eq('report_id', existing.id).order('sequence'),
-          supabase.from('report_plant').select('item, ref, status, notes').eq('report_id', existing.id).order('sequence'),
-          supabase.from('report_photos').select('url, caption, sequence, layout').eq('report_id', existing.id).order('sequence'),
-        ])
+        let labour
+        let plant
+        let reportPhotos
+        {
+          const results = await Promise.all([
+            supabase.from('report_labour').select('trade, company, count, hours, notes').eq('report_id', existing.id).order('sequence'),
+            supabase.from('report_plant').select('item, ref, status, notes').eq('report_id', existing.id).order('sequence'),
+            supabase.from('report_photos').select('url, caption, sequence, layout, annotations, overlay_path').eq('report_id', existing.id).order('sequence'),
+          ])
+          labour = results[0].data
+          plant = results[1].data
+          reportPhotos = results[2].data
+          if (results[2].error && /annotations|overlay_path/i.test(results[2].error.message || '')) {
+            const fallback = await supabase
+              .from('report_photos')
+              .select('url, caption, sequence, layout')
+              .eq('report_id', existing.id)
+              .order('sequence')
+            reportPhotos = fallback.data
+          }
+        }
 
         if (cancelled) return
 
@@ -482,6 +524,9 @@ export default function SiteDiaryPage() {
         if (reportPhotos?.length) {
           const withPreview = await Promise.all(reportPhotos.map(async (p, index) => {
             const preview = await signedUrlForPath(supabase, p.url)
+            const overlayPreview = p.overlay_path
+              ? await signedUrlForPath(supabase, p.overlay_path)
+              : null
             return {
               key: makeUuid(),
               file: null,
@@ -490,6 +535,10 @@ export default function SiteDiaryPage() {
               caption: p.caption || '',
               sequence_number: p.sequence ?? index + 1,
               layout: p.layout || 'grid4',
+              annotations: p.annotations || null,
+              overlayPath: p.overlay_path || null,
+              overlayPreview,
+              overlayDirty: false,
             }
           }))
           if (cancelled) return
@@ -532,9 +581,32 @@ export default function SiteDiaryPage() {
       caption: '',
       layout,
       sequence_number: 0,
+      annotations: null,
+      overlayPath: null,
+      overlayPreview: null,
+      overlayDirty: false,
     }))
     setPhotos((prev) => resequencePhotos([...prev, ...next]))
   }, [])
+
+  const savePhotoAnnotations = useCallback(async ({ annotations, overlayDataUrl }) => {
+    if (!annotatingPhotoKey) return
+    setPhotos((prev) =>
+      prev.map((p) => {
+        if (p.key !== annotatingPhotoKey) return p
+        if (p.overlayPreview && String(p.overlayPreview).startsWith('blob:')) {
+          try { URL.revokeObjectURL(p.overlayPreview) } catch { /* ignore */ }
+        }
+        return {
+          ...p,
+          annotations,
+          overlayPreview: overlayDataUrl || null,
+          overlayDirty: true,
+        }
+      }),
+    )
+    setAnnotatingPhotoKey(null)
+  }, [annotatingPhotoKey])
 
   const onCoverDrop = useCallback((accepted) => {
     const file = accepted[0]
@@ -741,6 +813,10 @@ export default function SiteDiaryPage() {
   }, [project])
 
   const labourTotals = useMemo(() => labourAggregateTotals(labourRows), [labourRows])
+  const annotatingPhoto = useMemo(
+    () => photos.find((p) => p.key === annotatingPhotoKey) || null,
+    [photos, annotatingPhotoKey],
+  )
 
   const clearScanPreview = useCallback(() => {
     setScanSheetPreview((prev) => {
@@ -1087,8 +1163,31 @@ export default function SiteDiaryPage() {
     const photoRecords = []
 
     for (const photo of sequenced) {
+      let overlayPath = photo.overlayPath || null
+      if (photo.overlayDirty) {
+        try {
+          if (hasAnnotations(photo.annotations) && photo.overlayPreview) {
+            overlayPath = await uploadOverlayPng(supabase, {
+              userId: user.id,
+              reportId: report.id,
+              sequence: photo.sequence_number,
+              dataUrl: photo.overlayPreview,
+            })
+          } else {
+            overlayPath = null
+          }
+        } catch (overlayErr) {
+          setError(`Annotation overlay upload failed: ${overlayErr?.message || 'unknown error'}`)
+          setSaving(false)
+          return
+        }
+      }
+
+      const annotationPayload = hasAnnotations(photo.annotations) ? photo.annotations : null
+
       if (photo.file) {
         const ext = photo.file.name.split('.').pop()?.toLowerCase() || 'jpg'
+        // Original photograph only — never bake annotations into this file
         const storagePath = `${user.id}/${report.id}/${photo.sequence_number}-${Date.now()}.${ext}`
 
         const { error: uploadError } = await supabase.storage
@@ -1107,6 +1206,8 @@ export default function SiteDiaryPage() {
           caption: photo.caption.trim() || null,
           sequence: photo.sequence_number,
           layout: photo.layout || 'grid4',
+          annotations: annotationPayload,
+          overlay_path: overlayPath,
         })
       } else if (!editingReportId && photo.storagePath) {
         // Duplicate / create: link existing storage paths onto the new report row
@@ -1116,31 +1217,42 @@ export default function SiteDiaryPage() {
           caption: photo.caption.trim() || null,
           sequence: photo.sequence_number,
           layout: photo.layout || 'grid4',
+          annotations: annotationPayload,
+          overlay_path: overlayPath,
         })
+      } else if (editingReportId && photo.storagePath) {
+        await supabase
+          .from('report_photos')
+          .update({
+            caption: photo.caption.trim() || null,
+            sequence: photo.sequence_number,
+            layout: photo.layout || 'grid4',
+            annotations: annotationPayload,
+            overlay_path: overlayPath,
+          })
+          .eq('report_id', report.id)
+          .eq('url', photo.storagePath)
       }
     }
 
     if (photoRecords.length > 0) {
       const { error: photosError } = await supabase.from('report_photos').insert(photoRecords)
       if (photosError) {
-        setError(photosError.message)
-        setSaving(false)
-        return
+        // Retry without annotation columns if migration not applied yet
+        if (/annotations|overlay_path/i.test(photosError.message || '')) {
+          const stripped = photoRecords.map(({ annotations, overlay_path, ...rest }) => rest)
+          const { error: retryError } = await supabase.from('report_photos').insert(stripped)
+          if (retryError) {
+            setError(retryError.message)
+            setSaving(false)
+            return
+          }
+        } else {
+          setError(photosError.message)
+          setSaving(false)
+          return
+        }
       }
-    }
-
-    // Keep captions/sequence in sync for existing kept photos
-    for (const photo of sequenced) {
-      if (photo.file || !photo.storagePath) continue
-      await supabase
-        .from('report_photos')
-        .update({
-          caption: photo.caption.trim() || null,
-          sequence: photo.sequence_number,
-          layout: photo.layout || 'grid4',
-        })
-        .eq('report_id', report.id)
-        .eq('url', photo.storagePath)
     }
 
     setSuccess(editingReportId ? 'Site diary updated successfully' : 'Site diary saved successfully')
@@ -1845,36 +1957,40 @@ export default function SiteDiaryPage() {
                           border: '1px solid rgba(255,255,255,0.08)',
                         }}
                       >
-                        <div style={{ position: 'relative' }}>
-                          <img
-                            src={photo.preview}
+                        <div>
+                          <PhotoAnnotationViewer
+                            imageSrc={photo.preview}
+                            overlaySrc={photo.overlayPreview}
                             alt={`Photo ${photo.sequence_number}`}
-                            style={{ width: 88, height: 88, objectFit: 'cover', borderRadius: 8, display: 'block' }}
+                            width={88}
+                            height={88}
                           />
-                          <span
+                          <div
                             style={{
-                              position: 'absolute',
-                              top: 6,
-                              left: 6,
-                              background: `rgba(${DIARY_ACCENT}, 0.92)`,
-                              color: '#0b0d12',
+                              marginTop: 6,
                               fontSize: 11,
-                              fontWeight: 700,
-                              padding: '2px 7px',
-                              borderRadius: 999,
+                              fontWeight: 600,
+                              color: 'var(--text)',
+                              letterSpacing: '0.02em',
                             }}
                           >
-                            #{photo.sequence_number}
-                          </span>
+                            Photo {photo.sequence_number}
+                          </div>
                         </div>
                         <div>
                           <label style={{ ...labelStyle, fontSize: 10 }}>Caption</label>
                           <input
-                            style={{ ...cellInputStyle, width: '100%' }}
+                            style={{ ...cellInputStyle, width: '100%', marginBottom: 8 }}
                             value={photo.caption}
                             onChange={(e) => updatePhotoCaption(photo.key, e.target.value)}
-                            placeholder={`Caption for photo ${photo.sequence_number}`}
+                            placeholder={`Caption for Photo ${photo.sequence_number}`}
                           />
+                          <SecondaryButton
+                            type="button"
+                            onClick={() => setAnnotatingPhotoKey(photo.key)}
+                          >
+                            {hasAnnotations(photo.annotations) ? 'Edit annotations' : 'Annotate'}
+                          </SecondaryButton>
                         </div>
                         <button
                           type="button"
@@ -1947,6 +2063,16 @@ export default function SiteDiaryPage() {
             </div>
           </RecentEntryCard>
         ))
+      )}
+      {annotatingPhoto?.preview && (
+        <PhotoAnnotationEditor
+          imageSrc={annotatingPhoto.preview}
+          initialAnnotations={annotatingPhoto.annotations}
+          accent={REPORT_THEMES.diary.accent}
+          title={`Annotate Photo ${annotatingPhoto.sequence_number || ''}`}
+          onCancel={() => setAnnotatingPhotoKey(null)}
+          onSave={savePhotoAnnotations}
+        />
       )}
     </PremiumShell>
   )
