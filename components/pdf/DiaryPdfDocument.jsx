@@ -7,12 +7,22 @@ import {
   PDF_HEADER_OFFSET,
   PDF_FOOTER_OFFSET,
 } from '@/components/pdf/PdfHeader'
+import {
+  buildPhotoSchedule,
+  photoReferenceLabel,
+  photoTileCaption,
+} from '@/lib/photo-schedule'
 
 const PAGE_PAD_X = 28
 const PAGE_INNER_W = 595.28 - PAGE_PAD_X * 2 // A4 width minus horizontal padding
 const CONTENT_TOP = PDF_HEADER_OFFSET + 12
 const CONTENT_BOTTOM = PDF_FOOTER_OFFSET + 8
 const CONTENT_H = 841.89 - CONTENT_TOP - CONTENT_BOTTOM
+
+/** Neutral fill behind contain-fitted photographs */
+const IMAGE_WELL = '#f2f2f2'
+/** Fine perimeter around each photo tile */
+const TILE_BORDER = '#2a2a2a'
 
 const DECLARATION =
   'I hereby certify that the contents of this site report are true and accurate to the best of my knowledge and belief, and that the information recorded herein fairly represents the works, conditions, and observations for the date stated.'
@@ -30,55 +40,47 @@ const styles = StyleSheet.create({
   meta: { fontSize: 9, color: '#555', marginBottom: 4 },
   section: { marginTop: 14, marginBottom: 6, fontSize: 11, fontWeight: 700 },
   body: { fontSize: 10, lineHeight: 1.45, marginBottom: 4 },
-  // Shared photo frame
+  // Shared photo tile — fixed outer frame; image region never crops
   frame: {
-    borderWidth: 1.25,
-    borderColor: '#2a2a2a',
+    borderWidth: 0.75,
+    borderColor: TILE_BORDER,
     borderStyle: 'solid',
-    backgroundColor: '#f7f7f7',
+    backgroundColor: '#ffffff',
     padding: 6,
     display: 'flex',
     flexDirection: 'column',
-    position: 'relative',
   },
-  imageWrap: {
-    position: 'relative',
+  imageWell: {
     width: '100%',
+    backgroundColor: IMAGE_WELL,
+    justifyContent: 'center',
+    alignItems: 'center',
     overflow: 'hidden',
   },
-  badge: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    minWidth: 22,
-    paddingVertical: 3,
-    paddingHorizontal: 6,
-    borderRadius: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
+  // Contain-fit only: scale down into fixed region, never crop / stretch / enlarge frame
+  imageContain: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'contain',
   },
-  badgeText: {
-    color: '#FFFFFF',
-    fontSize: 8,
+  photoRef: {
+    fontSize: 9,
     fontFamily: 'Helvetica-Bold',
-    letterSpacing: 0.3,
+    color: '#1a1a1a',
+    marginTop: 6,
+    letterSpacing: 0.2,
   },
   caption: {
-    fontSize: 9.5,
+    fontSize: 9,
     fontFamily: 'Helvetica',
-    color: '#222',
-    marginTop: 6,
+    color: '#333',
+    marginTop: 2,
     lineHeight: 1.35,
   },
   // Full-page tile
   fullFrame: {
     width: PAGE_INNER_W,
     height: CONTENT_H - 8,
-  },
-  fullImage: {
-    width: '100%',
-    flex: 1,
-    objectFit: 'cover',
   },
   // Grid rows
   gridRow: {
@@ -238,27 +240,36 @@ function PageChrome({ brandColor, logoUrl, companyName, reportTitle }) {
   )
 }
 
-function FramedPhoto({ src, caption, frameStyle, imageStyle, photoNumber, brandColor }) {
+/**
+ * Fixed-frame photo tile:
+ * - contain-fit image (no crop / stretch / distort)
+ * - sequential "Photo N" reference (no timestamp)
+ * - caption
+ * - fine perimeter
+ */
+function FramedPhoto({ src, caption, frameStyle, imageRegionStyle, photoNumber }) {
   if (!src) return null
-  const color = brandColor || '#FF5000'
+  const refLabel = photoReferenceLabel(photoNumber)
+  const captionText = typeof caption === 'string' ? caption.trim() : ''
   return (
     <View style={[styles.frame, frameStyle]}>
-      <View style={[styles.imageWrap, imageStyle?.flex === 1 ? { flex: 1 } : null]}>
-        <Image src={src} style={imageStyle} />
-        {photoNumber != null ? (
-          <View style={[styles.badge, { backgroundColor: color }]}>
-            <Text style={styles.badgeText}>#{photoNumber}</Text>
-          </View>
-        ) : null}
+      <View style={[styles.imageWell, imageRegionStyle]}>
+        {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
+        <Image src={src} style={styles.imageContain} />
       </View>
-      <Text style={styles.caption}>{caption?.trim() ? caption.trim() : ' '}</Text>
+      <Text style={styles.photoRef}>{refLabel}</Text>
+      <Text style={styles.caption}>{captionText || ' '}</Text>
     </View>
   )
 }
 
-function FullPagePhotos({ photos, brandColor, logoUrl, companyName, numberOffset = 0 }) {
+function FullPagePhotos({ photos, brandColor, logoUrl, companyName }) {
+  const metaH = 36
+  const framePad = 12
+  const imageH = Math.max(80, CONTENT_H - 8 - metaH - framePad)
+
   return photos.map((photo, i) => (
-    <Page key={`full-${photo.key || i}`} size="A4" style={styles.page}>
+    <Page key={`full-${photo.key || photo.reportPhotoNumber || i}`} size="A4" style={styles.page}>
       <PageChrome
         brandColor={brandColor}
         logoUrl={logoUrl}
@@ -267,11 +278,10 @@ function FullPagePhotos({ photos, brandColor, logoUrl, companyName, numberOffset
       />
       <FramedPhoto
         src={photo.src || photo.preview || photo.url}
-        caption={photo.caption}
+        caption={photoTileCaption(photo)}
         frameStyle={styles.fullFrame}
-        imageStyle={styles.fullImage}
-        photoNumber={numberOffset + i + 1}
-        brandColor={brandColor}
+        imageRegionStyle={{ height: imageH, flexGrow: 1 }}
+        photoNumber={photo.reportPhotoNumber}
       />
     </Page>
   ))
@@ -286,15 +296,14 @@ function GridPages({
   logoUrl,
   companyName,
   title,
-  numberOffset = 0,
 }) {
   const gap = 10
   const tileW = (PAGE_INNER_W - gap * (cols - 1)) / cols
-  const captionBlock = 28
+  const metaBlock = 34
   const framePad = 12
   const availableH = CONTENT_H - gap * (rows - 1)
   const tileH = availableH / rows
-  const imageH = Math.max(40, tileH - captionBlock - framePad)
+  const imageH = Math.max(40, tileH - metaBlock - framePad)
 
   const pages = chunk(photos, perPage)
 
@@ -310,20 +319,16 @@ function GridPages({
         />
         {rowChunks.map((row, ri) => (
           <View key={`row-${ri}`} style={styles.gridRow}>
-            {row.map((photo, ci) => {
-              const flatIndex = pageIndex * perPage + ri * cols + ci
-              return (
-                <FramedPhoto
-                  key={photo.key || `${pageIndex}-${ri}-${ci}`}
-                  src={photo.src || photo.preview || photo.url}
-                  caption={photo.caption}
-                  frameStyle={{ width: tileW, height: tileH }}
-                  imageStyle={{ width: '100%', height: imageH, objectFit: 'cover' }}
-                  photoNumber={numberOffset + flatIndex + 1}
-                  brandColor={brandColor}
-                />
-              )
-            })}
+            {row.map((photo, ci) => (
+              <FramedPhoto
+                key={photo.key || `${pageIndex}-${ri}-${ci}`}
+                src={photo.src || photo.preview || photo.url}
+                caption={photoTileCaption(photo)}
+                frameStyle={{ width: tileW, height: tileH }}
+                imageRegionStyle={{ width: '100%', height: imageH }}
+                photoNumber={photo.reportPhotoNumber}
+              />
+            ))}
             {row.length < cols
               ? Array.from({ length: cols - row.length }).map((_, pi) => (
                   <View key={`pad-${pi}`} style={{ width: tileW, height: tileH }} />
@@ -501,7 +506,12 @@ function SignaturePage({
  * Diary PDF with summary page + photo pages by layout tier:
  * full (1/page), grid4 (2×2), grid6 (3×2), then declaration/signature.
  *
- * photos: [{ key?, src|preview|url, caption, layout: 'full'|'grid4'|'grid6' }]
+ * Photo schedule rules:
+ * - contain-fit only inside fixed frames (no crop / stretch)
+ * - continuous Photo 1..N across the whole report (recalculated at generation)
+ * - caption + fine perimeter; no timestamps on tiles
+ *
+ * photos: [{ key?, src|preview|url, caption, layout: 'full'|'grid4'|'grid6', sequence_number? }]
  * labour: [{ trade, company, headcount|count, hours }]
  * equipmentHire: [{ description, supplier, quantity, status }]
  */
@@ -519,13 +529,7 @@ export function DiaryPdfDocument({
   authorRole = '',
   signatureSrc = null,
 }) {
-  const full = photos.filter((p) => (p.layout || 'grid4') === 'full')
-  const grid4 = photos.filter((p) => (p.layout || 'grid4') === 'grid4')
-  const grid6 = photos.filter((p) => p.layout === 'grid6')
-
-  const fullOffset = 0
-  const grid4Offset = full.length
-  const grid6Offset = full.length + grid4.length
+  const schedule = buildPhotoSchedule(photos)
 
   return (
     <Document>
@@ -546,15 +550,14 @@ export function DiaryPdfDocument({
       </Page>
 
       <FullPagePhotos
-        photos={full}
+        photos={schedule.full}
         brandColor={brandColor}
         logoUrl={logoUrl}
         companyName={companyName}
-        numberOffset={fullOffset}
       />
 
       <GridPages
-        photos={grid4}
+        photos={schedule.grid4}
         perPage={4}
         cols={2}
         rows={2}
@@ -562,11 +565,10 @@ export function DiaryPdfDocument({
         logoUrl={logoUrl}
         companyName={companyName}
         title="Site Diary — Progress photos"
-        numberOffset={grid4Offset}
       />
 
       <GridPages
-        photos={grid6}
+        photos={schedule.grid6}
         perPage={6}
         cols={3}
         rows={2}
@@ -574,7 +576,6 @@ export function DiaryPdfDocument({
         logoUrl={logoUrl}
         companyName={companyName}
         title="Site Diary — Site checks"
-        numberOffset={grid6Offset}
       />
 
       <SignaturePage
