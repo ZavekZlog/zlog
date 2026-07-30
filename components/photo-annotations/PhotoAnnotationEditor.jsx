@@ -7,6 +7,7 @@ import {
   normalizeAnnotationDoc,
   upsertShape,
   removeShape,
+  offsetShape,
   makeAnnotationId,
   DEFAULT_STROKE,
   fitContain,
@@ -90,7 +91,7 @@ export function PhotoAnnotationEditor({
   const [naturalSize, setNaturalSize] = useState({ w: 0, h: 0 })
   const [fit, setFit] = useState({ x: 0, y: 0, w: 0, h: 0, scale: 1 })
   const [doc, setDoc] = useState(() => normalizeAnnotationDoc(initialAnnotations))
-  const [tool, setTool] = useState('arrow')
+  const [tool, setTool] = useState('select')
   const [selectedId, setSelectedId] = useState(null)
   const [stroke, setStroke] = useState(DEFAULT_STROKE)
   const draftRef = useRef(null)
@@ -176,19 +177,24 @@ export function PhotoAnnotationEditor({
   const onPointerDown = (e) => {
     const pt = eventToNorm(e)
     if (!pt) return
+    e.preventDefault?.()
     e.currentTarget.setPointerCapture?.(e.pointerId)
 
     if (tool === 'select') {
       const hit = hitTestShape(doc, pt.x, pt.y, fit.w, fit.h)
       setSelectedId(hit?.id || null)
+      draftRef.current = null
       if (hit) {
         if (hit.stroke) setStroke(hit.stroke)
         if (hit.type === 'text') setTextDraft(hit.text || '')
+        // Snapshot so only this shape moves; others stay fixed in `doc`.
         dragRef.current = {
           id: hit.id,
           start: pt,
-          origin: { ...hit },
+          origin: offsetShape(hit, 0, 0),
         }
+      } else {
+        dragRef.current = null
       }
       return
     }
@@ -209,6 +215,7 @@ export function PhotoAnnotationEditor({
       return
     }
 
+    dragRef.current = null
     const id = makeAnnotationId(tool)
     if (tool === 'arrow') {
       draftRef.current = { id, type: 'arrow', x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y, stroke }
@@ -228,29 +235,12 @@ export function PhotoAnnotationEditor({
     if (!pt) return
 
     if (tool === 'select' && dragRef.current) {
-      const { id, start, origin } = dragRef.current
+      const { start, origin } = dragRef.current
       const dx = pt.x - start.x
       const dy = pt.y - start.y
-      let next = { ...origin, id }
-      if (origin.type === 'arrow') {
-        next = {
-          ...next,
-          x1: origin.x1 + dx,
-          y1: origin.y1 + dy,
-          x2: origin.x2 + dx,
-          y2: origin.y2 + dy,
-        }
-      } else if (origin.type === 'ellipse') {
-        next = { ...next, cx: origin.cx + dx, cy: origin.cy + dy }
-      } else if (origin.type === 'rect' || origin.type === 'text') {
-        next = { ...next, x: origin.x + dx, y: origin.y + dy }
-      } else if (origin.type === 'freehand') {
-        next = {
-          ...next,
-          points: (origin.points || []).map((p) => ({ x: p.x + dx, y: p.y + dy })),
-        }
-      }
-      setDoc((d) => upsertShape(d, next))
+      // Paint via draft (no React state per frame) for smooth mobile dragging.
+      draftRef.current = offsetShape(origin, dx, dy)
+      paint()
       return
     }
 
@@ -277,12 +267,14 @@ export function PhotoAnnotationEditor({
   }
 
   const onPointerUp = () => {
+    const wasDragging = Boolean(dragRef.current)
     dragRef.current = null
     const draft = draftRef.current
     if (draft) {
       const { _sx, _sy, ...clean } = draft
       setDoc((d) => upsertShape(d, clean))
       draftRef.current = null
+      if (wasDragging) paint()
     }
   }
 
