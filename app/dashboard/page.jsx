@@ -66,7 +66,8 @@ export default function DashboardPage() {
           disabled={disabled}
           onClick={() => {
             if (isDiary) {
-              router.push('/dashboard/diary/setup')
+              // Consistent entry hub on all devices (edit existing vs start new).
+              router.push('/dashboard/diary')
               return
             }
             if (project?.id) router.push(`/dashboard/project/${project.id}/${card.path}`)

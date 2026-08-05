@@ -1,0 +1,16 @@
+{
+  "reportId": "949132dc-644d-47a0-8fad-54951a4375fc",
+  "badUpdate": {
+    "error": {
+      "message": "Could not find the 'is_draft' column of 'daily_reports' in the schema cache",
+      "code": "PGRST204",
+      "details": null,
+      "hint": null
+    },
+    "status": 400,
+    "dataId": null,
+    "dataSiteSummary": null
+  },
+  "freshSelectSiteSummary": null,
+  "conclusion": "CONFIRMED: including is_draft (absent from live schema) fails the UPDATE; edited value does not persist."
+}

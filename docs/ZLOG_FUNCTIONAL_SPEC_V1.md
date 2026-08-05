@@ -519,19 +519,22 @@ Visual evolution of `/dashboard` only after Today’s Report sequence is stable.
 
 **Milestone M0 — Schema reconciliation + save-path contract (no UI redesign)**
 
-1. **Inspect live Supabase columns** for `daily_reports`, `report_labour`, `report_plant`, `report_photos` (SQL editor or `information_schema`).  
-2. Produce **one reconciliation migration** (or a thin data-access mapper) so every write uses verified column names.  
-3. Document the authoritative contract in code comments or a short `lib/diary-schema.js` map.  
-4. Add a regression checklist:  
-   - Open existing report by id → edit site summary → Save → same id updated → complete screen.  
-   - Setup Continue twice → confirm draft policy (reuse vs new) is intentional.  
-5. Optionally wire `DiaryPdfDocument` to the Share button as download/share blob (**feature**, but low UI risk).
+**Status: save contract implemented on `architecture-rebuild`; bug M0-01 (login autofill auto-submit) RESOLVED and included in M0.** See `docs/M0_SAVE_LIFECYCLE.md`.
 
-**Explicitly out of scope for M0:** Dashboard redesign, landing changes, new checks/permits UI, renaming routes, fixing every known fault unless blocking the schema/save contract.
+Delivered:
+1. Authoritative UPDATE-only final save in `lib/diary-save.js` (`finalizeSiteDiarySave`).
+2. Form `handleSave` never inserts `daily_reports`; missing `?report=` fails loudly.
+3. Structured logging (`[zlog:diary-save]`), Saving… / ✓ Saved confirmation, complete navigation with same id.
+4. Legacy column retry for `shift`/`actions` (and labour/plant) when live DB still uses migration names.
+5. **M0-01:** Login no longer auto-submits on autofill; Sign In is explicit click/Enter only (`app/(auth)/login/page.jsx` + regression test).
 
-**Exact first coding task:**
+Remaining for M0 acceptance:
+- Authenticated browser save checklist (edit → save → refresh → same id, no duplicate).
+- Optional: draft `owner_id` on create (separate from UPDATE contract).
 
-> Verify live DB column names for diary tables against `supabase/migrations` and `handleSave` payloads; implement a single reconciliation (migration and/or write mapper) so UPDATE/INSERT of an existing `?report=` diary cannot fail or silently no-op due to column mismatch; add a short automated or manual test script that updates one report by id and reads it back.
+Remaining follow-ups (not blocking M0 acceptance if live columns already match app writes):
+- Optional dedicated reconciliation migration once live schema is confirmed.
+- Setup duplicate-draft policy (Phase 0 item 3) — separate from final-save contract.
 
 ---
 

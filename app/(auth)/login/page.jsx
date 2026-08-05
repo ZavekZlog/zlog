@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -16,46 +16,67 @@ import {
   passwordVisibilityLabel,
   readLoginFormCredentials,
 } from '@/lib/auth/login-form'
+import { safeAppReturnPath } from '@/lib/auth/return-path'
 
 /**
  * Sign-in — inherits re-centred ZlogBrandWordmark glow.
- * Auth: FormData from the live form → Supabase signInWithPassword → /dashboard.
+ * Auth runs only on explicit user action: Sign In click or Enter/Return.
  *
- * Inputs stay uncontrolled so password-manager autofill is not wiped by React state.
- * Form uses noValidate: Android Chrome often shows autofill before input.value is set;
- * native `required` can block submit and dismiss the preview (fields look cleared).
+ * Credential source (M0-02):
+ * - Email/password inputs are uncontrolled (no React value / defaultValue).
+ * - Zlog does not persist raw passwords to storage, cookies, logs, or DB.
+ * - Fields appearing pre-filled are browser / password-manager autofill
+ *   (autocomplete="username" / "current-password"), not app-held credentials.
+ * - After sign-out (?signedOut=1), any in-DOM form values are cleared once;
+ *   the browser may then autofill again — that is expected and preferred.
  */
 export default function Login() {
   const supabase = createClient()
   const router = useRouter()
+  const formRef = useRef(null)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
-  const handleLogin = async (e) => {
-    e.preventDefault()
+  // Clear application-held login form DOM state after sign-out.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('signedOut') !== '1') return
+    const form = formRef.current
+    if (form) {
+      form.reset()
+      const emailInput = form.elements.namedItem('email')
+      const passwordInput = form.elements.namedItem('password')
+      if (emailInput && 'value' in emailInput) emailInput.value = ''
+      if (passwordInput && 'value' in passwordInput) passwordInput.value = ''
+    }
+    setShowPassword(false)
+    setErrorMsg('')
+    setLoading(false)
+    const next = safeAppReturnPath(params.get('next'))
+    router.replace(next ? `/login?next=${encodeURIComponent(next)}` : '/login')
+  }, [router])
 
-    const form = e.currentTarget
+  const authenticate = async () => {
+    if (loading) return
+
+    const form = formRef.current
     if (!form) return
 
-    // Submission source of truth: FormData from the actual form DOM — not React state.
-    let formData = new FormData(form)
-    let email = String(formData.get('email') ?? '')
-    let password = String(formData.get('password') ?? '')
+    // Source of truth: live form DOM / FormData — not React state.
+    let { email, password } = readLoginFormCredentials(form)
 
-    // Android Chrome may not have flushed autofill into input.value yet.
-    if (!email.trim() || !password) {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      formData = new FormData(form)
-      email = String(formData.get('email') ?? '')
-      password = String(formData.get('password') ?? '')
-    }
-
-    // Prefer live element values if FormData is still empty after flush.
-    if (!email.trim() || !password) {
-      const fromDom = readLoginFormCredentials(form)
-      if (!email.trim()) email = fromDom.email
-      if (!password) password = fromDom.password
+    // Prefer named element values when FormData is still empty (some autofill paths).
+    if (!email || !password) {
+      const emailInput = form.elements.namedItem('email')
+      const passwordInput = form.elements.namedItem('password')
+      if (!email && emailInput && 'value' in emailInput) {
+        email = String(emailInput.value || '').trim()
+      }
+      if (!password && passwordInput && 'value' in passwordInput) {
+        password = String(passwordInput.value || '')
+      }
     }
 
     email = email.trim()
@@ -80,6 +101,8 @@ export default function Login() {
     setErrorMsg('')
 
     try {
+      // Password is passed only to Supabase Auth in-memory for this request.
+      // It is never written to localStorage, sessionStorage, cookies, or logs.
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -91,12 +114,35 @@ export default function Login() {
         return
       }
 
-      router.push('/dashboard')
-      router.refresh()
+      // Drop password from the DOM after a successful auth handoff.
+      if (passwordInput && 'value' in passwordInput) {
+        passwordInput.value = ''
+      }
+
+      const next = safeAppReturnPath(
+        new URLSearchParams(window.location.search).get('next'),
+      )
+      // Full navigation restores the exact report URL (pathname + ?report=) with the new session.
+      window.location.assign(next || '/dashboard')
     } catch {
       setErrorMsg('An unexpected error occurred. Please try again.')
       setLoading(false)
     }
+  }
+
+  /** Autofill may fire submit; never authenticate from that path. */
+  const handleFormSubmit = (e) => {
+    e.preventDefault()
+  }
+
+  /** Enter/Return in a field is an explicit user action — allow sign-in. */
+  const handleFormKeyDown = (e) => {
+    if (e.key !== 'Enter') return
+    if (e.nativeEvent?.isComposing) return
+    const tag = e.target?.tagName
+    if (tag === 'TEXTAREA' || tag === 'BUTTON') return
+    e.preventDefault()
+    authenticate()
   }
 
   return (
@@ -104,12 +150,10 @@ export default function Login() {
       <style>{premiumScopedCss}</style>
 
       <div className="w-full max-w-md mx-auto flex flex-col items-center">
-        {/* Brand container with localized atmospheric radial glow ONLY */}
         <div style={{ marginBottom: 32, width: '100%', paddingTop: 18 }}>
           <ZlogBrandWordmark size="lg" centered={true} />
         </div>
 
-        {/* Unchanged Authentication Card */}
         <div className="w-full bg-[#14171c] border border-[#222731] rounded-xl px-5 py-5 shadow-xl relative">
           <div className="mb-4">
             <h2 className="text-[20px] font-bold text-[#f3f4f6] tracking-tight mb-0.5">
@@ -137,7 +181,13 @@ export default function Login() {
             </div>
           ) : null}
 
-          <form onSubmit={handleLogin} className="space-y-4" noValidate>
+          <form
+            ref={formRef}
+            onSubmit={handleFormSubmit}
+            onKeyDown={handleFormKeyDown}
+            className="space-y-4"
+            noValidate
+          >
             <div>
               <label style={{ ...labelStyle, fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', marginBottom: 4 }}>
                 Email
@@ -202,7 +252,7 @@ export default function Login() {
               </div>
             </div>
 
-            <PrimaryCTA type="submit" disabled={loading} className="w-full">
+            <PrimaryCTA type="button" onClick={authenticate} disabled={loading} className="w-full">
               {loading ? 'Signing in...' : 'Sign In'}
             </PrimaryCTA>
           </form>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -55,7 +55,7 @@ async function signedLogoUrl(supabase, path) {
   return data?.signedUrl ?? null
 }
 
-export default function SiteDiarySetupPage() {
+function SiteDiarySetupPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const editingReportId = searchParams.get('report') || null
@@ -199,6 +199,15 @@ export default function SiteDiarySetupPage() {
           setLogoStoragePath(profile.logo_url)
           const preview = await signedLogoUrl(supabase, profile.logo_url)
           if (!cancelled) setLogoPreview(preview)
+        }
+
+        // Hub "Start New" may pass ?project= to preselect a saved project (not a diary).
+        if (!editingReportId && editingProjectId) {
+          const project = (projectRows || []).find((p) => p.id === editingProjectId)
+          if (project) {
+            setSelectedProjectId(project.id)
+            setProjectName(project.name || '')
+          }
         }
       } catch (err) {
         if (!cancelled) setError(err?.message || 'Could not load setup')
@@ -448,7 +457,8 @@ export default function SiteDiarySetupPage() {
           color: 'color-mix(in srgb, var(--text) 90%, var(--text-2))',
         }}
       >
-        Confirm the project and report details before starting.
+        Confirm the project and report details before starting a <strong>new</strong> report.
+        This screen selects a <strong>saved project</strong> (kkk / zzz / aaa names) — it is not a list of previous diaries.
       </p>
 
       {error && (
@@ -471,12 +481,12 @@ export default function SiteDiarySetupPage() {
       <GlassSection title="Report details" accent={BRAND_ACCENT}>
         {existingProjects.length > 0 && (
           <>
-            <label style={setupLabelStyle}>Saved project</label>
+            <label style={setupLabelStyle}>Saved project (not a previous diary)</label>
             <select
               value={selectedProjectId}
               onChange={(e) => handleSelectExisting(e.target.value)}
               style={{ ...setupInputStyle, cursor: 'pointer' }}
-              aria-label="Choose an existing project"
+              aria-label="Choose a saved project for a new report"
             >
               <option value={NEW_PROJECT_VALUE}>New project — type name below</option>
               {existingProjects.map((p) => (
@@ -619,5 +629,19 @@ export default function SiteDiarySetupPage() {
         Back
       </SecondaryButton>
     </PremiumShell>
+  )
+}
+
+export default function SiteDiarySetupRoute() {
+  return (
+    <Suspense
+      fallback={
+        <PremiumShell title="Site Diary setup" backHref="/dashboard/diary" accent={BRAND_ACCENT}>
+          <p style={{ color: 'var(--text-2)' }}>Loading…</p>
+        </PremiumShell>
+      }
+    >
+      <SiteDiarySetupPage />
+    </Suspense>
   )
 }

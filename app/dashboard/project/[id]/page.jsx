@@ -142,10 +142,10 @@ export default function ProjectPage() {
         <div className="premium-dash-card-wrap" style={{ animationDelay: '0ms' }}>
           <ModuleHomeCard
             title="Site Diary"
-            description="Create, continue, or start blank"
+            description="Edit existing or start new"
             icon="📋"
             accent={REPORT_THEMES.diary.accent}
-            onClick={() => router.push(`/dashboard/project/${id}/diary`)}
+            onClick={() => router.push(`/dashboard/diary?project=${id}`)}
           />
         </div>
         <div className="premium-dash-card-wrap" style={{ animationDelay: '70ms' }}>

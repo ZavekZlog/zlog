@@ -1,0 +1,150 @@
+{
+  "ok": true,
+  "primaryKey": "id",
+  "updateFilter": {
+    "id": "949132dc-644d-47a0-8fad-54951a4375fc"
+  },
+  "ownerUserRelationship": {
+    "column": "owner_id",
+    "valueOnRow": "e79ef391-4a45-446b-a6ad-b11c34f2b727",
+    "requiredOnInsert": true,
+    "note": "Live OpenAPI marks owner_id required. Repo migrations RLS used projects.owner_id; live table has its own owner_id."
+  },
+  "liveColumns": [
+    "id",
+    "owner_id",
+    "project_id",
+    "report_number",
+    "report_date",
+    "weather",
+    "shift",
+    "site_summary",
+    "visitors",
+    "delays_issues",
+    "actions",
+    "created_at",
+    "company_reporting_for",
+    "creator_name",
+    "creator_role",
+    "cover_photo_url",
+    "signature_url",
+    "branding_id",
+    "brand_color",
+    "brand_logo_url",
+    "equipment_hire"
+  ],
+  "requiredColumns": [
+    "id",
+    "owner_id",
+    "project_id",
+    "report_date",
+    "created_at",
+    "equipment_hire"
+  ],
+  "before": {
+    "id": "949132dc-644d-47a0-8fad-54951a4375fc",
+    "owner_id": "e79ef391-4a45-446b-a6ad-b11c34f2b727",
+    "project_id": "aa7975da-eae9-40d7-8376-d5ef5ec9e9ef",
+    "site_summary": null,
+    "columnNamesPresent": [
+      "id",
+      "owner_id",
+      "project_id",
+      "report_number",
+      "report_date",
+      "weather",
+      "shift",
+      "site_summary",
+      "visitors",
+      "delays_issues",
+      "actions",
+      "created_at",
+      "company_reporting_for",
+      "creator_name",
+      "creator_role",
+      "cover_photo_url",
+      "signature_url",
+      "branding_id",
+      "brand_color",
+      "brand_logo_url",
+      "equipment_hire"
+    ]
+  },
+  "update": {
+    "payload": {
+      "site_summary": "M0-A-PROBE 2026-08-05T20:34:16.604Z"
+    },
+    "response": {
+      "data": {
+        "id": "949132dc-644d-47a0-8fad-54951a4375fc",
+        "owner_id": "e79ef391-4a45-446b-a6ad-b11c34f2b727",
+        "project_id": "aa7975da-eae9-40d7-8376-d5ef5ec9e9ef",
+        "report_number": null,
+        "report_date": "2026-08-05",
+        "weather": null,
+        "shift": null,
+        "site_summary": "M0-A-PROBE 2026-08-05T20:34:16.604Z",
+        "visitors": null,
+        "delays_issues": null,
+        "actions": null,
+        "created_at": "2026-08-05T19:13:56.827974+00:00",
+        "company_reporting_for": "Shc",
+        "creator_name": "Colin walker",
+        "creator_role": null,
+        "cover_photo_url": null,
+        "signature_url": null,
+        "branding_id": "7e22800c-9e8c-4704-8b7a-5a44266087de",
+        "brand_color": "#003F2E",
+        "brand_logo_url": "e79ef391-4a45-446b-a6ad-b11c34f2b727/branding/1784831375056.jpg",
+        "equipment_hire": []
+      },
+      "error": null,
+      "status": 200,
+      "statusText": "OK",
+      "count": null
+    }
+  },
+  "freshSelect": {
+    "response": {
+      "data": {
+        "id": "949132dc-644d-47a0-8fad-54951a4375fc",
+        "owner_id": "e79ef391-4a45-446b-a6ad-b11c34f2b727",
+        "project_id": "aa7975da-eae9-40d7-8376-d5ef5ec9e9ef",
+        "report_number": null,
+        "report_date": "2026-08-05",
+        "weather": null,
+        "shift": null,
+        "site_summary": "M0-A-PROBE 2026-08-05T20:34:16.604Z",
+        "visitors": null,
+        "delays_issues": null,
+        "actions": null,
+        "created_at": "2026-08-05T19:13:56.827974+00:00",
+        "company_reporting_for": "Shc",
+        "creator_name": "Colin walker",
+        "creator_role": null,
+        "cover_photo_url": null,
+        "signature_url": null,
+        "branding_id": "7e22800c-9e8c-4704-8b7a-5a44266087de",
+        "brand_color": "#003F2E",
+        "brand_logo_url": "e79ef391-4a45-446b-a6ad-b11c34f2b727/branding/1784831375056.jpg",
+        "equipment_hire": []
+      },
+      "error": null,
+      "status": 200,
+      "statusText": "OK",
+      "count": null
+    },
+    "site_summary": "M0-A-PROBE 2026-08-05T20:34:16.604Z",
+    "matchedMarker": true
+  },
+  "restore": {
+    "data": {
+      "id": "949132dc-644d-47a0-8fad-54951a4375fc",
+      "site_summary": null
+    },
+    "error": null,
+    "status": 200,
+    "statusText": "OK",
+    "count": null
+  }
+}

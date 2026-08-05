@@ -39,8 +39,10 @@ export function DashboardTopBar() {
 
   const handleSignOut = async () => {
     setSigningOut(true)
+    // Clears Supabase auth session/cookies only — never stores or clears a raw password
+    // (Zlog does not persist passwords). Login form DOM is reset via ?signedOut=1.
     await supabase.auth.signOut()
-    router.replace('/login')
+    router.replace('/login?signedOut=1')
     router.refresh()
   }
 

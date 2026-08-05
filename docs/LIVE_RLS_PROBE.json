@@ -1,0 +1,30 @@
+{
+  "introspectedAt": "2026-08-05T20:34:37.959Z",
+  "hasServiceRoleKey": false,
+  "hasDatabaseUrl": false,
+  "policySqlAvailable": false,
+  "reason": "Exact RLS policy definitions require Postgres (pg_policies) or Supabase Dashboard SQL. This environment only has NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+  "attempts": [
+    {
+      "method": "rpc pg_policies_for_table (anon)",
+      "error": {
+        "message": "Could not find the function public.pg_policies_for_table(table_name) in the schema cache",
+        "code": "PGRST202"
+      },
+      "data": null
+    },
+    {
+      "method": "GET /rest/v1/pg_policies (anon)",
+      "status": 404,
+      "bodyPreview": "{\"code\":\"PGRST205\",\"details\":null,\"hint\":null,\"message\":\"Could not find the table 'public.pg_policies' in the schema cache\"}"
+    },
+    {
+      "method": "empirical anon SELECT/UPDATE",
+      "selectCount": 3,
+      "selectError": null,
+      "updateError": null,
+      "updateReturnedRow": true,
+      "updateStatus": 200
+    }
+  ]
+}

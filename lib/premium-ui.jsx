@@ -328,6 +328,18 @@ function PowderCtaOverlays() {
   )
 }
 
+/**
+ * @param {{
+ *   children: import('react').ReactNode
+ *   disabled?: boolean
+ *   type?: string
+ *   onClick?: import('react').MouseEventHandler
+ *   href?: string
+ *   style?: import('react').CSSProperties
+ *   className?: string
+ *   accent?: string
+ * }} props
+ */
 export function PrimaryCTA({
   children,
   disabled = false,

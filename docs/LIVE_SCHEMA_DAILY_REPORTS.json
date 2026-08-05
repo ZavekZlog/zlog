@@ -1,0 +1,677 @@
+{
+  "introspectedAt": "2026-08-05T20:33:50.151Z",
+  "host": "epvkxavaxmzyskteecsv.supabase.co",
+  "source": "GET /rest/v1/ Accept: application/openapi+json",
+  "definitionKeysSample": [
+    "company_brandings",
+    "site_survey_reports",
+    "report_plant",
+    "report_photos",
+    "daily_reports",
+    "weekly_progress_reports",
+    "projects",
+    "snags",
+    "report_labour",
+    "weekly_hs_reports"
+  ],
+  "tables": {
+    "daily_reports": {
+      "required": [
+        "id",
+        "owner_id",
+        "project_id",
+        "report_date",
+        "created_at",
+        "equipment_hire"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "string",
+          "format": "uuid",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "owner_id",
+          "type": "string",
+          "format": "uuid",
+          "description": null,
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "auth.uid()"
+        },
+        {
+          "name": "project_id",
+          "type": "string",
+          "format": "uuid",
+          "description": "Note:\nThis is a Foreign Key to `projects.id`.<fk table='projects' column='id'/>",
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": null
+        },
+        {
+          "name": "report_number",
+          "type": "integer",
+          "format": "int32",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "report_date",
+          "type": "string",
+          "format": "date",
+          "description": null,
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": null
+        },
+        {
+          "name": "weather",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "shift",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "site_summary",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "visitors",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "delays_issues",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "actions",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "string",
+          "format": "timestamp with time zone",
+          "description": null,
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "now()"
+        },
+        {
+          "name": "company_reporting_for",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "creator_name",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "creator_role",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "cover_photo_url",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "signature_url",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "branding_id",
+          "type": "string",
+          "format": "uuid",
+          "description": "Note:\nThis is a Foreign Key to `company_brandings.id`.<fk table='company_brandings' column='id'/>",
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "brand_color",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "brand_logo_url",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "equipment_hire",
+          "type": "jsonb",
+          "format": "jsonb",
+          "description": "Array of hire items: [{ description, supplier, quantity, status }]",
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": null
+        }
+      ],
+      "columnNames": [
+        "id",
+        "owner_id",
+        "project_id",
+        "report_number",
+        "report_date",
+        "weather",
+        "shift",
+        "site_summary",
+        "visitors",
+        "delays_issues",
+        "actions",
+        "created_at",
+        "company_reporting_for",
+        "creator_name",
+        "creator_role",
+        "cover_photo_url",
+        "signature_url",
+        "branding_id",
+        "brand_color",
+        "brand_logo_url",
+        "equipment_hire"
+      ]
+    },
+    "report_labour": {
+      "required": [
+        "id",
+        "owner_id",
+        "report_id"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "string",
+          "format": "uuid",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "owner_id",
+          "type": "string",
+          "format": "uuid",
+          "description": null,
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "auth.uid()"
+        },
+        {
+          "name": "report_id",
+          "type": "string",
+          "format": "uuid",
+          "description": "Note:\nThis is a Foreign Key to `daily_reports.id`.<fk table='daily_reports' column='id'/>",
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": null
+        },
+        {
+          "name": "company",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "trade",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "count",
+          "type": "integer",
+          "format": "int32",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "hours",
+          "type": "number",
+          "format": "numeric",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "notes",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "sequence",
+          "type": "integer",
+          "format": "int32",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        }
+      ],
+      "columnNames": [
+        "id",
+        "owner_id",
+        "report_id",
+        "company",
+        "trade",
+        "count",
+        "hours",
+        "notes",
+        "sequence"
+      ]
+    },
+    "report_plant": {
+      "required": [
+        "id",
+        "owner_id",
+        "report_id"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "string",
+          "format": "uuid",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "owner_id",
+          "type": "string",
+          "format": "uuid",
+          "description": null,
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "auth.uid()"
+        },
+        {
+          "name": "report_id",
+          "type": "string",
+          "format": "uuid",
+          "description": "Note:\nThis is a Foreign Key to `daily_reports.id`.<fk table='daily_reports' column='id'/>",
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": null
+        },
+        {
+          "name": "item",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "ref",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "notes",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "sequence",
+          "type": "integer",
+          "format": "int32",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        }
+      ],
+      "columnNames": [
+        "id",
+        "owner_id",
+        "report_id",
+        "item",
+        "ref",
+        "status",
+        "notes",
+        "sequence"
+      ]
+    },
+    "report_photos": {
+      "required": [
+        "id",
+        "owner_id",
+        "report_id",
+        "url",
+        "created_at"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "string",
+          "format": "uuid",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "owner_id",
+          "type": "string",
+          "format": "uuid",
+          "description": null,
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "auth.uid()"
+        },
+        {
+          "name": "report_id",
+          "type": "string",
+          "format": "uuid",
+          "description": "Note:\nThis is a Foreign Key to `daily_reports.id`.<fk table='daily_reports' column='id'/>",
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": null
+        },
+        {
+          "name": "url",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": null
+        },
+        {
+          "name": "caption",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "location",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "category",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "sequence",
+          "type": "integer",
+          "format": "int32",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "string",
+          "format": "timestamp with time zone",
+          "description": null,
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "now()"
+        },
+        {
+          "name": "layout",
+          "type": "string",
+          "format": "text",
+          "description": "PDF layout tier: full (1/page), grid4 (2x2), grid6 (3x2)",
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": "grid4"
+        }
+      ],
+      "columnNames": [
+        "id",
+        "owner_id",
+        "report_id",
+        "url",
+        "caption",
+        "location",
+        "category",
+        "sequence",
+        "created_at",
+        "layout"
+      ]
+    },
+    "projects": {
+      "required": [
+        "id",
+        "owner_id",
+        "name",
+        "created_at"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "string",
+          "format": "uuid",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "owner_id",
+          "type": "string",
+          "format": "uuid",
+          "description": null,
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "auth.uid()"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": null
+        },
+        {
+          "name": "client_name",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "site_address",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "reference",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": "active"
+        },
+        {
+          "name": "logo_url",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "brand_color",
+          "type": "string",
+          "format": "text",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "string",
+          "format": "timestamp with time zone",
+          "description": null,
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "now()"
+        },
+        {
+          "name": "start_date",
+          "type": "string",
+          "format": "date",
+          "description": null,
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        }
+      ],
+      "columnNames": [
+        "id",
+        "owner_id",
+        "name",
+        "client_name",
+        "site_address",
+        "reference",
+        "status",
+        "logo_url",
+        "brand_color",
+        "created_at",
+        "start_date"
+      ]
+    }
+  },
+  "anonProbeDailyReports": {
+    "status": 206,
+    "statusText": "Partial Content",
+    "contentRange": "0-0/20",
+    "bodyPreview": "[{\"id\":\"224b01c8-ff2b-45fd-b594-f4a95df006f2\",\"owner_id\":\"e79ef391-4a45-446b-a6ad-b11c34f2b727\",\"project_id\":\"cb33e65d-2e32-4ff9-a4da-6f50085f7be9\",\"report_number\":null,\"report_date\":\"2026-06-29\",\"weather\":null,\"shift\":\"Day\",\"site_summary\":\"site set up\",\"visitors\":\"None\",\"delays_issues\":\"none\",\"actions\":\"none\",\"created_at\":\"2026-06-29T09:12:45.927504+00:00\",\"company_reporting_for\":null,\"creator_na"
+  },
+  "note": "OpenAPI describes exposed PostgREST columns. RLS policies and DB NOT NULL constraints require SQL (service role / Dashboard)."
+}
