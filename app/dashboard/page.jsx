@@ -8,7 +8,6 @@ import {
   premiumScopedCss,
   dashboardCardInteractionCss,
   ModuleHomeCard,
-  PrimaryCTA,
   BRAND_HEADER_SPACE,
 } from '@/lib/premium-ui'
 import { REPORT_THEME_LIST } from '@/lib/report-theme'
@@ -29,6 +28,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const load = async () => {
+      // Quietly load latest project for non-diary modules only — never shown on dashboard.
       const { data: proj } = await supabase
         .from('projects')
         .select('id, name, client_name, site_address')
@@ -50,7 +50,8 @@ export default function DashboardPage() {
   }
 
   const renderCard = (card, index, wrapClassName = 'premium-dash-card-wrap') => {
-    const disabled = !project
+    const isDiary = card.path === 'diary'
+    const disabled = isDiary ? false : !project
     return (
       <div
         key={card.path}
@@ -64,6 +65,10 @@ export default function DashboardPage() {
           accent={card.accent}
           disabled={disabled}
           onClick={() => {
+            if (isDiary) {
+              router.push('/dashboard/diary/setup')
+              return
+            }
             if (project?.id) router.push(`/dashboard/project/${project.id}/${card.path}`)
           }}
         />
@@ -83,28 +88,6 @@ export default function DashboardPage() {
           margin: '0 auto',
         }}
       >
-        {!project && (
-          <div
-            style={{
-              position: 'relative',
-              overflow: 'hidden',
-              textAlign: 'center',
-              padding: '24px 20px',
-              marginBottom: 16,
-              background: 'var(--plate)',
-              border: '1px solid var(--edge)',
-              borderRadius: '12px',
-              boxShadow: 'inset 0 1px 0 var(--edge-highlight)',
-            }}
-          >
-            <p style={{ margin: '8px 0 12px', color: 'var(--text)', fontWeight: 600, fontSize: 16 }}>Create your first project</p>
-            <p style={{ margin: '0 0 16px', fontSize: 16, lineHeight: 1.45, color: 'color-mix(in srgb, var(--text) 90%, var(--text-2))' }}>Add a site before opening reports.</p>
-            <PrimaryCTA onClick={() => router.push('/dashboard/new-project')} style={{ maxWidth: 280, margin: '0 auto' }}>
-              New project
-            </PrimaryCTA>
-          </div>
-        )}
-
         <div className="premium-dash-cards-grid" style={{ marginBottom: 0 }}>
           {REPORT_THEME_LIST.map((card, index) =>
             renderCard(

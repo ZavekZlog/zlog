@@ -44,6 +44,7 @@ import {
   createTodaysDiaryDraft,
   fetchOpenDraft,
 } from '@/lib/diary-draft'
+import { readReportSetupExtras } from '@/lib/report-setup'
 
 const SHIFT_OPTIONS = ['Day', 'Night', 'Weekend', 'Half day']
 
@@ -270,8 +271,12 @@ export default function SiteDiaryPage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const saveNavTimerRef = useRef(null)
+  const saveLockRef = useRef(false)
+  const completingRef = useRef(false)
   const [startBusy, setStartBusy] = useState(false)
   const [startError, setStartError] = useState('')
   const [openDraft, setOpenDraft] = useState(null)
@@ -314,6 +319,8 @@ export default function SiteDiaryPage() {
   const [brandingSelection, setBrandingSelection] = useState(null)
   const [carriedVisitors, setCarriedVisitors] = useState(false)
   const [carriedDelaysIssues, setCarriedDelaysIssues] = useState(false)
+  const [projectReference, setProjectReference] = useState('')
+  const [setupLogoPreview, setSetupLogoPreview] = useState(null)
 
   const openReportForm = useCallback((reportId) => {
     router.replace(`/dashboard/project/${projectId}/diary?report=${reportId}`)
@@ -388,6 +395,14 @@ export default function SiteDiaryPage() {
     if (!editingReportId) return
     let cancelled = false
     const load = async () => {
+      // TEMP DIAGNOSTIC — remove after save-path fix verified
+      console.log('[diary:load] start', {
+        editingReportId,
+        projectId,
+        justSaved,
+        completing: completingRef.current,
+        saveLocked: saveLockRef.current,
+      })
       setLoading(true)
       setError('')
       setPrefilledFromLast(false)
@@ -421,6 +436,8 @@ export default function SiteDiaryPage() {
         setCompanyReportingFor('')
         setCreatorName('')
         setCreatorRole('')
+        setProjectReference('')
+        setSetupLogoPreview(null)
         setLabourRows([emptyLabour()])
         setPlantRows([emptyPlant()])
         setEquipmentHireRows([emptyEquipmentHire()])
@@ -456,12 +473,22 @@ export default function SiteDiaryPage() {
           .eq('project_id', projectId)
           .maybeSingle()
 
-        if (cancelled) return
+        if (cancelled) {
+          console.log('[diary:load] cancelled after fetch', { editingReportId })
+          return
+        }
 
         if (existingError || !existing) {
+          console.log('[diary:load] not found / error', { existingError, editingReportId })
           setError(existingError?.message || 'Diary entry not found')
           return
         }
+        console.log('[diary:load] loaded from DB', {
+          id: existing.id,
+          site_summary: existing.site_summary,
+          report_date: existing.report_date,
+          updated_at: existing.updated_at,
+        })
 
         let labour
         let plant
@@ -497,6 +524,17 @@ export default function SiteDiaryPage() {
         setCompanyReportingFor(existing.company_reporting_for || '')
         setCreatorName(existing.creator_name || '')
         setCreatorRole(existing.creator_role || '')
+        {
+          const extras = readReportSetupExtras(existing.id)
+          setProjectReference(extras?.projectReference || '')
+          const logoPath = existing.brand_logo_url || null
+          if (logoPath) {
+            const preview = await signedUrlForPath(supabase, logoPath)
+            if (!cancelled) setSetupLogoPreview(preview)
+          } else {
+            setSetupLogoPreview(null)
+          }
+        }
         setEquipmentHireRows(equipmentHireFromDb(existing.equipment_hire))
         if (existing.branding_id || existing.brand_color || existing.brand_logo_url) {
           setBrandingSelection({
@@ -901,7 +939,7 @@ export default function SiteDiaryPage() {
   const handleProjectChange = (newId) => {
     if (newId && newId !== projectId) {
       let query = ''
-      if (editingReportId) query = ''
+      if (editingReportId) query = `?report=${editingReportId}`
       else if (duplicateReportId) query = `?duplicate=${duplicateReportId}`
       else if (prefillLast) query = '?prefill=last'
       router.push(`/dashboard/project/${newId}/diary${query}`)
@@ -963,8 +1001,30 @@ export default function SiteDiaryPage() {
   }
 
   const handleSave = async (e) => {
-    e.preventDefault()
+    e?.preventDefault?.()
+    e?.stopPropagation?.()
+    // TEMP DIAGNOSTIC — remove after save-path fix verified
+    console.log('[diary:save] 1 clicked', {
+      eventType: e?.type,
+      editingReportId,
+      projectId,
+      saveLocked: saveLockRef.current,
+      justSaved,
+      completing: completingRef.current,
+      siteSummaryLen: siteSummary.trim().length,
+    })
+    // Ref lock blocks double-submit from click + form submit before React re-renders.
+    if (saveLockRef.current || justSaved || completingRef.current) {
+      console.log('[diary:save] 1b EARLY RETURN — lock/justSaved/completing', {
+        saveLocked: saveLockRef.current,
+        justSaved,
+        completing: completingRef.current,
+      })
+      return
+    }
+
     if (!siteSummary.trim()) {
+      console.log('[diary:save] 1c EARLY RETURN — site summary required')
       setError('Site summary is required')
       return
     }
@@ -972,6 +1032,7 @@ export default function SiteDiaryPage() {
     const missingDescriptions = photosMissingDescription(locationWalk)
     if (missingDescriptions.length > 0) {
       const n = missingDescriptions.length
+      console.log('[diary:save] 1d EARLY RETURN — photos missing descriptions', { n })
       setError(
         n === 1
           ? '1 photo still needs a description.'
@@ -981,14 +1042,27 @@ export default function SiteDiaryPage() {
       return
     }
 
+    saveLockRef.current = true
     setSaving(true)
+    setJustSaved(false)
     setError('')
     setSuccess('')
+    console.log('[diary:save] 2 lock acquired, saving=true')
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setError('You must be signed in to save a report')
+    const failSave = (message) => {
+      console.log('[diary:save] FAIL', { message, editingReportId })
+      saveLockRef.current = false
+      completingRef.current = false
       setSaving(false)
+      setJustSaved(false)
+      if (message) setError(message)
+    }
+
+    try {
+    const { data: { user } } = await supabase.auth.getUser()
+    console.log('[diary:save] 3 auth', { userId: user?.id || null })
+    if (!user) {
+      failSave('You must be signed in to save a report')
       return
     }
 
@@ -999,12 +1073,12 @@ export default function SiteDiaryPage() {
     if (coverPhoto?.file) {
       const ext = coverPhoto.file.name.split('.').pop()?.toLowerCase() || 'jpg'
       const coverPath = `${user.id}/pending/${pendingId}/cover.${ext}`
+      console.log('[diary:save] 4 uploading cover', { coverPath })
       const { error: coverUploadError } = await supabase.storage
         .from('site-photos')
         .upload(coverPath, coverPhoto.file, { contentType: coverPhoto.file.type, upsert: false })
       if (coverUploadError) {
-        setError(`Cover photo upload failed: ${coverUploadError.message}`)
-        setSaving(false)
+        failSave(`Cover photo upload failed: ${coverUploadError.message}`)
         return
       }
       coverPhotoUrl = coverPath
@@ -1012,12 +1086,12 @@ export default function SiteDiaryPage() {
 
     if (signature?.file) {
       const signaturePath = `${user.id}/pending/${pendingId}/signature.png`
+      console.log('[diary:save] 5 uploading signature', { signaturePath })
       const { error: signatureUploadError } = await supabase.storage
         .from('site-photos')
         .upload(signaturePath, signature.file, { contentType: signature.file.type, upsert: false })
       if (signatureUploadError) {
-        setError(`Signature upload failed: ${signatureUploadError.message}`)
-        setSaving(false)
+        failSave(`Signature upload failed: ${signatureUploadError.message}`)
         return
       }
       signatureUrl = signaturePath
@@ -1044,6 +1118,11 @@ export default function SiteDiaryPage() {
 
     let report = null
     if (editingReportId) {
+      console.log('[diary:save] 6 UPDATE path', {
+        diaryId: editingReportId,
+        projectId,
+        site_summary: reportPayload.site_summary,
+      })
       const { data, error: reportError } = await supabase
         .from('daily_reports')
         .update(reportPayload)
@@ -1052,25 +1131,34 @@ export default function SiteDiaryPage() {
         .select('id')
         .single()
 
+      console.log('[diary:save] 6b UPDATE result', {
+        data,
+        error: reportError,
+        diaryIdUsed: editingReportId,
+      })
       if (reportError || !data) {
-        setError(reportError?.message || 'Failed to update report')
-        setSaving(false)
+        failSave(reportError?.message || 'Failed to update report')
         return
       }
       report = data
 
       await supabase.from('report_labour').delete().eq('report_id', report.id)
       await supabase.from('report_plant').delete().eq('report_id', report.id)
+      console.log('[diary:save] 7 labour/plant cleared for update', { reportId: report.id })
     } else {
+      console.log('[diary:save] 6 INSERT path (no editingReportId)', {
+        projectId,
+        site_summary: reportPayload.site_summary,
+      })
       const { data, error: reportError } = await supabase
         .from('daily_reports')
         .insert(reportPayload)
         .select('id')
         .single()
 
+      console.log('[diary:save] 6b INSERT result', { data, error: reportError })
       if (reportError || !data) {
-        setError(reportError?.message || 'Failed to create report')
-        setSaving(false)
+        failSave(reportError?.message || 'Failed to create report')
         return
       }
       report = data
@@ -1089,10 +1177,10 @@ export default function SiteDiaryPage() {
       }))
 
     if (labourPayload.length > 0) {
+      console.log('[diary:save] 8 insert labour', { count: labourPayload.length })
       const { error: labourError } = await supabase.from('report_labour').insert(labourPayload)
       if (labourError) {
-        setError(labourError.message)
-        setSaving(false)
+        failSave(labourError.message)
         return
       }
     }
@@ -1109,10 +1197,10 @@ export default function SiteDiaryPage() {
       }))
 
     if (plantPayload.length > 0) {
+      console.log('[diary:save] 9 insert plant', { count: plantPayload.length })
       const { error: plantError } = await supabase.from('report_plant').insert(plantPayload)
       if (plantError) {
-        setError(plantError.message)
-        setSaving(false)
+        failSave(plantError.message)
         return
       }
     }
@@ -1130,13 +1218,13 @@ export default function SiteDiaryPage() {
 
       const toRemove = (existingPhotoRows || []).filter((row) => !keptStoragePaths.includes(row.url))
       if (toRemove.length > 0) {
+        console.log('[diary:save] 10 remove photos', { count: toRemove.length })
         const { error: deletePhotosError } = await supabase
           .from('report_photos')
           .delete()
           .in('id', toRemove.map((row) => row.id))
         if (deletePhotosError) {
-          setError(deletePhotosError.message)
-          setSaving(false)
+          failSave(deletePhotosError.message)
           return
         }
       }
@@ -1159,8 +1247,7 @@ export default function SiteDiaryPage() {
             overlayPath = null
           }
         } catch (overlayErr) {
-          setError(`Annotation overlay upload failed: ${overlayErr?.message || 'unknown error'}`)
-          setSaving(false)
+          failSave(`Annotation overlay upload failed: ${overlayErr?.message || 'unknown error'}`)
           return
         }
       }
@@ -1177,8 +1264,7 @@ export default function SiteDiaryPage() {
           .upload(storagePath, photo.file, { contentType: photo.file.type, upsert: false })
 
         if (uploadError) {
-          setError(`Photo upload failed: ${uploadError.message}`)
-          setSaving(false)
+          failSave(`Photo upload failed: ${uploadError.message}`)
           return
         }
 
@@ -1221,6 +1307,7 @@ export default function SiteDiaryPage() {
     }
 
     if (photoRecords.length > 0) {
+      console.log('[diary:save] 11 insert photo records', { count: photoRecords.length })
       const { error: photosError } = await supabase.from('report_photos').insert(photoRecords)
       if (photosError) {
         // Retry without annotation columns if migration not applied yet
@@ -1231,22 +1318,52 @@ export default function SiteDiaryPage() {
           })
           const { error: retryError } = await supabase.from('report_photos').insert(stripped)
           if (retryError) {
-            setError(retryError.message)
-            setSaving(false)
+            failSave(retryError.message)
             return
           }
         } else {
-          setError(photosError.message)
-          setSaving(false)
+          failSave(photosError.message)
           return
         }
       }
     }
 
-    setSuccess(editingReportId ? 'Site diary updated successfully' : 'Site diary saved successfully')
+    if (!report?.id) {
+      failSave('Save finished but the report id was missing. Please try again.')
+      return
+    }
+
+    // Handoff to Report Complete — same save path, no second save.
+    completingRef.current = true
     setSaving(false)
-    setTimeout(() => router.push(`/dashboard/project/${projectId}`), 800)
+    setJustSaved(true)
+    setSuccess('')
+    const savedReportId = report.id
+    const completeHref = `/dashboard/project/${projectId}/diary/complete?report=${savedReportId}`
+    console.log('[diary:save] 12 SUCCESS — scheduling complete nav', {
+      savedReportId,
+      editingReportId,
+      mode: editingReportId ? 'update' : 'insert',
+      completeHref,
+    })
+    if (saveNavTimerRef.current) clearTimeout(saveNavTimerRef.current)
+    saveNavTimerRef.current = setTimeout(() => {
+      console.log('[diary:save] 13 navigating to complete', { completeHref })
+      router.replace(completeHref)
+    }, 1500)
+    } catch (err) {
+      console.log('[diary:save] UNCAUGHT', err)
+      failSave(err?.message || 'Save failed unexpectedly')
+    }
   }
+
+  useEffect(() => {
+    return () => {
+      // Do not cancel an in-flight handoff to Report Complete (Strict Mode / remount).
+      if (completingRef.current) return
+      if (saveNavTimerRef.current) clearTimeout(saveNavTimerRef.current)
+    }
+  }, [])
 
   if (loading) {
     return (
@@ -1396,7 +1513,74 @@ export default function SiteDiaryPage() {
         </div>
       )}
 
-      <form onSubmit={handleSave}>
+      {(project?.name || creatorName || companyReportingFor || reportDate) && (
+        <div
+          style={{
+            background: 'var(--plate)',
+            border: '1px solid var(--edge)',
+            borderRadius: 12,
+            padding: '14px 16px',
+            marginBottom: 16,
+            boxShadow: 'inset 0 1px 0 var(--edge-highlight)',
+          }}
+        >
+          <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+            {setupLogoPreview ? (
+              <img
+                src={setupLogoPreview}
+                alt=""
+                style={{
+                  width: 48,
+                  height: 48,
+                  objectFit: 'contain',
+                  borderRadius: 8,
+                  background: 'color-mix(in srgb, var(--ink) 40%, var(--plate))',
+                  border: '1px solid var(--edge)',
+                  flexShrink: 0,
+                  padding: 4,
+                }}
+              />
+            ) : null}
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3 }}>
+                {project?.name || 'Project'}
+              </p>
+              <p style={{ margin: '6px 0 0', fontSize: 14, color: 'color-mix(in srgb, var(--text) 82%, var(--text-2))', lineHeight: 1.45 }}>
+                {[
+                  creatorName && `Author: ${creatorName}`,
+                  companyReportingFor && `On behalf of: ${companyReportingFor}`,
+                  reportDate &&
+                    new Date(`${reportDate}T12:00:00`).toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    }),
+                  projectReference && `Ref: ${projectReference}`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            </div>
+          </div>
+          <SecondaryButton
+            type="button"
+            href={`/dashboard/diary/setup?report=${editingReportId}&project=${projectId}`}
+            style={{ width: '100%', minHeight: 48, marginTop: 12 }}
+          >
+            Edit Report Details
+          </SecondaryButton>
+        </div>
+      )}
+
+      <form
+        method="post"
+        onSubmit={(e) => {
+          // Prevent native GET/POST navigation that remounts the page and aborts async save.
+          e.preventDefault()
+          console.log('[diary:save] form onSubmit')
+          handleSave(e)
+        }}
+      >
         <BrandingSelector
           value={brandingSelection}
           onChange={setBrandingSelection}
@@ -1917,9 +2101,65 @@ export default function SiteDiaryPage() {
           onContinueToSignature={continueToSignature}
         />
 
-        <PrimaryCTA type="submit" disabled={saving} accent={REPORT_THEMES.diary.accent}>
-          {saving ? 'Saving…' : (editingReportId ? 'Save changes' : 'Save site diary')}
+        <PrimaryCTA
+          type="button"
+          onClick={(e) => {
+            console.log('[diary:save] button onClick')
+            handleSave(e)
+          }}
+          disabled={saving || justSaved}
+          accent={REPORT_THEMES.diary.accent}
+          style={
+            justSaved
+              ? {
+                  border: '1px solid color-mix(in srgb, #22c55e, var(--ink) 45%)',
+                  background:
+                    'linear-gradient(180deg, color-mix(in srgb, #22c55e, var(--text) 14%) 0%, #16a34a 42%, color-mix(in srgb, #15803d, var(--ink) 18%) 100%)',
+                  boxShadow: 'inset 0 1px 0 color-mix(in srgb, var(--text), transparent 78%)',
+                  cursor: 'default',
+                  opacity: 1,
+                }
+              : undefined
+          }
+        >
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+            }}
+          >
+            {saving ? (
+              <>
+                <span
+                  aria-hidden
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: '50%',
+                    border: '2px solid color-mix(in srgb, var(--text) 30%, transparent)',
+                    borderTopColor: 'var(--text)',
+                    animation: 'zlog-save-spin 0.7s linear infinite',
+                    flexShrink: 0,
+                  }}
+                />
+                Saving...
+              </>
+            ) : justSaved ? (
+              '✓ Saved'
+            ) : editingReportId ? (
+              'Save Changes'
+            ) : (
+              'Save site diary'
+            )}
+          </span>
         </PrimaryCTA>
+        <style>{`
+          @keyframes zlog-save-spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
       </form>
 
       <h2
