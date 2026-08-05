@@ -108,7 +108,7 @@ export default function SiteDiaryReportCompletePage() {
             maxWidth: 340,
           }}
         >
-          Your Site Diary has been securely saved.
+          Your Site Diary has been securely saved and is ready to share.
         </p>
       </div>
 
@@ -135,7 +135,7 @@ export default function SiteDiaryReportCompletePage() {
           onClick={() => router.push('/dashboard')}
           style={{ ...fullWidthBtn, marginBottom: 0 }}
         >
-          Create Another Report
+          Start Another Site Diary
         </SecondaryButton>
 
         {shareMessage ? (

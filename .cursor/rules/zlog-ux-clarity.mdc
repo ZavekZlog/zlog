@@ -1,0 +1,58 @@
+---
+description: Zlog UX clarity — where am I, what am I doing, what next
+alwaysApply: true
+---
+
+# Zlog UX clarity principle
+
+Every screen must answer three questions immediately, without the user needing to think:
+
+1. **Where am I? / What am I doing?**
+2. **Why am I here?**
+3. **What do I do next?**
+
+Assume the user is a busy Site Manager — distracted, on site, and unfamiliar with software jargon.
+
+## Must
+
+- Use plain construction language (today’s diary, latest diary, new diary)
+- Explain the **benefit** of each action
+- Optimise for speed, clarity, and confidence
+- State the workflow explicitly; never expect the user to infer the next step
+- Keep technical detail in code comments, logs, and developer docs — not in the UI
+
+## Must not
+
+- Database or developer language in the UI (`report id`, `UPDATE`, `INSERT`, `existing report`, UUID dumps)
+- Dead-end states (error that saving cannot succeed while the primary button still looks like Save)
+- Software-speak a Site Manager would not use on a toolbox talk
+
+## Copy pattern
+
+| Question | Put it in |
+|----------|-----------|
+| What am I doing? | Page title / top banner |
+| Why am I here? | One short supporting sentence |
+| What do I do next? | Primary button label + optional helper |
+
+## Examples
+
+```text
+❌ Continue / Edit Existing Report
+✅ Open Latest Diary
+
+❌ Uses the existing report ID (UPDATE only).
+✅ Open your latest Site Diary to continue today's work or use it as the starting point for today's report.
+
+❌ Save Changes
+✅ Save Site Diary
+
+❌ You must be signed in to save a report
+✅ Your sign-in has timed out. Sign in again to keep editing, then save your work.
+```
+
+## Scope notes
+
+- Do not redesign the locked landing page unless explicitly asked
+- Prefer copy fixes over new chrome, modals, or layout rewrites
+- Preserve working save / routing behaviour; change only user-facing language

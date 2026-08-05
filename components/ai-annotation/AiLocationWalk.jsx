@@ -881,9 +881,12 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
             background: 'var(--plate)',
           }}
         >
-          <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)', marginBottom: 12 }}>
-            ✓ Area Saved
+          <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)', marginBottom: 6 }}>
+            ✓ Area saved.
           </div>
+          <p style={{ margin: '0 0 12px', fontSize: 14, lineHeight: 1.45, color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))' }}>
+            Add another area or continue your report.
+          </p>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
             {lastSaved.name}
           </div>

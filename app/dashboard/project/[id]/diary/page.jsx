@@ -279,9 +279,9 @@ export default function SiteDiaryPage() {
   const saveCtaRef = useRef(null)
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
+  const [showSaveBanner, setShowSaveBanner] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
   const saveNavTimerRef = useRef(null)
   const saveLockRef = useRef(false)
   const completingRef = useRef(false)
@@ -292,6 +292,7 @@ export default function SiteDiaryPage() {
     completingRef.current = false
     setSaving(false)
     setJustSaved(false)
+    setShowSaveBanner(false)
   }, [editingReportId])
 
   // Detect session loss while editing — recover via Sign in CTA (do not leave Save enabled).
@@ -308,7 +309,7 @@ export default function SiteDiaryPage() {
       setSessionExpired(true)
       setSaving(false)
       setJustSaved(false)
-      setSuccess('')
+      setShowSaveBanner(false)
       setError(SESSION_EXPIRED_SAVE_MESSAGE)
       saveLockRef.current = false
       completingRef.current = false
@@ -1071,6 +1072,33 @@ export default function SiteDiaryPage() {
     window.location.assign(loginUrlWithReturn(path))
   }
 
+  const friendlyDiarySaveError = (err) => {
+    switch (err?.code) {
+      case 'MISSING_REPORT_ID':
+        return 'We couldn’t save your Site Diary because it wasn’t opened correctly. Go back to Site Diary and choose Open Latest Diary or Start New Site Diary.'
+      case 'MISSING_PROJECT_ID':
+        return 'We couldn’t save your Site Diary because it isn’t linked to a project. Go back to Site Diary and open it again.'
+      case 'PREFLIGHT_FAILED':
+      case 'PREFLIGHT_ZERO_ROWS':
+      case 'ID_MISMATCH':
+      case 'UPDATE_ZERO_ROWS':
+      case 'UPDATE_FAILED':
+      case 'VERIFY_SELECT_FAILED':
+      case 'VERIFY_MISMATCH':
+        return 'We couldn’t save your Site Diary. Check your connection and try again.'
+      case 'LABOUR_DELETE_FAILED':
+      case 'LABOUR_INSERT_FAILED':
+      case 'PLANT_DELETE_FAILED':
+      case 'PLANT_INSERT_FAILED':
+      case 'PHOTOS_LIST_FAILED':
+      case 'PHOTOS_DELETE_FAILED':
+      case 'PHOTOS_INSERT_FAILED':
+        return 'We couldn’t save all of your Site Diary. Check your connection and try again.'
+      default:
+        return 'We couldn’t save your Site Diary. Check your connection and try again.'
+    }
+  }
+
   const markSessionExpired = () => {
     diarySaveLog('session expired')
     saveLockRef.current = false
@@ -1079,7 +1107,7 @@ export default function SiteDiaryPage() {
       setSessionExpired(true)
       setSaving(false)
       setJustSaved(false)
-      setSuccess('')
+      setShowSaveBanner(false)
       setError(SESSION_EXPIRED_SAVE_MESSAGE)
     })
     saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
@@ -1122,8 +1150,8 @@ export default function SiteDiaryPage() {
     flushSync(() => {
       setSaving(true)
       setJustSaved(false)
+      setShowSaveBanner(false)
       setError('')
-      setSuccess('')
     })
 
     const failSave = (message) => {
@@ -1133,7 +1161,7 @@ export default function SiteDiaryPage() {
       flushSync(() => {
         setSaving(false)
         setJustSaved(false)
-        setSuccess('')
+        setShowSaveBanner(false)
         setError(message)
       })
       saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
@@ -1141,12 +1169,12 @@ export default function SiteDiaryPage() {
 
     try {
       if (!editingReportId) {
-        failSave('Cannot save: this diary has no report id. Open it from setup or Recent entries.')
+        failSave('We couldn’t save your Site Diary because it wasn’t opened correctly. Go back to Site Diary and choose Open Latest Diary or Start New Site Diary.')
         return
       }
 
       if (!siteSummary.trim()) {
-        failSave('Site summary is required')
+        failSave('Add a short site summary, then tap Save Site Diary.')
         return
       }
 
@@ -1155,8 +1183,8 @@ export default function SiteDiaryPage() {
         const n = missingDescriptions.length
         failSave(
           n === 1
-            ? '1 photo still needs a description.'
-            : `${n} photos still need descriptions.`,
+            ? '1 photo still needs a description. Add it, then tap Save Site Diary.'
+            : `${n} photos still need descriptions. Add them, then tap Save Site Diary.`,
         )
         locationWalkRef.current?.openFirstIncompletePhoto?.()
         return
@@ -1183,7 +1211,7 @@ export default function SiteDiaryPage() {
           .from('site-photos')
           .upload(coverPath, coverPhoto.file, { contentType: coverPhoto.file.type, upsert: false })
         if (coverUploadError) {
-          failSave(`Cover photo upload failed: ${coverUploadError.message}`)
+          failSave('We couldn’t upload the cover photo. Check your connection and try Save Site Diary again.')
           return
         }
         coverPhotoUrl = coverPath
@@ -1195,7 +1223,7 @@ export default function SiteDiaryPage() {
           .from('site-photos')
           .upload(signaturePath, signature.file, { contentType: signature.file.type, upsert: false })
         if (signatureUploadError) {
-          failSave(`Signature upload failed: ${signatureUploadError.message}`)
+          failSave('We couldn’t upload the signature. Check your connection and try Save Site Diary again.')
           return
         }
         signatureUrl = signaturePath
@@ -1265,7 +1293,7 @@ export default function SiteDiaryPage() {
               overlayPath = null
             }
           } catch (overlayErr) {
-            failSave(`Annotation overlay upload failed: ${overlayErr?.message || 'unknown error'}`)
+            failSave('We couldn’t upload photo mark-ups. Check your connection and try Save Site Diary again.')
             return
           }
         }
@@ -1281,7 +1309,7 @@ export default function SiteDiaryPage() {
             .upload(storagePath, photo.file, { contentType: photo.file.type, upsert: false })
 
           if (uploadError) {
-            failSave(`Photo upload failed: ${uploadError.message}`)
+            failSave('We couldn’t upload a photo. Check your connection and try Save Site Diary again.')
             return
           }
 
@@ -1322,15 +1350,16 @@ export default function SiteDiaryPage() {
       })
 
       if (!saved?.id || saved.id !== editingReportId) {
-        failSave('Save finished but the report id did not match. No INSERT performed.')
+        failSave('We couldn’t save your Site Diary. Check your connection and try again.')
         return
       }
 
+      // Button confirmation + non-blocking green banner (~3s), then Report Complete.
       completingRef.current = true
       flushSync(() => {
         setSaving(false)
         setJustSaved(true)
-        setSuccess('Saved')
+        setShowSaveBanner(true)
       })
       saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
       diarySaveLog('success', { reportId: saved.id })
@@ -1338,12 +1367,12 @@ export default function SiteDiaryPage() {
       if (saveNavTimerRef.current) clearTimeout(saveNavTimerRef.current)
       saveNavTimerRef.current = setTimeout(() => {
         router.replace(`/dashboard/project/${projectId}/diary/complete?report=${saved.id}`)
-      }, 2000)
+      }, 3000)
     } catch (err) {
       const message =
         err instanceof DiarySaveError
-          ? err.message
-          : err?.message || 'Save failed unexpectedly'
+          ? friendlyDiarySaveError(err)
+          : 'We couldn’t save your Site Diary. Check your connection and try again.'
       failSave(message)
     }
   }
@@ -1506,17 +1535,46 @@ export default function SiteDiaryPage() {
           {error}
         </div>
       )}
-      {success && (
-        <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', color: '#4ade80', padding: '12px 14px', fontSize: 14, marginBottom: 16, borderRadius: 10 }}>
-          {success}
+      {showSaveBanner && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            top: 18,
+            left: '50%',
+            zIndex: 80,
+            width: 'min(440px, calc(100vw - 32px))',
+            marginLeft: 0,
+            transform: 'translateX(-50%)',
+            pointerEvents: 'none',
+            padding: '12px 16px',
+            fontSize: 14,
+            lineHeight: 1.45,
+            borderRadius: 10,
+            textAlign: 'center',
+            fontWeight: 600,
+            background: 'rgba(34,197,94,0.14)',
+            border: '1px solid rgba(34,197,94,0.38)',
+            color: '#4ade80',
+            boxShadow: '0 10px 28px color-mix(in srgb, var(--ink) 35%, transparent)',
+            animation: 'zlog-save-banner 3s ease forwards',
+          }}
+        >
+          ✓ Your Site Diary has been saved.
         </div>
       )}
       {editingReportId && (
-        <div style={{ background: `rgba(${DIARY_ACCENT}, 0.08)`, border: `1px solid rgba(${DIARY_ACCENT}, 0.25)`, color: '#F0EDE8', padding: '12px 14px', fontSize: 13, marginBottom: 16, borderRadius: 10, lineHeight: 1.5 }}>
-          Editing an existing diary entry. Saving updates this record.
-          <div style={{ marginTop: 6, fontFamily: 'ui-monospace, monospace', fontSize: 12, opacity: 0.9 }}>
-            report id: {editingReportId}
-          </div>
+        <div style={{ background: `rgba(${DIARY_ACCENT}, 0.08)`, border: `1px solid rgba(${DIARY_ACCENT}, 0.25)`, color: '#F0EDE8', padding: '12px 14px', fontSize: 14, marginBottom: 16, borderRadius: 10, lineHeight: 1.5 }}>
+          You’re editing today’s Site Diary
+          {project?.name ? (
+            <>
+              {' '}
+              for{' '}
+              <strong style={{ fontWeight: 700, color: 'var(--text)' }}>{project.name}</strong>
+            </>
+          ) : null}
+          . Fill in the sections below, then tap <strong>Save Site Diary</strong> when you’re ready.
         </div>
       )}
 
@@ -2112,7 +2170,7 @@ export default function SiteDiaryPage() {
         />
 
         <div ref={saveCtaRef} style={{ marginTop: 8 }}>
-          {(error || success) && (
+          {error && (
             <div
               role="status"
               aria-live="polite"
@@ -2123,20 +2181,12 @@ export default function SiteDiaryPage() {
                 lineHeight: 1.45,
                 borderRadius: 10,
                 whiteSpace: 'pre-line',
-                ...(error
-                  ? {
-                      background: 'rgba(220,50,50,0.1)',
-                      border: '1px solid rgba(220,50,50,0.3)',
-                      color: '#ff6b6b',
-                    }
-                  : {
-                      background: 'rgba(34,197,94,0.1)',
-                      border: '1px solid rgba(34,197,94,0.3)',
-                      color: '#4ade80',
-                    }),
+                background: 'rgba(220,50,50,0.1)',
+                border: '1px solid rgba(220,50,50,0.3)',
+                color: '#ff6b6b',
               }}
             >
-              {error || success}
+              {error}
             </div>
           )}
           <PrimaryCTA
@@ -2176,7 +2226,7 @@ export default function SiteDiaryPage() {
               }}
             >
               {sessionExpired ? (
-                'Sign in to Save'
+                'Sign in to save your work'
               ) : saving ? (
                 <>
                   <span
@@ -2191,14 +2241,12 @@ export default function SiteDiaryPage() {
                       flexShrink: 0,
                     }}
                   />
-                  Saving...
+                  Saving…
                 </>
               ) : justSaved ? (
-                '✓ Saved'
-              ) : editingReportId ? (
-                'Save Changes'
+                '✓ Site Diary Saved'
               ) : (
-                'Save site diary'
+                'Save Site Diary'
               )}
             </span>
           </PrimaryCTA>
@@ -2206,6 +2254,12 @@ export default function SiteDiaryPage() {
         <style>{`
           @keyframes zlog-save-spin {
             to { transform: rotate(360deg); }
+          }
+          @keyframes zlog-save-banner {
+            0% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+            12% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            78% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-4px); }
           }
         `}</style>
       </form>

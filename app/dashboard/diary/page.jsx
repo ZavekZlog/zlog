@@ -2,12 +2,8 @@
 
 /**
  * Site Diary entry hub — same on all devices.
- * A) Continue / Edit Existing Report → open exact ?report= id
- * B) Start New Report → setup (project selection)
- *
- * Dashboard "Site Diary" previously jumped straight to setup (project names only),
- * while /dashboard/project/[id]/diary showed draft/recent choices — that caused
- * phone vs laptop inconsistency when each device used a different entry link.
+ * A) Open Latest Diary → pick a recent diary and continue it
+ * B) Start New Report → setup (choose/create project)
  */
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
@@ -50,7 +46,7 @@ function SiteDiaryEntryPage() {
   const [reports, setReports] = useState([])
 
   const title = useMemo(() => {
-    if (mode === 'edit') return 'Continue / Edit Existing Report'
+    if (mode === 'edit') return 'Open Latest Diary'
     if (mode === 'new') return 'Start New Report'
     return 'Site Diary'
   }, [mode])
@@ -77,7 +73,9 @@ function SiteDiaryEntryPage() {
         if (qErr) throw qErr
         if (!cancelled) setReports(data || [])
       } catch (err) {
-        if (!cancelled) setError(err?.message || 'Could not load existing reports')
+        if (!cancelled) {
+          setError('We couldn’t load your latest diaries. Check your connection and try again.')
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -90,7 +88,7 @@ function SiteDiaryEntryPage() {
 
   const openExistingReport = (row) => {
     if (!row?.id || !row?.project_id) {
-      setError('That report is missing an id or project id and cannot be opened for edit.')
+      setError('That diary can’t be opened. Try another one, or start a new Site Diary.')
       return
     }
     // Exact existing report — never create a new row here.
@@ -137,24 +135,24 @@ function SiteDiaryEntryPage() {
               color: 'color-mix(in srgb, var(--text) 90%, var(--text-2))',
             }}
           >
-            Choose whether to edit an existing report or start a new one. Saved projects are not previous diaries.
+            Choose whether to open your latest Site Diary or start a new one.
           </p>
 
-          <GlassSection title="A. Continue / Edit Existing Report" accent={DIARY_ACCENT}>
+          <GlassSection title="Open Latest Diary" accent={DIARY_ACCENT}>
             <p style={{ margin: '0 0 14px', fontSize: 14, lineHeight: 1.5, color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))' }}>
-              Open a saved diary by project, date and shift. Uses the existing report ID (UPDATE only).
+              Open your latest Site Diary to continue today's work or use it as the starting point for today's report.
             </p>
             <PrimaryCTA type="button" accent={DIARY_ACCENT} onClick={() => setMode('edit')}>
-              Continue / Edit Existing Report
+              Open Latest Diary
             </PrimaryCTA>
           </GlassSection>
 
-          <GlassSection title="B. Start New Report" accent={DIARY_ACCENT}>
+          <GlassSection title="Start New Report" accent={DIARY_ACCENT}>
             <p style={{ margin: '0 0 14px', fontSize: 14, lineHeight: 1.5, color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))' }}>
-              Choose or create a project, then open a new diary draft.
+              Start a new Site Diary for a different project or a completely new report.
             </p>
             <SecondaryButton type="button" onClick={startNewReport}>
-              Start New Report
+              Start New Site Diary
             </SecondaryButton>
           </GlassSection>
         </>
@@ -170,17 +168,19 @@ function SiteDiaryEntryPage() {
               color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
             }}
           >
-            Existing reports{filterProjectId ? ' for this project' : ''}. Selecting one opens that exact report ID.
+            {filterProjectId
+              ? 'Choose your latest Site Diary for this project. Tap one to open it and update it for today.'
+              : 'Choose your latest Site Diary below. Tap one to open it and update it for today.'}
           </p>
 
-          {loading && <p style={{ color: 'var(--text-2)' }}>Loading reports…</p>}
+          {loading && <p style={{ color: 'var(--text-2)' }}>Loading your latest diaries…</p>}
 
           {!loading && reports.length === 0 && (
-            <div style={{ padding: '24px 0', color: 'var(--text-2)', fontSize: 14 }}>
-              No existing reports found.
+            <div style={{ padding: '24px 0', color: 'var(--text-2)', fontSize: 14, lineHeight: 1.5 }}>
+              No Site Diaries yet{filterProjectId ? ' for this project' : ''}.
               <div style={{ marginTop: 14 }}>
                 <SecondaryButton type="button" onClick={startNewReport}>
-                  Start New Report instead
+                  Start New Site Diary
                 </SecondaryButton>
               </div>
             </div>
@@ -190,30 +190,36 @@ function SiteDiaryEntryPage() {
             reports.map((row) => {
               const projectName = row.projects?.name || 'Project'
               const shift = row.shift || '—'
+              const summary = (row.site_summary || '').trim()
               return (
                 <RecentEntryCard key={row.id} accent={DIARY_ACCENT}>
                   <div style={recentEntryDateStyle}>{projectName}</div>
                   <div style={recentEntrySummaryStyle}>
                     {formatReportDate(row.report_date)} · Shift: {shift}
                   </div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      fontFamily: 'ui-monospace, monospace',
-                      opacity: 0.75,
-                      marginBottom: 10,
-                      wordBreak: 'break-all',
-                    }}
-                  >
-                    report id: {row.id}
-                  </div>
+                  {summary ? (
+                    <div
+                      style={{
+                        fontSize: 13,
+                        lineHeight: 1.45,
+                        opacity: 0.85,
+                        marginBottom: 10,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {summary}
+                    </div>
+                  ) : null}
                   <div style={recentEntryActionsStyle}>
                     <SecondaryButton
                       type="button"
                       onClick={() => openExistingReport(row)}
                       style={recentEntryActionButtonStyle}
                     >
-                      Open for edit
+                      Open this diary
                     </SecondaryButton>
                   </div>
                 </RecentEntryCard>

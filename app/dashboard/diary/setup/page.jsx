@@ -434,7 +434,7 @@ function SiteDiarySetupPage() {
 
   if (loading) {
     return (
-      <PremiumShell title="Site Diary Setup" backHref="/dashboard" accent={BRAND_ACCENT} maxWidth={520}>
+      <PremiumShell title="New Site Diary" backHref="/dashboard" accent={BRAND_ACCENT} maxWidth={520}>
         <p style={{ color: 'var(--text-2)', fontSize: 16 }}>Loading…</p>
       </PremiumShell>
     )
@@ -442,7 +442,7 @@ function SiteDiarySetupPage() {
 
   return (
     <PremiumShell
-      title="Site Diary Setup"
+      title="New Site Diary"
       onBack={handleBack}
       backHref="/dashboard"
       accent={BRAND_ACCENT}
@@ -457,8 +457,7 @@ function SiteDiarySetupPage() {
           color: 'color-mix(in srgb, var(--text) 90%, var(--text-2))',
         }}
       >
-        Confirm the project and report details before starting a <strong>new</strong> report.
-        This screen selects a <strong>saved project</strong> (kkk / zzz / aaa names) — it is not a list of previous diaries.
+        You’re setting up a <strong>new</strong> Site Diary. Confirm the project and date below, then continue to fill in today’s details.
       </p>
 
       {error && (
@@ -478,17 +477,17 @@ function SiteDiarySetupPage() {
         </div>
       )}
 
-      <GlassSection title="Report details" accent={BRAND_ACCENT}>
+      <GlassSection title="Project and date" accent={BRAND_ACCENT}>
         {existingProjects.length > 0 && (
           <>
-            <label style={setupLabelStyle}>Saved project (not a previous diary)</label>
+            <label style={setupLabelStyle}>Which project is this diary for?</label>
             <select
               value={selectedProjectId}
               onChange={(e) => handleSelectExisting(e.target.value)}
               style={{ ...setupInputStyle, cursor: 'pointer' }}
-              aria-label="Choose a saved project for a new report"
+              aria-label="Choose which project this diary is for"
             >
-              <option value={NEW_PROJECT_VALUE}>New project — type name below</option>
+              <option value={NEW_PROJECT_VALUE}>New project — type the name below</option>
               {existingProjects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -617,7 +616,7 @@ function SiteDiarySetupPage() {
         disabled={saving || !requiredOk}
         style={{ minHeight: 52, fontSize: 16, marginBottom: 12 }}
       >
-        {saving ? 'Opening…' : 'Continue to Site Diary'}
+        {saving ? 'Opening your diary…' : 'Continue to fill in your diary'}
       </PrimaryCTA>
 
       <SecondaryButton
@@ -636,7 +635,7 @@ export default function SiteDiarySetupRoute() {
   return (
     <Suspense
       fallback={
-        <PremiumShell title="Site Diary setup" backHref="/dashboard/diary" accent={BRAND_ACCENT}>
+        <PremiumShell title="New Site Diary" backHref="/dashboard/diary" accent={BRAND_ACCENT}>
           <p style={{ color: 'var(--text-2)' }}>Loading…</p>
         </PremiumShell>
       }
