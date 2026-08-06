@@ -160,7 +160,7 @@ export default function Login() {
               Sign in
             </h2>
             <p className="text-[14px] text-[#9ca3af] leading-relaxed">
-              Sign in to open your projects and finish saving your Site Diary.
+              Sign in to create and manage your site reports.
             </p>
           </div>
 
