@@ -49,6 +49,11 @@ import { DiarySaveError, DIARY_SAVE_LOG, finalizeSiteDiarySave } from '@/lib/dia
 import { diaryHubHref, existingDiaryHref } from '@/lib/diary-routing'
 import { readReportSetupExtras } from '@/lib/report-setup'
 import {
+  diaryLinkedProjectSelectColumns,
+  diaryProjectSelectorSelectColumns,
+  programmeDatesForProjectDetails,
+} from '@/lib/diary-project-details'
+import {
   loginUrlWithReturn,
   SESSION_EXPIRED_SAVE_MESSAGE,
 } from '@/lib/auth/return-path'
@@ -395,7 +400,11 @@ export default function SiteDiaryPage() {
   }, [router, projectId])
 
   const refreshStartData = useCallback(async () => {
-    const { data: proj } = await supabase.from('projects').select('*').eq('id', projectId).single()
+    const { data: proj } = await supabase
+      .from('projects')
+      .select(diaryLinkedProjectSelectColumns())
+      .eq('id', projectId)
+      .single()
     setProject(proj)
 
     let draft = null
@@ -473,8 +482,8 @@ export default function SiteDiaryPage() {
 
       try {
         const [{ data: proj }, { data: allProjects }] = await Promise.all([
-          supabase.from('projects').select('*').eq('id', projectId).single(),
-          supabase.from('projects').select('id, name, client_name, site_address, status').order('name'),
+          supabase.from('projects').select(diaryLinkedProjectSelectColumns()).eq('id', projectId).single(),
+          supabase.from('projects').select(diaryProjectSelectorSelectColumns()).order('name'),
         ])
         if (cancelled) return
         setProject(proj)
@@ -893,6 +902,11 @@ export default function SiteDiaryPage() {
     const parts = [project.client_name, project.site_address].filter(Boolean)
     return parts.join(' · ')
   }, [project])
+
+  const projectProgrammeCard = useMemo(
+    () => programmeDatesForProjectDetails(project, reportDate || null),
+    [project, reportDate],
+  )
 
   const labourTotals = useMemo(() => labourAggregateTotals(labourRows), [labourRows])
 
@@ -1663,7 +1677,7 @@ export default function SiteDiaryPage() {
         <GlassSection title="Project" accent={DIARY_ACCENT}>
           <label style={labelStyle}>Project</label>
           <select
-            style={{ ...inputStyle, marginBottom: projectSubtitle ? 8 : 0 }}
+            style={{ ...inputStyle, marginBottom: 8 }}
             value={projectId}
             onChange={(e) => handleProjectChange(e.target.value)}
           >
@@ -1672,7 +1686,65 @@ export default function SiteDiaryPage() {
             ))}
           </select>
           {projectSubtitle && (
-            <p style={{ margin: 0, fontSize: 13, color: '#7a92a8', lineHeight: 1.5 }}>{projectSubtitle}</p>
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#7a92a8', lineHeight: 1.5 }}>{projectSubtitle}</p>
+          )}
+
+          {projectProgrammeCard.status === 'missing' ? (
+            <p
+              style={{
+                margin: projectSubtitle ? 0 : '4px 0 0',
+                fontSize: 14,
+                lineHeight: 1.45,
+                color: 'color-mix(in srgb, var(--text) 78%, var(--text-2))',
+              }}
+            >
+              {projectProgrammeCard.missingMessage}
+            </p>
+          ) : (
+            <div style={{ marginTop: projectSubtitle ? 0 : 4 }}>
+              <label style={labelStyle}>Project Start Date</label>
+              <p
+                style={{
+                  margin: '0 0 14px',
+                  fontSize: 15,
+                  lineHeight: 1.4,
+                  color: 'var(--text)',
+                }}
+              >
+                {projectProgrammeCard.startNotSet ? 'Not set' : projectProgrammeCard.startDisplay}
+              </p>
+
+              <label style={labelStyle}>Planned Completion Date</label>
+              <p
+                style={{
+                  margin: '0 0 14px',
+                  fontSize: 15,
+                  lineHeight: 1.4,
+                  color: 'var(--text)',
+                }}
+              >
+                {projectProgrammeCard.plannedCompletionNotSet
+                  ? 'Not set'
+                  : projectProgrammeCard.plannedCompletionDisplay}
+              </p>
+
+              {projectProgrammeCard.projectDayLine ? (
+                <>
+                  <label style={{ ...labelStyle, marginBottom: 6 }}>Project Day</label>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 15,
+                      fontWeight: 650,
+                      lineHeight: 1.4,
+                      color: 'var(--text)',
+                    }}
+                  >
+                    {projectProgrammeCard.projectDayLine}
+                  </p>
+                </>
+              ) : null}
+            </div>
           )}
         </GlassSection>
 

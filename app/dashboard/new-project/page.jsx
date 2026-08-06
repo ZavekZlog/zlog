@@ -11,35 +11,64 @@ import {
   inputStyle,
   BRAND_ACCENT,
 } from '@/lib/premium-ui'
+import { ProjectDatesFields } from '@/components/project/ProjectDatesFields'
+import { toDateColumnValue, validateProjectDates } from '@/lib/project-day'
 
 export default function NewProject() {
   const [name, setName] = useState('')
   const [client, setClient] = useState('')
   const [siteAddress, setSiteAddress] = useState('')
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
+  const [startDate, setStartDate] = useState('')
+  const [plannedCompletionDate, setPlannedCompletionDate] = useState('')
+  const [datesError, setDatesError] = useState('')
   const [status, setStatus] = useState('active')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const supabase = createClient()
   const router = useRouter()
 
+  const handleDatesChange = ({ startDate: s, plannedCompletionDate: p }) => {
+    setStartDate(s)
+    setPlannedCompletionDate(p)
+    const v = validateProjectDates(s, p)
+    setDatesError(v.ok ? '' : v.message)
+  }
+
   const handleCreate = async () => {
     if (!name.trim()) { setError('Project name is required'); return }
+    const v = validateProjectDates(startDate, plannedCompletionDate)
+    if (!v.ok) {
+      setDatesError(v.message)
+      setError(v.message)
+      return
+    }
     setLoading(true)
     setError('')
-    const { error: insertError } = await supabase.from('projects').insert({
-      name: name.trim(),
-      client_name: client.trim() || null,
-      site_address: siteAddress.trim() || null,
-      start_date: startDate || null,
-      status,
-    })
+    const start_date = toDateColumnValue(startDate)
+    const planned_completion_date = toDateColumnValue(plannedCompletionDate)
+    const { data, error: insertError } = await supabase
+      .from('projects')
+      .insert({
+        name: name.trim(),
+        client_name: client.trim() || null,
+        site_address: siteAddress.trim() || null,
+        start_date,
+        planned_completion_date,
+        status,
+      })
+      .select('id, start_date, planned_completion_date')
+      .single()
     if (insertError) {
       setError(insertError.message)
       setLoading(false)
-    } else {
-      router.push('/dashboard')
+      return
     }
+    if (!data?.id) {
+      setError('We couldn’t create the project. Check your connection and try again.')
+      setLoading(false)
+      return
+    }
+    router.push('/dashboard')
   }
 
   return (
@@ -76,14 +105,6 @@ export default function NewProject() {
           style={inputStyle}
         />
 
-        <label style={labelStyle}>Start date</label>
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          style={inputStyle}
-        />
-
         <label style={labelStyle}>Status</label>
         <select
           value={status}
@@ -96,7 +117,26 @@ export default function NewProject() {
         </select>
       </GlassSection>
 
-      <PrimaryCTA onClick={handleCreate} disabled={loading}>
+      <GlassSection title="Project programme dates" accent={BRAND_ACCENT}>
+        <p
+          style={{
+            margin: '0 0 14px',
+            fontSize: 14,
+            lineHeight: 1.45,
+            color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
+          }}
+        >
+          Set once for this project. Progress reports use these dates for Project Day.
+        </p>
+        <ProjectDatesFields
+          startDate={startDate}
+          plannedCompletionDate={plannedCompletionDate}
+          onChange={handleDatesChange}
+          error={datesError}
+        />
+      </GlassSection>
+
+      <PrimaryCTA onClick={handleCreate} disabled={loading || Boolean(datesError)}>
         {loading ? 'Creating…' : 'Create project'}
       </PrimaryCTA>
     </PremiumShell>

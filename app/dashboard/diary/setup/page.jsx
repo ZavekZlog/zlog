@@ -14,6 +14,19 @@ import {
   typeTokens,
 } from '@/lib/premium-ui'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
+import { ProjectDatesFields } from '@/components/project/ProjectDatesFields'
+import { validateProjectDates } from '@/lib/project-day'
+import {
+  NEW_PROJECT_SENTINEL,
+  hydrateProjectDatesFromRow,
+  mergeProjectIntoSetupState,
+  projectsSetupSelectColumns,
+  showProjectDatesOnSetup,
+} from '@/lib/diary-setup-project-dates'
+import {
+  persistSetupProject,
+  runDiarySetupContinue,
+} from '@/lib/diary-setup-continue'
 import {
   createDiaryDraftFromSetup,
   fetchDefaultCompanyProfile,
@@ -46,7 +59,7 @@ const setupLabelStyle = {
   color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
 }
 
-const NEW_PROJECT_VALUE = '__new__'
+const NEW_PROJECT_VALUE = NEW_PROJECT_SENTINEL
 
 async function signedLogoUrl(supabase, path) {
   if (!path) return null
@@ -69,6 +82,9 @@ function SiteDiarySetupPage() {
 
   const [selectedProjectId, setSelectedProjectId] = useState(NEW_PROJECT_VALUE)
   const [projectName, setProjectName] = useState('')
+  const [projectStartDate, setProjectStartDate] = useState('')
+  const [projectPlannedCompletionDate, setProjectPlannedCompletionDate] = useState('')
+  const [projectDatesError, setProjectDatesError] = useState('')
   const [author, setAuthor] = useState('')
   const [reportingOnBehalfOf, setReportingOnBehalfOf] = useState('')
   const [reportDate, setReportDate] = useState(todayIsoDate())
@@ -94,6 +110,10 @@ function SiteDiarySetupPage() {
     if (!snapshot) return
     if (snapshot.selectedProjectId) setSelectedProjectId(snapshot.selectedProjectId)
     if (typeof snapshot.projectName === 'string') setProjectName(snapshot.projectName)
+    if (typeof snapshot.projectStartDate === 'string') setProjectStartDate(snapshot.projectStartDate)
+    if (typeof snapshot.projectPlannedCompletionDate === 'string') {
+      setProjectPlannedCompletionDate(snapshot.projectPlannedCompletionDate)
+    }
     if (typeof snapshot.author === 'string') setAuthor(snapshot.author)
     if (typeof snapshot.reportingOnBehalfOf === 'string') setReportingOnBehalfOf(snapshot.reportingOnBehalfOf)
     if (typeof snapshot.reportDate === 'string' && snapshot.reportDate) setReportDate(snapshot.reportDate)
@@ -120,7 +140,7 @@ function SiteDiarySetupPage() {
           supabase.auth.getUser(),
           supabase
             .from('projects')
-            .select('id, name, client_name, site_address, status, created_at')
+            .select(projectsSetupSelectColumns())
             .order('created_at', { ascending: false }),
           fetchDefaultCompanyProfile(supabase),
         ])
@@ -148,11 +168,22 @@ function SiteDiarySetupPage() {
             .maybeSingle()
           if (reportError) throw reportError
 
-          const project = (projectRows || []).find((p) => p.id === editingProjectId)
+          let project = (projectRows || []).find((p) => p.id === editingProjectId)
+          if (!project) {
+            const { data: fetchedProject } = await supabase
+              .from('projects')
+              .select(projectsSetupSelectColumns())
+              .eq('id', editingProjectId)
+              .maybeSingle()
+            project = fetchedProject
+          }
           const extras = readReportSetupExtras(editingReportId)
+          const dates = hydrateProjectDatesFromRow(project)
 
           setSelectedProjectId(editingProjectId)
           setProjectName(project?.name || '')
+          setProjectStartDate(dates.projectStartDate)
+          setProjectPlannedCompletionDate(dates.projectPlannedCompletionDate)
           setAuthor(report?.creator_name || profileName || '')
           setReportingOnBehalfOf(
             report?.company_reporting_for || profile?.company_name || '',
@@ -205,8 +236,11 @@ function SiteDiarySetupPage() {
         if (!editingReportId && editingProjectId) {
           const project = (projectRows || []).find((p) => p.id === editingProjectId)
           if (project) {
-            setSelectedProjectId(project.id)
-            setProjectName(project.name || '')
+            const merged = mergeProjectIntoSetupState({}, project)
+            setSelectedProjectId(merged.selectedProjectId)
+            setProjectName(merged.projectName)
+            setProjectStartDate(merged.projectStartDate)
+            setProjectPlannedCompletionDate(merged.projectPlannedCompletionDate)
           }
         }
       } catch (err) {
@@ -230,6 +264,8 @@ function SiteDiarySetupPage() {
     persistForm({
       selectedProjectId,
       projectName,
+      projectStartDate,
+      projectPlannedCompletionDate,
       author,
       reportingOnBehalfOf,
       reportDate,
@@ -243,6 +279,8 @@ function SiteDiarySetupPage() {
     editingReportId,
     selectedProjectId,
     projectName,
+    projectStartDate,
+    projectPlannedCompletionDate,
     author,
     reportingOnBehalfOf,
     reportDate,
@@ -259,24 +297,31 @@ function SiteDiarySetupPage() {
     }
   }, [logoObjectUrl])
 
-  const requiredOk =
-    projectName.trim() &&
-    author.trim() &&
-    reportingOnBehalfOf.trim() &&
-    reportDate
+  useEffect(() => {
+    if (!error) return
+    const el = document.getElementById('diary-setup-continue-error')
+    el?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+  }, [error])
 
   const handleSelectExisting = async (projectId) => {
     setError('')
     if (!projectId || projectId === NEW_PROJECT_VALUE) {
       setSelectedProjectId(NEW_PROJECT_VALUE)
+      setProjectStartDate('')
+      setProjectPlannedCompletionDate('')
+      setProjectDatesError('')
       return
     }
 
     const project = existingProjects.find((p) => p.id === projectId)
     if (!project) return
 
-    setSelectedProjectId(projectId)
-    setProjectName(project.name || '')
+    const merged = mergeProjectIntoSetupState({}, project)
+    setSelectedProjectId(merged.selectedProjectId)
+    setProjectName(merged.projectName)
+    setProjectStartDate(merged.projectStartDate)
+    setProjectPlannedCompletionDate(merged.projectPlannedCompletionDate)
+    setProjectDatesError('')
 
     try {
       const [latest, profile] = await Promise.all([
@@ -337,31 +382,11 @@ function SiteDiarySetupPage() {
     setLogoStoragePath(null)
   }
 
-  const resolveProjectId = async () => {
-    const name = projectName.trim()
-    if (selectedProjectId !== NEW_PROJECT_VALUE) {
-      const match = existingProjects.find((p) => p.id === selectedProjectId)
-      if (match) {
-        // Do not overwrite stored project rows — use selected id as-is.
-        return match.id
-      }
-    }
-
-    const exact = existingProjects.find(
-      (p) => p.name.trim().toLowerCase() === name.toLowerCase(),
-    )
-    if (exact) return exact.id
-
-    const { data, error: insertError } = await supabase
-      .from('projects')
-      .insert({
-        name,
-        status: 'active',
-      })
-      .select('id')
-      .single()
-    if (insertError) throw insertError
-    return data.id
+  const handleProjectDatesChange = ({ startDate, plannedCompletionDate }) => {
+    setProjectStartDate(startDate)
+    setProjectPlannedCompletionDate(plannedCompletionDate)
+    const v = validateProjectDates(startDate, plannedCompletionDate)
+    setProjectDatesError(v.ok ? '' : v.message)
   }
 
   const uploadLogoIfNeeded = async (userId) => {
@@ -376,48 +401,59 @@ function SiteDiarySetupPage() {
   }
 
   const handleContinue = async () => {
-    if (!requiredOk) {
-      setError('Please complete Project Name, Report Author, Reporting On Behalf Of, and Report Date.')
-      return
-    }
+    if (saving) return
+
     setSaving(true)
     setError('')
+    setProjectDatesError('')
+
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('You must be signed in')
-
-      const projectId = await resolveProjectId()
-      const brandLogoUrl = await uploadLogoIfNeeded(user.id)
-
-      const setupFields = {
-        projectId,
-        reportDate,
-        creatorName: author,
-        companyReportingFor: reportingOnBehalfOf,
-        brandLogoUrl: brandLogoUrl || null,
-        brandingId,
-        brandColor,
+      let brandLogoUrl = logoStoragePath
+      if (logoFile) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('You must be signed in')
+        brandLogoUrl = await uploadLogoIfNeeded(user.id)
       }
 
-      let reportId = editingReportId
-      if (editingReportId) {
-        await updateDiarySetupFields(supabase, {
-          reportId: editingReportId,
-          projectId: editingProjectId,
-          fields: setupFields,
-        })
-        reportId = editingReportId
-      } else {
-        reportId = await createDiaryDraftFromSetup(supabase, setupFields)
-      }
-
-      writeReportSetupExtras(reportId, {
-        projectReference: projectReference.trim() || '',
-        projectName: projectName.trim(),
+      const result = await runDiarySetupContinue({
+        alreadySaving: false,
+        form: {
+          projectName,
+          author,
+          reportingOnBehalfOf,
+          reportDate,
+          startDate: projectStartDate,
+          plannedCompletionDate: projectPlannedCompletionDate,
+          projectReference,
+          brandLogoUrl: brandLogoUrl || null,
+          brandingId,
+          brandColor,
+        },
+        existingProjects,
+        selectedProjectId,
+        editingReportId,
+        editingProjectId,
+        getUser: async () => {
+          const { data: { user } } = await supabase.auth.getUser()
+          return user
+        },
+        persistProject: (plan) => persistSetupProject({ supabase, plan }),
+        createDraft: (fields) => createDiaryDraftFromSetup(supabase, fields),
+        updateDraft: (args) => updateDiarySetupFields(supabase, args),
+        writeExtras: writeReportSetupExtras,
+        clearFormDraft: clearSetupFormDraft,
+        navigate: async (href) => {
+          router.push(href)
+        },
       })
-      clearSetupFormDraft()
 
-      router.push(`/dashboard/project/${projectId}/diary?report=${reportId}`)
+      if (!result.ok) {
+        if (result.field === 'dates') setProjectDatesError(result.message)
+        setError(result.message || 'Could not continue to Site Diary')
+        setSaving(false)
+        return
+      }
+      // Keep saving=true until route change unmounts this screen.
     } catch (err) {
       setError(err?.message || 'Could not continue to Site Diary')
       setSaving(false)
@@ -514,6 +550,27 @@ function SiteDiarySetupPage() {
           style={setupInputStyle}
           required
         />
+
+        {showProjectDatesOnSetup() ? (
+          <div style={{ marginBottom: 4 }}>
+            <p
+              style={{
+                margin: '0 0 12px',
+                fontSize: 14,
+                lineHeight: 1.45,
+                color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
+              }}
+            >
+              Project programme dates (set once for this project)
+            </p>
+            <ProjectDatesFields
+              startDate={projectStartDate}
+              plannedCompletionDate={projectPlannedCompletionDate}
+              onChange={handleProjectDatesChange}
+              error={projectDatesError}
+            />
+          </div>
+        ) : null}
 
         <label style={setupLabelStyle}>Report Author *</label>
         <input
@@ -613,11 +670,30 @@ function SiteDiarySetupPage() {
       <PrimaryCTA
         type="button"
         onClick={handleContinue}
-        disabled={saving || !requiredOk}
+        disabled={saving}
         style={{ minHeight: 52, fontSize: 16, marginBottom: 12 }}
       >
-        {saving ? 'Opening your diary…' : 'Continue to fill in your diary'}
+        {saving ? 'Continuing…' : 'Continue to fill in your diary'}
       </PrimaryCTA>
+
+      {error ? (
+        <div
+          id="diary-setup-continue-error"
+          role="alert"
+          style={{
+            background: 'rgba(220,50,50,0.1)',
+            border: '1px solid rgba(220,50,50,0.35)',
+            color: '#ff6b6b',
+            padding: '14px 16px',
+            fontSize: 15,
+            marginBottom: 12,
+            borderRadius: 10,
+            lineHeight: 1.45,
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
 
       <SecondaryButton
         type="button"
