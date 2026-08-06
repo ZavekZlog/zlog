@@ -1,0 +1,26 @@
+---
+description: Frozen Shared Report Workspace — Photo Workspace next, not shell
+alwaysApply: true
+---
+
+# Shared Report Workspace — freeze
+
+Architecture is **APPROVED and FROZEN**. Source of truth:
+
+`docs/SHARED_REPORT_WORKSPACE_ARCHITECTURE.md`
+
+## Do not
+
+- Implement `ReportWorkspaceShell` / shared report shell yet
+- Refactor Site Diary save (`finalizeSiteDiarySave`, live allowlist, `?report=` UPDATE contract)
+- Introduce a unified `reports` table as part of shell work
+
+## Next milestone
+
+**Shared Photo Workspace** — planning doc: `docs/SHARED_PHOTO_WORKSPACE_ARCHITECTURE.md`.
+
+- **P2A is FROZEN** (foundation + Site Diary host). Do not reopen P2A scope.
+- Do not start **P2B+** until the user explicitly approves.
+- Do not implement Report Workspace shell until Photo Workspace is proven and the user asks for shell work.
+
+Do not refactor Site Diary save as part of Photo Workspace work.

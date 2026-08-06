@@ -33,7 +33,7 @@ import { fileToVisionDataUrl, parseSignInSheetImage } from '@/lib/parse-signin-s
 import { BrandingSelector, brandingPayload } from '@/components/branding/BrandingSelector'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
 import { SignInOperativeReview } from '@/components/diary/SignInOperativeReview'
-import { AiLocationWalk } from '@/components/ai-annotation'
+import { PhotoWorkspace } from '@/components/photo-workspace'
 import {
   flattenAreaGroups,
   groupPhotosByArea,
@@ -2159,14 +2159,15 @@ export default function SiteDiaryPage() {
           />
         </GlassSection>
 
-        <AiLocationWalk
+        <PhotoWorkspace
           ref={locationWalkRef}
+          reportType="diary"
+          reportId={editingReportId}
           accent={DIARY_ACCENT}
           projectId={projectId}
           value={locationWalk}
           onChange={handleLocationWalkChange}
-          title="Work Photos"
-          onContinueToSignature={continueToSignature}
+          onContinue={continueToSignature}
         />
 
         <div ref={saveCtaRef} style={{ marginTop: 8 }}>

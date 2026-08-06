@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Location Walk = Work Photos workflow (named areas).
+ * Location Walk = Photo Evidence workflow (named areas).
  * Active create → Save Area confirmation → Add Another / Continue to Signature.
  * Saved areas stay visible as expandable cards.
  */
@@ -275,16 +275,38 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   projectId,
   value = [],
   onChange,
-  title = 'Work Photos',
+  title = 'Photo Evidence',
   onContinueToSignature,
   onAreaSaved,
+  /** Optional Photo Workspace labels (P2A). Falls back to diary-friendly defaults. */
+  labels = null,
 }, ref) {
+  const copy = {
+    sectionIntro: '',
+    addGroup: 'Add Work Area',
+    createGroup: 'Add Work Area',
+    groupNameLabel: 'Work area name',
+    groupNamePlaceholder: 'e.g. Ground Floor Reception',
+    groupDescriptionLabel: 'Notes for this area',
+    groupDescriptionPlaceholder: 'Work carried out, materials used, or other site notes',
+    saveGroup: 'Save Area',
+    areaSavedTitle: '✓ Area saved.',
+    areaSavedHint: 'Add another area or continue your report.',
+    addAnother: 'Add Another Area',
+    continueReport: 'No More Areas — Continue',
+    enterNameError: 'Enter a work area name',
+    cancelGroup: 'Cancel',
+    ...(labels || {}),
+  }
+  const sectionTitle = title || copy.sectionTitle || 'Photo Evidence'
+
   const locationWalk = useMemo(() => (Array.isArray(value) ? value : []), [value])
   const walkRef = useRef(locationWalk)
   useEffect(() => { walkRef.current = locationWalk }, [locationWalk])
 
   const [phase, setPhase] = useState(() => (locationWalk.length ? 'review' : 'create'))
   const [nameDraft, setNameDraft] = useState('')
+  const [descriptionDraft, setDescriptionDraft] = useState('')
   const [perPageDraft, setPerPageDraft] = useState(4)
   const [editingGroupId, setEditingGroupId] = useState(null)
   /** Photos for a brand-new area — not in locationWalk until Save Area */
@@ -348,6 +370,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
 
   const beginCreate = useCallback(() => {
     setNameDraft('')
+    setDescriptionDraft('')
     // Retain most recent photos-per-page setting
     setEditingGroupId(null)
     setDraftPhotos([])
@@ -359,7 +382,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     let ok = true
     const name = nameDraft.trim()
     if (!name) {
-      setNameError('Enter an area name')
+      setNameError(copy.enterNameError)
       ok = false
     } else {
       setNameError('')
@@ -388,7 +411,11 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     const nextPhotos = []
     for (const file of list) {
       const preview = URL.createObjectURL(file)
-      nextPhotos.push(createAreaPhoto({ file, preview, description: '' }))
+      nextPhotos.push({
+        ...createAreaPhoto({ file, preview, description: '' }),
+        uploadState: 'local_only',
+        saveState: 'unsaved',
+      })
     }
 
     if (groupId || isEditing) {
@@ -405,13 +432,26 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   const saveArea = () => {
     if (!validateSave()) return
     const name = nameDraft.trim()
+    const description = descriptionDraft.trim()
     const layout = perPageToLayout(perPageDraft)
+
+    const withGroupSaveState = (photos) => (photos || []).map((photo) => ({
+      ...photo,
+      saveState: 'linked_to_group',
+    }))
 
     let saved
     if (isEditing && editingGroupId) {
       updateWalk((prev) => prev.map((g) => (
         g.id === editingGroupId
-          ? { ...g, areaName: name, layout }
+          ? {
+              ...g,
+              areaName: name,
+              description,
+              layout,
+              completionState: 'saved',
+              photos: withGroupSaveState(g.photos),
+            }
           : g
       )))
       saved = walkRef.current.find((g) => g.id === editingGroupId)
@@ -419,7 +459,9 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
       const group = {
         ...createAreaGroup(name, perPageDraft),
         layout,
-        photos: draftPhotos,
+        description,
+        completionState: 'saved',
+        photos: withGroupSaveState(draftPhotos),
       }
       updateWalk((prev) => [...prev, group])
       saved = group
@@ -436,6 +478,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     })
     setExpandedIds((prev) => new Set([...prev, saved.id]))
     setEditingGroupId(null)
+    setDescriptionDraft('')
     clearFieldErrors()
     setPhase('after_save')
     onAreaSaved?.(saved)
@@ -446,11 +489,30 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     if (!group) return
     setEditingGroupId(groupId)
     setNameDraft(group.areaName)
+    setDescriptionDraft(group.description || '')
     setPerPageDraft(layoutToPerPage(group.layout))
     setDraftPhotos([])
     clearFieldErrors()
     setPhase('create')
   }
+
+  // Warn before leave/refresh when create-flow has unsaved local work (online-first; no IndexedDB).
+  useEffect(() => {
+    const dirty =
+      phase === 'create'
+      && (
+        Boolean(nameDraft.trim())
+        || Boolean(descriptionDraft.trim())
+        || draftPhotos.length > 0
+      )
+    if (!dirty) return undefined
+    const onBeforeUnload = (event) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [phase, nameDraft, descriptionDraft, draftPhotos.length])
 
   const openViewer = (groupId, index) => {
     setWalkError('')
@@ -621,7 +683,19 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   }
 
   return (
-    <GlassSection title={title} accent={accent}>
+    <GlassSection title={sectionTitle} accent={accent}>
+      {copy.sectionIntro ? (
+        <p
+          style={{
+            margin: '0 0 14px',
+            fontSize: 14,
+            lineHeight: 1.45,
+            color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
+          }}
+        >
+          {copy.sectionIntro}
+        </p>
+      ) : null}
       <div ref={sectionRef}>
       <input
         ref={replaceInputRef}
@@ -725,7 +799,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
 
       {phase === 'create' && (
         <div>
-          <div style={{ ...labelStyle, marginBottom: 8 }}>Area name</div>
+          <div style={{ ...labelStyle, marginBottom: 8 }}>{copy.groupNameLabel}</div>
           <input
             type="text"
             value={nameDraft}
@@ -733,11 +807,20 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
               setNameDraft(e.target.value)
               if (e.target.value.trim()) setNameError('')
             }}
-            placeholder="Ground Floor Reception"
+            placeholder={copy.groupNamePlaceholder}
             style={{ ...inputStyle, marginBottom: nameError ? 0 : 14, minHeight: 48 }}
             autoComplete="off"
           />
           {nameError ? <p style={{ ...fieldErrorStyle, marginBottom: 12 }}>{nameError}</p> : null}
+
+          <div style={{ ...labelStyle, marginBottom: 8 }}>{copy.groupDescriptionLabel}</div>
+          <textarea
+            value={descriptionDraft}
+            onChange={(e) => setDescriptionDraft(e.target.value)}
+            placeholder={copy.groupDescriptionPlaceholder}
+            rows={3}
+            style={{ ...inputStyle, marginBottom: 14, minHeight: 72, resize: 'vertical' }}
+          />
 
           {dictationSupported || recentAreas.length > 0 ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
@@ -850,7 +933,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
               onClick={saveArea}
               style={primaryTap}
             >
-              Save Area
+              {copy.saveGroup}
             </PrimaryCTA>
           </div>
 
@@ -861,11 +944,12 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
                 onClick={() => {
                   setEditingGroupId(null)
                   setDraftPhotos([])
+                  setDescriptionDraft('')
                   clearFieldErrors()
                   setPhase('review')
                 }}
               >
-                Cancel
+                {copy.cancelGroup}
               </SecondaryButton>
             </div>
           )}
@@ -882,10 +966,10 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
           }}
         >
           <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)', marginBottom: 6 }}>
-            ✓ Area saved.
+            {copy.areaSavedTitle}
           </div>
           <p style={{ margin: '0 0 12px', fontSize: 14, lineHeight: 1.45, color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))' }}>
-            Add another area or continue your report.
+            {copy.areaSavedHint}
           </p>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
             {lastSaved.name}
@@ -898,7 +982,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <PrimaryCTA type="button" accent={accent} onClick={beginCreate} style={primaryTap}>
-              Add Another Area
+              {copy.addAnother}
             </PrimaryCTA>
             <SecondaryButton
               type="button"
@@ -906,7 +990,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
               onClick={continueToSignature}
               style={{ ...primaryTap, opacity: locationWalk.length ? 1 : 0.45 }}
             >
-              Continue to Signature
+              {copy.continueReport}
             </SecondaryButton>
           </div>
         </div>
@@ -916,15 +1000,15 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
         <div>
           {locationWalk.length === 0 ? (
             <PrimaryCTA type="button" accent={accent} onClick={beginCreate} style={primaryTap}>
-              Create Area
+              {copy.createGroup}
             </PrimaryCTA>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
               <PrimaryCTA type="button" accent={accent} onClick={beginCreate} style={primaryTap}>
-                Add Another Area
+                {copy.addAnother}
               </PrimaryCTA>
               <SecondaryButton type="button" onClick={continueToSignature} style={primaryTap}>
-                Continue to Signature
+                {copy.continueReport}
               </SecondaryButton>
             </div>
           )}
