@@ -46,6 +46,7 @@ import {
   fetchOpenDraft,
 } from '@/lib/diary-draft'
 import { DiarySaveError, DIARY_SAVE_LOG, finalizeSiteDiarySave } from '@/lib/diary-save'
+import { diaryHubHref, existingDiaryHref } from '@/lib/diary-routing'
 import { readReportSetupExtras } from '@/lib/report-setup'
 import {
   loginUrlWithReturn,
@@ -388,7 +389,9 @@ export default function SiteDiaryPage() {
   const [setupLogoPreview, setSetupLogoPreview] = useState(null)
 
   const openReportForm = useCallback((reportId) => {
-    router.replace(`/dashboard/project/${projectId}/diary?report=${reportId}`)
+    const href = existingDiaryHref(projectId, reportId)
+    if (!href) return
+    router.replace(href)
   }, [router, projectId])
 
   const refreshStartData = useCallback(async () => {
@@ -535,7 +538,8 @@ export default function SiteDiaryPage() {
 
         if (existingError || !existing) {
           console.log(DIARY_SAVE_LOG, 'load:not-found', { existingError, editingReportId })
-          setError(existingError?.message || 'Diary entry not found')
+          // Soft recovery — never leave the user on a raw Next.js 404.
+          router.replace(diaryHubHref({ projectId, missing: true }))
           return
         }
         console.log(DIARY_SAVE_LOG, 'load:ok', {
@@ -675,7 +679,7 @@ export default function SiteDiaryPage() {
     }
     load()
     return () => { cancelled = true }
-  }, [projectId, editingReportId])
+  }, [projectId, editingReportId, router])
 
   const handleLocationWalkChange = useCallback((next) => {
     setLocationWalk(next)
@@ -2299,7 +2303,10 @@ export default function SiteDiaryPage() {
             <div style={recentEntryActionsStyle}>
               <SecondaryButton
                 type="button"
-                onClick={() => router.push(`/dashboard/project/${projectId}/diary?report=${d.id}`)}
+                onClick={() => {
+                  const href = existingDiaryHref(projectId, d.id)
+                  if (href) router.push(href)
+                }}
                 style={recentEntryActionButtonStyle}
               >
                 View / Edit

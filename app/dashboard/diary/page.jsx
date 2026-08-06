@@ -22,6 +22,7 @@ import {
   recentEntryActionButtonStyle,
 } from '@/lib/premium-ui'
 import { REPORT_THEMES } from '@/lib/report-theme'
+import { DIARY_MISSING_MESSAGE, existingDiaryHref } from '@/lib/diary-routing'
 
 const DIARY_ACCENT = REPORT_THEMES.diary.accent
 
@@ -38,11 +39,12 @@ function SiteDiaryEntryPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const filterProjectId = searchParams.get('project') || null
+  const missingReport = searchParams.get('missing') === '1'
   const supabase = createClient()
 
   const [mode, setMode] = useState(null) // null | 'edit' | 'new'
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(() => (missingReport ? DIARY_MISSING_MESSAGE : ''))
   const [reports, setReports] = useState([])
 
   const title = useMemo(() => {
@@ -52,11 +54,15 @@ function SiteDiaryEntryPage() {
   }, [mode])
 
   useEffect(() => {
+    if (missingReport) setError(DIARY_MISSING_MESSAGE)
+  }, [missingReport])
+
+  useEffect(() => {
     if (mode !== 'edit') return
     let cancelled = false
     const load = async () => {
       setLoading(true)
-      setError('')
+      setError((prev) => (prev === DIARY_MISSING_MESSAGE ? prev : ''))
       try {
         let query = supabase
           .from('daily_reports')
@@ -87,12 +93,13 @@ function SiteDiaryEntryPage() {
   }, [mode, filterProjectId, supabase])
 
   const openExistingReport = (row) => {
-    if (!row?.id || !row?.project_id) {
+    const href = existingDiaryHref(row?.project_id, row?.id)
+    if (!href) {
       setError('That diary can’t be opened. Try another one, or start a new Site Diary.')
       return
     }
     // Exact existing report — never create a new row here.
-    router.push(`/dashboard/project/${row.project_id}/diary?report=${row.id}`)
+    router.push(href)
   }
 
   const startNewReport = () => {

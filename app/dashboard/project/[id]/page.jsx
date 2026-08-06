@@ -18,6 +18,7 @@ import {
   recentEntryActionButtonStyle,
 } from '@/lib/premium-ui'
 import { REPORT_THEMES } from '@/lib/report-theme'
+import { existingDiaryHref } from '@/lib/diary-routing'
 
 export default function ProjectPage() {
   const [project, setProject] = useState(null)
@@ -192,7 +193,10 @@ export default function ProjectPage() {
             <div style={recentEntryActionsStyle}>
               <SecondaryButton
                 type="button"
-                onClick={() => router.push(`/dashboard/project/${id}/diary?report=${d.id}`)}
+                onClick={() => {
+                  const href = existingDiaryHref(id, d.id)
+                  if (href) router.push(href)
+                }}
                 style={recentEntryActionButtonStyle}
               >
                 View / Edit
