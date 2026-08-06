@@ -145,12 +145,12 @@ function SiteDiaryEntryPage() {
             Choose whether to open your latest Site Diary or start a new one.
           </p>
 
-          <GlassSection title="Open Latest Diary" accent={DIARY_ACCENT}>
+          <GlassSection title="Open Saved Diaries" accent={DIARY_ACCENT}>
             <p style={{ margin: '0 0 14px', fontSize: 14, lineHeight: 1.5, color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))' }}>
-              Open your latest Site Diary to continue today's work or use it as the starting point for today's report.
+              Open a previously saved Site Diary to review it or save time by updating it instead of creating a new diary from scratch.
             </p>
             <PrimaryCTA type="button" accent={DIARY_ACCENT} onClick={() => setMode('edit')}>
-              Open Latest Diary
+              Open Saved Diaries
             </PrimaryCTA>
           </GlassSection>
 
