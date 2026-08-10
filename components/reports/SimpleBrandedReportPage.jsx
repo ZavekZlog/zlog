@@ -18,6 +18,8 @@ import {
 } from '@/lib/premium-ui'
 import { BrandingSelector, brandingPayload } from '@/components/branding/BrandingSelector'
 import { AiLocationWalk } from '@/components/ai-annotation'
+import { ProjectProgrammeSummary } from '@/components/project/ProjectProgrammeSummary'
+import { toDateInputValue } from '@/lib/project-day'
 import { persistAnnotationItems } from '@/lib/ai-annotation/persist'
 import { getAnnotationContext } from '@/lib/ai-annotation/contexts'
 import {
@@ -56,6 +58,10 @@ export function SimpleBrandedReportPage({
   const [brandingSelection, setBrandingSelection] = useState(null)
   const [duplicatedFromReport, setDuplicatedFromReport] = useState(false)
   const [locationWalk, setLocationWalk] = useState([])
+  const [projectDates, setProjectDates] = useState({
+    startDate: null,
+    plannedCompletionDate: null,
+  })
   const locationWalkRef = useRef(null)
 
   useEffect(() => {
@@ -68,6 +74,16 @@ export function SimpleBrandedReportPage({
       setLocationWalk([])
       const today = new Date().toISOString().slice(0, 10)
       setReportDate(today)
+
+      const { data: proj } = await supabase
+        .from('projects')
+        .select('start_date, planned_completion_date')
+        .eq('id', projectId)
+        .maybeSingle()
+      setProjectDates({
+        startDate: toDateInputValue(proj?.start_date) || null,
+        plannedCompletionDate: toDateInputValue(proj?.planned_completion_date) || null,
+      })
 
       const sourceId = editingReportId || duplicateReportId
       if (sourceId) {
@@ -234,6 +250,16 @@ export function SimpleBrandedReportPage({
           accent={accent}
           autoSelectDefault={!editingReportId && !duplicateReportId}
         />
+
+        {contextId === 'progress' ? (
+          <ProjectProgrammeSummary
+            startDate={projectDates.startDate}
+            plannedCompletionDate={projectDates.plannedCompletionDate}
+            asOfDate={reportDate}
+            accent={accent}
+            editProjectHref={`/dashboard/project/${projectId}`}
+          />
+        ) : null}
 
         <GlassSection title="Report details" accent={accent}>
           <label style={labelStyle}>Report date</label>

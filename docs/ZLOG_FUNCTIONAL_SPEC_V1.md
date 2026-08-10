@@ -328,8 +328,13 @@ Daily report rows **reference** register IDs and may create/update a register en
 | Project | `projects` / `project_id` |
 | Reporting on behalf of | `company_reporting_for` |
 | Job / contract reference | sessionStorage only today → must become durable |
+| **Project Start Date** (planned) | Project-level — entered once; **not** per daily report |
+| **Planned Completion Date** (planned) | Project-level — entered once; **not** per daily report |
+| **Project Day** (planned) | **Automatically calculated** from Start + Planned Completion (e.g. `Project Day 17 of 50`); no daily input |
 
-**Carry-forward rule:** Safe to prefill from last saved / profile. User may edit.
+**Carry-forward rule:** Safe to prefill from last saved / profile. User may edit entered sticky fields.
+
+**Project Day (approved planned feature):** Derived display of elapsed programme time only — never % physical complete or “on programme”. See `docs/PROGRESS_REPORT_PROGRAMME_ARCHITECTURE.md`. Calendar vs working days must be resolved before implementation. Do not add to current Site Diary UI yet.
 
 ### 6.2 DAILY (fresh each report — never silent-copy as current facts)
 
@@ -600,6 +605,46 @@ Remaining follow-ups (not blocking M0 acceptance if live columns already match a
 | **Migration sequence** | (0) Reconcile columns → (1) Rename/sequence Today’s Report UI → (2) Add C/D/F data → (3) Continue-report rules → (4) Live registers → (5) Dashboard panel |
 | **First coding task** | Live schema verification + reconciliation so `?report=` UPDATE is reliable |
 | **Do not touch yet** | Landing page; broad dashboard redesign; speculative deletion of working diary/OCR/photo paths |
+| **Future premium (documented only)** | Project Day; Progress Report programme / Gantt; Progress Date Line; Mark Up Programme — see §16 |
+
+---
+
+## 16. Future Progress Report — Project Programme (approved; not implementing)
+
+**Recorded:** 2026-08-06 · **No production code in this section.**
+
+**Approved product decision:**
+
+> The Progress Report will eventually allow a project programme or Gantt chart to be uploaded once, reused in weekly reports, marked with a progress date line and annotated to show completed, ongoing and delayed work. The original programme must remain unchanged.
+
+### Requirements summary
+
+| Area | Requirement |
+|------|-------------|
+| Project Start Date | Project-level; entered once; not re-entered daily |
+| Planned Completion Date | Project-level; entered once; not re-entered daily |
+| **Project Day** | **Approved planned feature.** Calculated **automatically** from start + planned completion (e.g. `Project Day 17 of 50`). Elapsed programme time only — **not** physical % complete. No daily input. |
+| Planned Days Remaining | Derived automatically alongside Project Day |
+| Site Diary | May later display automatic Project Day — **not in current Site Diary** |
+| Programme upload | Once per project (PDF / image / TBD); reuse weekly; re-upload only on revised programme |
+| Weekly markup | Progress Date Line / Progress Drop-Line; Mark Up Programme; non-destructive weekly versions |
+| Status colours | Green Complete · Amber In Progress · Red Delayed / At Risk (status only) |
+| PDF | Distinguish planned programme, reported actual progress, and author annotations |
+
+### Boundary
+
+- **Not** part of Shared Photo Workspace (P2).  
+- **Do not** add Project Day to the current Site Diary yet.  
+- **Do not** schedule or implement phases PR1–PR8 until explicitly approved.  
+
+### Canonical docs
+
+| Doc | Role |
+|-----|------|
+| `docs/PROGRESS_REPORT_PROGRAMME_ARCHITECTURE.md` | Full architecture & phases PR1–PR8 |
+| `docs/PRODUCT_ROADMAP.md` | Roadmap placement |
+| `docs/PREMIUM_FEATURE_BACKLOG.md` | Backlog IDs PR-BL-01…10 |
+| `docs/PROTECTED_PRODUCT_DECISIONS.md` | Protected decision + regression contract |
 
 ---
 

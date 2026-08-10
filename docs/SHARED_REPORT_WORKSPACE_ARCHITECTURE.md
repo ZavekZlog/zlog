@@ -154,3 +154,11 @@ Example shapes:
 Await approval before any Photo Workspace implementation.
 
 Do **not** start Shared Report Workspace shell implementation until Photo Workspace is ready and this architecture is explicitly unfrozen for coding.
+
+---
+
+## Related future work (not this shell)
+
+**Progress Report — Project Programme** (Gantt upload, Progress Date Line, Mark Up Programme) is a separate **premium** track. It is **not** part of the Shared Report Workspace shell milestone and must not be implemented until approved.
+
+See: `docs/PROGRESS_REPORT_PROGRAMME_ARCHITECTURE.md`, `docs/PRODUCT_ROADMAP.md` (PR1–PR8), `docs/PROTECTED_PRODUCT_DECISIONS.md`.

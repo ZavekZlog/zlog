@@ -15,9 +15,9 @@ import {
   useState,
 } from 'react'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
-import { PhotoAnnotationEditor } from '@/components/photo-annotations'
-import { AreaPhotoViewer, PhotosPerPagePicker } from '@/components/ai-annotation/AreaPhotoViewer'
-import { PhotoStatusBadges } from '@/components/ai-annotation/PhotoStatusBadges'
+import { CapturePhotoPreview } from '@/components/photo-workspace/CapturePhotoPreview'
+import { CaptureThumbnailGrid } from '@/components/photo-workspace/CaptureThumbnailGrid'
+import { PhotosPerPagePicker } from '@/components/ai-annotation/AreaPhotoViewer'
 import { useSpeechDictation } from '@/components/ai-annotation/useSpeechDictation'
 import {
   GlassSection,
@@ -35,7 +35,6 @@ import {
   layoutToPerPage,
   moveItem,
   perPageToLayout,
-  photoHasDescription,
   photosMissingDescription,
   readRecentAreas,
   rememberRecentArea,
@@ -68,7 +67,7 @@ function SavedAreaCard({
   onLayoutChange,
   onAddPhotos,
   onRemovePhoto,
-  onMovePhoto,
+  onRotatePhoto,
   globalOffset,
   isFirst,
   isLast,
@@ -177,93 +176,13 @@ function SavedAreaCard({
             />
           </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
-              gap: 8,
-              marginTop: 14,
-            }}
-          >
-            {group.photos.map((photo, pi) => {
-              const photoNumber = globalOffset + pi + 1
-              const incomplete = !photoHasDescription(photo)
-              return (
-                <div key={photo.id}>
-                  <button
-                    type="button"
-                    onClick={() => onOpenPhoto(pi)}
-                    aria-label={`Photo ${photoNumber}${incomplete ? ', description missing' : ', description complete'}`}
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      padding: 4,
-                      border: incomplete
-                        ? '2px solid rgba(251, 146, 60, 0.75)'
-                        : '1px solid var(--edge)',
-                      borderRadius: 10,
-                      background: 'var(--plate)',
-                      cursor: 'pointer',
-                      minHeight: 48,
-                      color: 'inherit',
-                      fontFamily: 'inherit',
-                    }}
-                  >
-                    <div style={{ position: 'relative' }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={photo.preview || photo.imageUrl || ''}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        style={{
-                          width: '100%',
-                          height: 72,
-                          objectFit: 'contain',
-                          display: 'block',
-                          background: '#0b0d12',
-                          borderRadius: 6,
-                        }}
-                      />
-                      <div style={{ position: 'absolute', top: 4, right: 4 }}>
-                        <PhotoStatusBadges photo={photo} size={12} />
-                      </div>
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: 'var(--text)',
-                        marginTop: 6,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 4,
-                      }}
-                    >
-                      <span>Photo {photoNumber}</span>
-                    </div>
-                  </button>
-                  <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-                    <button type="button" disabled={pi === 0} onClick={() => onMovePhoto(pi, pi - 1)} aria-label={`Move Photo ${photoNumber} up`} style={{ minHeight: 32, minWidth: 32, fontSize: 12, cursor: 'pointer' }}>↑</button>
-                    <button type="button" disabled={pi === group.photos.length - 1} onClick={() => onMovePhoto(pi, pi + 1)} aria-label={`Move Photo ${photoNumber} down`} style={{ minHeight: 32, minWidth: 32, fontSize: 12, cursor: 'pointer' }}>↓</button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (typeof window === 'undefined' || window.confirm(`Delete Photo ${photoNumber}?`)) {
-                          onRemovePhoto(photo.id)
-                        }
-                      }}
-                      aria-label={`Delete Photo ${photoNumber}`}
-                      style={{ minHeight: 32, minWidth: 32, fontSize: 12, cursor: 'pointer' }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          <CaptureThumbnailGrid
+            photos={group.photos}
+            numberOffset={globalOffset}
+            onOpen={onOpenPhoto}
+            onDelete={onRemovePhoto}
+            onRotate={onRotatePhoto}
+          />
         </div>
       )}
     </div>
@@ -318,11 +237,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   const [lastSaved, setLastSaved] = useState(null)
   const [expandedIds, setExpandedIds] = useState(() => new Set())
   const [viewer, setViewer] = useState(null)
-  const [annotating, setAnnotating] = useState(null)
-  const [draftViewerIndex, setDraftViewerIndex] = useState(null)
   const [walkError, setWalkError] = useState('')
-  const replaceInputRef = useRef(null)
-  const replacePhotoIdRef = useRef(null)
   const sectionRef = useRef(null)
   const [storedRecent, setStoredRecent] = useState(() => (
     projectId ? readRecentAreas(projectId) : []
@@ -406,13 +321,14 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   const handleFiles = async (files, groupId = null) => {
     const list = Array.from(files || []).filter((f) => f instanceof Blob)
     if (!list.length) return
+    // Stay on the current Work Area — append thumbnails in place (no navigation / reload).
     setCapturing(true)
     setPhotoError('')
     const nextPhotos = []
     for (const file of list) {
       const preview = URL.createObjectURL(file)
       nextPhotos.push({
-        ...createAreaPhoto({ file, preview, description: '' }),
+        ...createAreaPhoto({ file, preview, description: '', rotationDegrees: 0 }),
         uploadState: 'local_only',
         saveState: 'unsaved',
       })
@@ -542,8 +458,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     const scrollY = viewer?.scrollY || 0
     const groupId = viewer?.groupId
     setViewer(null)
-    setDraftViewerIndex(null)
-    if (groupId) {
+    if (groupId && groupId !== '__draft__') {
       setExpandedIds((prev) => new Set([...prev, groupId]))
     }
     requestAnimationFrame(() => {
@@ -565,6 +480,24 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     }))
   }
 
+  const rotatePhoto = (groupId, photoId) => {
+    const bump = (photo) => ({
+      ...photo,
+      rotationDegrees: ((Number(photo.rotationDegrees) || 0) + 90) % 360,
+    })
+    if (groupId === '__draft__') {
+      setDraftPhotos((prev) => prev.map((p) => (p.id === photoId ? bump(p) : p)))
+      return
+    }
+    updateWalk((prev) => prev.map((g) => {
+      if (g.id !== groupId) return g
+      return {
+        ...g,
+        photos: g.photos.map((p) => (p.id === photoId ? bump(p) : p)),
+      }
+    }))
+  }
+
   const removePhoto = (groupId, photoId) => {
     const revoke = (target) => {
       if (target?.file && target.preview) {
@@ -575,15 +508,16 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
       setDraftPhotos((prev) => {
         const target = prev.find((p) => p.id === photoId)
         revoke(target)
-        return prev.filter((p) => p.id !== photoId)
+        const next = prev.filter((p) => p.id !== photoId)
+        if (viewer?.groupId === '__draft__') {
+          if (!next.length) {
+            queueMicrotask(() => setViewer(null))
+          } else {
+            setViewer((v) => v && ({ ...v, index: Math.min(v.index, next.length - 1) }))
+          }
+        }
+        return next
       })
-      if (draftViewerIndex != null) {
-        setDraftViewerIndex((i) => {
-          const nextLen = draftPhotos.length - 1
-          if (nextLen <= 0) return null
-          return Math.min(i, nextLen - 1)
-        })
-      }
       return
     }
     updateWalk((prev) => prev.map((g) => {
@@ -598,47 +532,6 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
       else setViewer((v) => v && ({ ...v, index: Math.min(v.index, g.photos.length - 1) }))
     }
   }
-
-  const replacePhoto = (groupId, photoId) => {
-    replacePhotoIdRef.current = { groupId, photoId }
-    replaceInputRef.current?.click()
-  }
-
-  const onReplaceFile = async (e) => {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    const target = replacePhotoIdRef.current
-    replacePhotoIdRef.current = null
-    if (!file || !target) return
-    const preview = URL.createObjectURL(file)
-    const list = target.groupId === '__draft__'
-      ? draftPhotos
-      : walkRef.current.find((g) => g.id === target.groupId)?.photos || []
-    const prev = list.find((p) => p.id === target.photoId)
-    if (prev?.file && prev.preview) {
-      try { URL.revokeObjectURL(prev.preview) } catch { /* ignore */ }
-    }
-    patchPhoto(target.groupId, target.photoId, {
-      file,
-      preview,
-      imageUrl: null,
-      annotations: null,
-      overlayPreview: null,
-      overlayPath: null,
-      overlayDirty: true,
-    })
-  }
-
-  const annotatingPhoto = useMemo(() => {
-    if (!annotating) return null
-    if (annotating.groupId === '__draft__') {
-      const p = draftPhotos.find((x) => x.id === annotating.photoId)
-      return p ? { groupId: '__draft__', photo: p } : null
-    }
-    const g = locationWalk.find((x) => x.id === annotating.groupId)
-    const p = g?.photos.find((x) => x.id === annotating.photoId)
-    return p ? { groupId: annotating.groupId, photo: p } : null
-  }, [annotating, locationWalk, draftPhotos])
 
   const viewerGroup = viewer?.groupId === '__draft__'
     ? { id: '__draft__', areaName: nameDraft.trim() || 'New area', photos: draftPhotos }
@@ -697,15 +590,6 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
         </p>
       ) : null}
       <div ref={sectionRef}>
-      <input
-        ref={replaceInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        style={{ display: 'none' }}
-        onChange={onReplaceFile}
-      />
-
       {walkError ? (
         <p style={{ ...fieldErrorStyle, marginBottom: 12 }}>{walkError}</p>
       ) : null}
@@ -785,13 +669,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
               }}
               onAddPhotos={(files) => handleFiles(files, group.id)}
               onRemovePhoto={(photoId) => removePhoto(group.id, photoId)}
-              onMovePhoto={(from, to) => {
-                updateWalk((prev) => prev.map((g) => (
-                  g.id === group.id
-                    ? { ...g, photos: moveItem(g.photos, from, to) }
-                    : g
-                )))
-              }}
+              onRotatePhoto={(photoId) => rotatePhoto(group.id, photoId)}
             />
           ))}
         </div>
@@ -859,70 +737,15 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
             />
           </div>
 
-          {activePhotos.length > 0 && (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
-                gap: 8,
-                marginTop: 16,
-              }}
-            >
-              {activePhotos.map((photo, pi) => {
-                const photoNumber = isEditing
-                  ? areaOffset(editingGroupId) + pi + 1
-                  : draftPhotoOffset + pi + 1
-                const incomplete = !photoHasDescription(photo)
-                return (
-                  <button
-                    key={photo.id}
-                    type="button"
-                    onClick={() => {
-                      if (isEditing) openViewer(editingGroupId, pi)
-                      else setDraftViewerIndex(pi)
-                    }}
-                    aria-label={`Photo ${photoNumber}${incomplete ? ', description missing' : ''}`}
-                    style={{
-                      border: incomplete
-                        ? '2px solid rgba(251, 146, 60, 0.75)'
-                        : '1px solid var(--edge)',
-                      borderRadius: 10,
-                      background: 'var(--plate)',
-                      padding: 4,
-                      cursor: 'pointer',
-                      minHeight: 48,
-                      color: 'inherit',
-                      fontFamily: 'inherit',
-                    }}
-                  >
-                    <div style={{ position: 'relative' }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={photo.preview || photo.imageUrl || ''}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        style={{
-                          width: '100%',
-                          height: 72,
-                          objectFit: 'contain',
-                          display: 'block',
-                          background: '#0b0d12',
-                          borderRadius: 6,
-                        }}
-                      />
-                      <div style={{ position: 'absolute', top: 4, right: 4 }}>
-                        <PhotoStatusBadges photo={photo} size={12} />
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginTop: 6 }}>
-                      Photo {photoNumber}
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          )}
+          {activePhotos.length > 0 ? (
+            <CaptureThumbnailGrid
+              photos={activePhotos}
+              numberOffset={isEditing ? areaOffset(editingGroupId) : draftPhotoOffset}
+              onOpen={(pi) => openViewer(isEditing ? editingGroupId : '__draft__', pi)}
+              onDelete={(photoId) => removePhoto(isEditing ? editingGroupId : '__draft__', photoId)}
+              onRotate={(photoId) => rotatePhoto(isEditing ? editingGroupId : '__draft__', photoId)}
+            />
+          ) : null}
           {photoError ? <p style={fieldErrorStyle}>{photoError}</p> : null}
 
           <div style={{ marginTop: 18 }}>
@@ -1016,7 +839,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
       )}
 
       {viewer && viewerGroup && (
-        <AreaPhotoViewer
+        <CapturePhotoPreview
           key={viewer.groupId}
           photos={viewerGroup.photos}
           startIndex={viewer.index}
@@ -1025,43 +848,8 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
           accent={accent}
           onClose={closeViewer}
           onCaptionChange={(photoId, text) => patchPhoto(viewer.groupId, photoId, { acceptedDescription: text })}
-          onAnnotate={(photoId) => setAnnotating({ groupId: viewer.groupId, photoId })}
-          onReplace={(photoId) => replacePhoto(viewer.groupId, photoId)}
+          onRotate={(photoId) => rotatePhoto(viewer.groupId, photoId)}
           onDelete={(photoId) => removePhoto(viewer.groupId, photoId)}
-        />
-      )}
-
-      {draftViewerIndex != null && !isEditing && (
-        <AreaPhotoViewer
-          key="__draft__"
-          photos={draftPhotos}
-          startIndex={draftViewerIndex}
-          areaName={nameDraft.trim() || 'New area'}
-          globalNumbers={globalNumbersForGroup('__draft__')}
-          accent={accent}
-          onClose={() => setDraftViewerIndex(null)}
-          onCaptionChange={(photoId, text) => patchPhoto('__draft__', photoId, { acceptedDescription: text })}
-          onAnnotate={(photoId) => setAnnotating({ groupId: '__draft__', photoId })}
-          onReplace={(photoId) => replacePhoto('__draft__', photoId)}
-          onDelete={(photoId) => removePhoto('__draft__', photoId)}
-        />
-      )}
-
-      {annotatingPhoto?.photo?.preview && (
-        <PhotoAnnotationEditor
-          imageSrc={annotatingPhoto.photo.preview}
-          initialAnnotations={annotatingPhoto.photo.annotations}
-          accent={accent}
-          title="Annotate photo"
-          onCancel={() => setAnnotating(null)}
-          onSave={async ({ annotations, overlayDataUrl }) => {
-            patchPhoto(annotating.groupId, annotating.photoId, {
-              annotations,
-              overlayPreview: overlayDataUrl || null,
-              overlayDirty: true,
-            })
-            setAnnotating(null)
-          }}
         />
       )}
       </div>

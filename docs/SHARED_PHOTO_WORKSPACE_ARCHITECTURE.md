@@ -10,6 +10,7 @@
 - Do not modify existing photo components until implementation is approved
 - Do not alter database tables yet
 - Do not change Site Diary save logic, report routing, authentication, or the frozen Shared Report Workspace architecture (`docs/SHARED_REPORT_WORKSPACE_ARCHITECTURE.md`)
+- **Out of scope:** Progress Report programme / Gantt upload, Progress Date Line, and Mark Up Programme (`docs/PROGRESS_REPORT_PROGRAMME_ARCHITECTURE.md`) — future premium feature; not part of Photo Workspace
 
 ---
 
@@ -492,7 +493,8 @@ Report-level default template can exist later as a **default for new areas**, no
 | Phase | Status |
 |-------|--------|
 | **P2A** — core workspace foundation, Evidence Group model, contexts, adapters, Site Diary host | **FROZEN — ready for commit** |
-| P2B — capture, multi-upload, thumbnail review | Not started |
+| **P2B** Part 1 — camera capture + thumbnail grid (preview / delete / rotate) | **IN PROGRESS** |
+| P2B Part 2+ — multi-upload hardening, orientation ingest | Not started |
 | P2C — fullscreen viewer suite | Not started |
 | P2D — upload queue / retry / interruption | Not started (no IndexedDB in V1) |
 | P2E — annotation integration | Not started |

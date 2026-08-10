@@ -15,6 +15,7 @@ import {
 } from '@/lib/premium-ui'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
 import { ProjectDatesFields } from '@/components/project/ProjectDatesFields'
+import { ProjectStickyFields } from '@/components/project/ProjectStickyFields'
 import { validateProjectDates } from '@/lib/project-day'
 import {
   NEW_PROJECT_SENTINEL,
@@ -24,20 +25,34 @@ import {
   showProjectDatesOnSetup,
 } from '@/lib/diary-setup-project-dates'
 import {
+  brandingDefaultsFromCompanyProfile,
+  clearToNewProjectSelection,
+  initialiseNewDiarySetupState,
+  shouldRestoreSetupFormDraft,
+} from '@/lib/diary-setup-blank'
+import {
+  DEFAULT_SITE_DIARY_SHIFT,
+  SITE_DIARY_SHIFT_OPTIONS,
+  hydrateShift,
+} from '@/lib/diary-setup-shift'
+import {
   persistSetupProject,
   runDiarySetupContinue,
 } from '@/lib/diary-setup-continue'
 import {
+  hydrateStickyFromRow,
+  validateStickyProjectFields,
+} from '@/lib/project-sticky-fields'
+import { hydrateAuthorRole } from '@/lib/diary-form-hydrate'
+import {
   createDiaryDraftFromSetup,
   fetchDefaultCompanyProfile,
-  fetchLatestSavedDiary,
   updateDiarySetupFields,
 } from '@/lib/diary-draft'
 import {
-  authorNameFromUser,
+  scratchSetupAuthorFromProfile,
   clearSetupFormDraft,
   readReportSetupExtras,
-  readSetupFormDraft,
   todayIsoDate,
   writeReportSetupExtras,
   writeSetupFormDraft,
@@ -85,7 +100,14 @@ function SiteDiarySetupPage() {
   const [projectStartDate, setProjectStartDate] = useState('')
   const [projectPlannedCompletionDate, setProjectPlannedCompletionDate] = useState('')
   const [projectDatesError, setProjectDatesError] = useState('')
+  const [projectAddress, setProjectAddress] = useState('')
+  const [projectManager, setProjectManager] = useState('')
+  const [workingDaysPerWeek, setWorkingDaysPerWeek] = useState('')
+  const [currentPhase, setCurrentPhase] = useState('')
+  const [stickyFieldsError, setStickyFieldsError] = useState('')
   const [author, setAuthor] = useState('')
+  const [authorRole, setAuthorRole] = useState('')
+  const [shift, setShift] = useState(DEFAULT_SITE_DIARY_SHIFT)
   const [reportingOnBehalfOf, setReportingOnBehalfOf] = useState('')
   const [reportDate, setReportDate] = useState(todayIsoDate())
   const [projectReference, setProjectReference] = useState('')
@@ -114,7 +136,13 @@ function SiteDiarySetupPage() {
     if (typeof snapshot.projectPlannedCompletionDate === 'string') {
       setProjectPlannedCompletionDate(snapshot.projectPlannedCompletionDate)
     }
+    if (typeof snapshot.projectAddress === 'string') setProjectAddress(snapshot.projectAddress)
+    if (typeof snapshot.projectManager === 'string') setProjectManager(snapshot.projectManager)
+    if (typeof snapshot.workingDaysPerWeek === 'string') setWorkingDaysPerWeek(snapshot.workingDaysPerWeek)
+    if (typeof snapshot.currentPhase === 'string') setCurrentPhase(snapshot.currentPhase)
     if (typeof snapshot.author === 'string') setAuthor(snapshot.author)
+    if (typeof snapshot.authorRole === 'string') setAuthorRole(snapshot.authorRole)
+    if (typeof snapshot.shift === 'string' && snapshot.shift) setShift(hydrateShift(snapshot.shift))
     if (typeof snapshot.reportingOnBehalfOf === 'string') setReportingOnBehalfOf(snapshot.reportingOnBehalfOf)
     if (typeof snapshot.reportDate === 'string' && snapshot.reportDate) setReportDate(snapshot.reportDate)
     if (typeof snapshot.projectReference === 'string') setProjectReference(snapshot.projectReference)
@@ -148,6 +176,8 @@ function SiteDiarySetupPage() {
         if (cancelled) return
         setProjects(projectRows || [])
 
+        // Always resolve profile author before any form apply. A cancelled effect
+        // must not continue with authorName:'' and wipe a remounted form (Strict Mode).
         let profileName = ''
         if (user) {
           const { data: userRow } = await supabase
@@ -155,8 +185,9 @@ function SiteDiarySetupPage() {
             .select('full_name')
             .eq('id', user.id)
             .maybeSingle()
-          if (!cancelled) profileName = authorNameFromUser(user, userRow)
+          profileName = scratchSetupAuthorFromProfile(user, userRow)
         }
+        if (cancelled) return
 
         // Editing an existing diary's setup details
         if (editingReportId && editingProjectId) {
@@ -179,12 +210,20 @@ function SiteDiarySetupPage() {
           }
           const extras = readReportSetupExtras(editingReportId)
           const dates = hydrateProjectDatesFromRow(project)
+          const sticky = hydrateStickyFromRow(project)
 
           setSelectedProjectId(editingProjectId)
           setProjectName(project?.name || '')
           setProjectStartDate(dates.projectStartDate)
           setProjectPlannedCompletionDate(dates.projectPlannedCompletionDate)
+          setProjectAddress(sticky.projectAddress)
+          setProjectManager(sticky.projectManager)
+          setWorkingDaysPerWeek(sticky.workingDaysPerWeek)
+          setCurrentPhase(sticky.currentPhase)
+          // Edit/View setup: saved diary values win; profile is fallback only.
           setAuthor(report?.creator_name || profileName || '')
+          setAuthorRole(hydrateAuthorRole(report))
+          setShift(hydrateShift(report?.shift))
           setReportingOnBehalfOf(
             report?.company_reporting_for || profile?.company_name || '',
           )
@@ -203,45 +242,35 @@ function SiteDiarySetupPage() {
           return
         }
 
-        // Restore in-progress setup when navigating Back
-        const saved = readSetupFormDraft()
-        if (saved?.projectName || saved?.author || saved?.reportingOnBehalfOf) {
-          applyFormSnapshot({
-            ...saved,
-            author: saved.author || profileName,
-            reportingOnBehalfOf: saved.reportingOnBehalfOf || profile?.company_name || '',
-            reportDate: saved.reportDate || todayIsoDate(),
-          })
-          if (saved.logoStoragePath) {
-            const preview = await signedLogoUrl(supabase, saved.logoStoragePath)
-            if (!cancelled) setLogoPreview(preview)
-          }
-          setLoading(false)
-          return
+        // Brand-new diary setup — never restore a prior session draft / last diary.
+        // (Edit Report Details uses editingReportId above; Use as Basis is a separate route.)
+        // Scratch creator sticky: signed-in profile only — not prior diary, project, or draft.
+        if (!shouldRestoreSetupFormDraft({ editingReportId })) {
+          clearSetupFormDraft()
         }
 
-        // Fresh setup defaults
-        setAuthor(profileName)
-        setReportingOnBehalfOf(profile?.company_name || '')
-        setReportDate(todayIsoDate())
-        setBrandingId(profile?.id || null)
-        setBrandColor(profile?.brand_color || null)
-        if (profile?.logo_url) {
-          setLogoStoragePath(profile.logo_url)
-          const preview = await signedLogoUrl(supabase, profile.logo_url)
+        const existingProject =
+          !editingReportId && editingProjectId
+            ? (projectRows || []).find((p) => p.id === editingProjectId) || null
+            : null
+
+        const fresh = initialiseNewDiarySetupState({
+          authorName: profileName,
+          reportDate: todayIsoDate(),
+          companyProfile: profile,
+          existingProject,
+        })
+        if (cancelled) return
+        applyFormSnapshot(fresh)
+        // Explicit profile sticky — do not rely solely on snapshot apply path.
+        setAuthor(fresh.author)
+
+        const logoPath = fresh.logoStoragePath
+        if (logoPath) {
+          const preview = await signedLogoUrl(supabase, logoPath)
           if (!cancelled) setLogoPreview(preview)
-        }
-
-        // Hub "Start New" may pass ?project= to preselect a saved project (not a diary).
-        if (!editingReportId && editingProjectId) {
-          const project = (projectRows || []).find((p) => p.id === editingProjectId)
-          if (project) {
-            const merged = mergeProjectIntoSetupState({}, project)
-            setSelectedProjectId(merged.selectedProjectId)
-            setProjectName(merged.projectName)
-            setProjectStartDate(merged.projectStartDate)
-            setProjectPlannedCompletionDate(merged.projectPlannedCompletionDate)
-          }
+        } else if (!cancelled) {
+          setLogoPreview(null)
         }
       } catch (err) {
         if (!cancelled) setError(err?.message || 'Could not load setup')
@@ -266,7 +295,13 @@ function SiteDiarySetupPage() {
       projectName,
       projectStartDate,
       projectPlannedCompletionDate,
+      projectAddress,
+      projectManager,
+      workingDaysPerWeek,
+      currentPhase,
       author,
+      authorRole,
+      shift,
       reportingOnBehalfOf,
       reportDate,
       projectReference,
@@ -281,7 +316,13 @@ function SiteDiarySetupPage() {
     projectName,
     projectStartDate,
     projectPlannedCompletionDate,
+    projectAddress,
+    projectManager,
+    workingDaysPerWeek,
+    currentPhase,
     author,
+    authorRole,
+    shift,
     reportingOnBehalfOf,
     reportDate,
     projectReference,
@@ -303,62 +344,96 @@ function SiteDiarySetupPage() {
     el?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
   }, [error])
 
+  const applyStickyFormState = (merged) => {
+    setSelectedProjectId(merged.selectedProjectId)
+    setProjectName(merged.projectName || '')
+    setProjectStartDate(merged.projectStartDate || '')
+    setProjectPlannedCompletionDate(merged.projectPlannedCompletionDate || '')
+    setProjectAddress(merged.projectAddress || '')
+    setProjectManager(merged.projectManager || '')
+    setWorkingDaysPerWeek(merged.workingDaysPerWeek || '')
+    setCurrentPhase(merged.currentPhase || '')
+  }
+
   const handleSelectExisting = async (projectId) => {
     setError('')
     if (!projectId || projectId === NEW_PROJECT_VALUE) {
-      setSelectedProjectId(NEW_PROJECT_VALUE)
-      setProjectStartDate('')
-      setProjectPlannedCompletionDate('')
+      const cleared = clearToNewProjectSelection({
+        author,
+        reportDate,
+      })
+      applyStickyFormState(cleared)
+      setProjectReference('')
+      setAuthorRole('')
+      setReportingOnBehalfOf('')
       setProjectDatesError('')
+      setStickyFieldsError('')
+      // Branding may use company-profile default only — not the previously selected diary.
+      try {
+        const profile = await fetchDefaultCompanyProfile(supabase)
+        const branding = brandingDefaultsFromCompanyProfile(profile)
+        setBrandingId(branding.brandingId)
+        setBrandColor(branding.brandColor)
+        setLogoFile(null)
+        if (logoObjectUrl) {
+          URL.revokeObjectURL(logoObjectUrl)
+          setLogoObjectUrl(null)
+        }
+        setLogoStoragePath(branding.logoStoragePath)
+        if (branding.logoStoragePath) {
+          const preview = await signedLogoUrl(supabase, branding.logoStoragePath)
+          setLogoPreview(preview)
+        } else {
+          setLogoPreview(null)
+        }
+      } catch {
+        setBrandingId(null)
+        setBrandColor(null)
+        setLogoStoragePath(null)
+        setLogoPreview(null)
+      }
       return
     }
 
     const project = existingProjects.find((p) => p.id === projectId)
     if (!project) return
 
+    // Sticky + programme only — do not copy diary content from latest report.
     const merged = mergeProjectIntoSetupState({}, project)
-    setSelectedProjectId(merged.selectedProjectId)
-    setProjectName(merged.projectName)
-    setProjectStartDate(merged.projectStartDate)
-    setProjectPlannedCompletionDate(merged.projectPlannedCompletionDate)
+    applyStickyFormState(merged)
     setProjectDatesError('')
+    setStickyFieldsError('')
+  }
 
-    try {
-      const [latest, profile] = await Promise.all([
-        fetchLatestSavedDiary(supabase, projectId),
-        fetchDefaultCompanyProfile(supabase),
-      ])
+  const handleProjectNameChange = (e) => {
+    const nextName = e.target.value
+    setProjectName(nextName)
+    setError('')
 
-      if (latest?.creator_name) setAuthor(latest.creator_name)
-      if (latest?.company_reporting_for) {
-        setReportingOnBehalfOf(latest.company_reporting_for)
-      } else if (profile?.company_name && !reportingOnBehalfOf.trim()) {
-        setReportingOnBehalfOf(profile.company_name)
+    const trimmed = nextName.trim()
+    const match = trimmed
+      ? existingProjects.find((p) => String(p.name || '').trim() === trimmed)
+      : null
+
+    if (match) {
+      if (selectedProjectId !== match.id) {
+        void handleSelectExisting(match.id)
       }
+      return
+    }
 
-      // Keep date as today for a new report; only prefill date when editing.
-      if (editingReportId && latest?.report_date) setReportDate(latest.report_date)
-
-      const extras = latest?.id ? readReportSetupExtras(latest.id) : null
-      if (extras?.projectReference) setProjectReference(extras.projectReference)
-
-      const logoPath = latest?.brand_logo_url || profile?.logo_url || null
-      setBrandingId(latest?.branding_id || profile?.id || null)
-      setBrandColor(latest?.brand_color || profile?.brand_color || null)
-      setLogoFile(null)
-      if (logoObjectUrl) {
-        URL.revokeObjectURL(logoObjectUrl)
-        setLogoObjectUrl(null)
-      }
-      setLogoStoragePath(logoPath)
-      if (logoPath) {
-        const preview = await signedLogoUrl(supabase, logoPath)
-        setLogoPreview(preview)
-      } else {
-        setLogoPreview(null)
-      }
-    } catch (err) {
-      setError(err?.message || 'Could not load project details')
+    if (selectedProjectId !== NEW_PROJECT_VALUE) {
+      const cleared = clearToNewProjectSelection({
+        author,
+        reportDate,
+      })
+      applyStickyFormState(cleared)
+      setProjectName(nextName)
+      setProjectReference('')
+      setAuthorRole('')
+      setReportingOnBehalfOf('')
+      setProjectDatesError('')
+      setStickyFieldsError('')
     }
   }
 
@@ -389,6 +464,15 @@ function SiteDiarySetupPage() {
     setProjectDatesError(v.ok ? '' : v.message)
   }
 
+  const handleStickyFieldsChange = (next) => {
+    setProjectAddress(next.projectAddress)
+    setProjectManager(next.projectManager)
+    setWorkingDaysPerWeek(next.workingDaysPerWeek)
+    setCurrentPhase(next.currentPhase)
+    const v = validateStickyProjectFields(next)
+    setStickyFieldsError(v.ok ? '' : v.message)
+  }
+
   const uploadLogoIfNeeded = async (userId) => {
     if (!logoFile) return logoStoragePath
     const ext = logoFile.name.split('.').pop()?.toLowerCase() || 'jpg'
@@ -406,6 +490,7 @@ function SiteDiarySetupPage() {
     setSaving(true)
     setError('')
     setProjectDatesError('')
+    setStickyFieldsError('')
 
     try {
       let brandLogoUrl = logoStoragePath
@@ -420,10 +505,16 @@ function SiteDiarySetupPage() {
         form: {
           projectName,
           author,
+          authorRole,
+          shift,
           reportingOnBehalfOf,
           reportDate,
           startDate: projectStartDate,
           plannedCompletionDate: projectPlannedCompletionDate,
+          projectAddress,
+          projectManager,
+          workingDaysPerWeek,
+          currentPhase,
           projectReference,
           brandLogoUrl: brandLogoUrl || null,
           brandingId,
@@ -449,6 +540,7 @@ function SiteDiarySetupPage() {
 
       if (!result.ok) {
         if (result.field === 'dates') setProjectDatesError(result.message)
+        if (result.field === 'workingDays') setStickyFieldsError(result.message)
         setError(result.message || 'Could not continue to Site Diary')
         setSaving(false)
         return
@@ -514,42 +606,45 @@ function SiteDiarySetupPage() {
       )}
 
       <GlassSection title="Project and date" accent={BRAND_ACCENT}>
-        {existingProjects.length > 0 && (
-          <>
-            <label style={setupLabelStyle}>Which project is this diary for?</label>
-            <select
-              value={selectedProjectId}
-              onChange={(e) => handleSelectExisting(e.target.value)}
-              style={{ ...setupInputStyle, cursor: 'pointer' }}
-              aria-label="Choose which project this diary is for"
-            >
-              <option value={NEW_PROJECT_VALUE}>New project — type the name below</option>
-              {existingProjects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
-
         <label style={setupLabelStyle}>Project Name *</label>
         <input
           value={projectName}
-          onChange={(e) => {
-            setProjectName(e.target.value)
-            if (selectedProjectId !== NEW_PROJECT_VALUE) {
-              const match = existingProjects.find((p) => p.id === selectedProjectId)
-              if (match && e.target.value.trim() !== match.name) {
-                setSelectedProjectId(NEW_PROJECT_VALUE)
-              }
-            }
-          }}
-          placeholder="e.g. 14 High Street Extension"
+          onChange={handleProjectNameChange}
+          list={existingProjects.length > 0 ? 'diary-setup-project-names' : undefined}
+          placeholder="Select an existing project or type a new name"
           autoComplete="organization"
           style={setupInputStyle}
           required
+          aria-label="Project Name"
         />
+        {existingProjects.length > 0 ? (
+          <datalist id="diary-setup-project-names">
+            {existingProjects.map((p) => (
+              <option key={p.id} value={p.name} />
+            ))}
+          </datalist>
+        ) : null}
+
+        <div style={{ marginBottom: 4 }}>
+          <p
+            style={{
+              margin: '0 0 12px',
+              fontSize: 14,
+              lineHeight: 1.45,
+              color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
+            }}
+          >
+            Sticky project information (set once for this project)
+          </p>
+          <ProjectStickyFields
+            projectAddress={projectAddress}
+            projectManager={projectManager}
+            workingDaysPerWeek={workingDaysPerWeek}
+            currentPhase={currentPhase}
+            onChange={handleStickyFieldsChange}
+            error={stickyFieldsError}
+          />
+        </div>
 
         {showProjectDatesOnSetup() ? (
           <div style={{ marginBottom: 4 }}>
@@ -572,15 +667,56 @@ function SiteDiarySetupPage() {
           </div>
         ) : null}
 
-        <label style={setupLabelStyle}>Report Author *</label>
-        <input
-          value={author}
-          onChange={(e) => setAuthor(e.target.value)}
-          placeholder="Your name"
-          autoComplete="name"
-          style={setupInputStyle}
+        <label style={setupLabelStyle}>Shift *</label>
+        <select
+          value={shift}
+          onChange={(e) => setShift(hydrateShift(e.target.value))}
+          style={{ ...setupInputStyle, cursor: 'pointer' }}
+          aria-label="Shift"
           required
-        />
+        >
+          <option value="Day">Day</option>
+          <option value="Back">Back</option>
+          <option value="Night">Night</option>
+          {!SITE_DIARY_SHIFT_OPTIONS.includes(shift) && shift ? (
+            <option value={shift}>{shift}</option>
+          ) : null}
+        </select>
+
+        <div style={{ marginTop: 8, marginBottom: 4 }}>
+          <p
+            style={{
+              margin: '0 0 12px',
+              fontSize: 14,
+              fontWeight: 650,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              lineHeight: 1.45,
+              color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
+            }}
+          >
+            Report Author
+          </p>
+          <label style={setupLabelStyle}>Author Name *</label>
+          <input
+            value={author}
+            onChange={(e) => setAuthor(e.target.value)}
+            placeholder="Your name"
+            autoComplete="name"
+            style={setupInputStyle}
+            required
+          />
+
+          <label style={setupLabelStyle}>Author Role</label>
+          <input
+            type="text"
+            value={authorRole}
+            onChange={(e) => setAuthorRole(e.target.value)}
+            placeholder="e.g. Site Manager"
+            autoComplete="organization-title"
+            style={setupInputStyle}
+          />
+        </div>
 
         <label style={setupLabelStyle}>Reporting On Behalf Of *</label>
         <input

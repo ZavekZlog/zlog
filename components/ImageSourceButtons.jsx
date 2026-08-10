@@ -89,12 +89,13 @@ export function ImageSourceButtons({
             pointerEvents: disabled ? 'none' : 'auto',
           }}
         >
+          {/* Camera is always single-shot — multiple + capture often opens the gallery instead. */}
           <input
             id={cameraId}
             type="file"
             accept="image/*"
             capture="environment"
-            multiple={multiple}
+            multiple={false}
             disabled={disabled}
             onChange={emitFiles}
             style={overlayInputStyle}

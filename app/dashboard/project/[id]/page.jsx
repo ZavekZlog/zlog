@@ -9,6 +9,7 @@ import {
   RecentEntryCard,
   SecondaryButton,
   DestructiveButton,
+  GlassSection,
   dashboardCardInteractionCss,
   premiumScopedCss,
   typeTokens,
@@ -19,6 +20,10 @@ import {
 } from '@/lib/premium-ui'
 import { REPORT_THEMES } from '@/lib/report-theme'
 import { existingDiaryHref } from '@/lib/diary-routing'
+import { ProjectDatesEditor } from '@/components/project/ProjectDatesFields'
+import { ProjectStickyEditor } from '@/components/project/ProjectStickyFields'
+import { toDateInputValue } from '@/lib/project-day'
+import { hydrateStickyFromRow } from '@/lib/project-sticky-fields'
 
 export default function ProjectPage() {
   const [project, setProject] = useState(null)
@@ -30,19 +35,31 @@ export default function ProjectPage() {
   const { id } = useParams()
 
   useEffect(() => {
+    let cancelled = false
     const load = async () => {
-      const { data: proj } = await supabase.from('projects').select('*').eq('id', id).single()
+      setLoading(true)
+      const { data: proj } = await supabase
+        .from('projects')
+        .select(
+          'id, name, client_name, site_address, client_pm, working_days_per_week, current_phase, status, start_date, planned_completion_date, created_at',
+        )
+        .eq('id', id)
+        .single()
       const { data: logs } = await supabase
         .from('daily_reports')
         .select('*')
         .eq('project_id', id)
         .eq('is_draft', false)
         .order('report_date', { ascending: false })
+      if (cancelled) return
       setProject(proj)
       setDiaries(logs || [])
       setLoading(false)
     }
     load()
+    return () => {
+      cancelled = true
+    }
   }, [id])
 
   const handleDeleteDiary = async (report) => {
@@ -131,6 +148,8 @@ export default function ProjectPage() {
     )
   }
 
+  const sticky = hydrateStickyFromRow(project)
+
   return (
     <PremiumShell
       title="Project"
@@ -139,7 +158,69 @@ export default function ProjectPage() {
     >
       <style>{`${premiumScopedCss}${dashboardCardInteractionCss}`}</style>
 
-      <div className="premium-dash-cards-grid" style={{ marginBottom: 32 }}>
+      <GlassSection title="Sticky project information" accent={REPORT_THEMES.diary.accent}>
+        <p
+          style={{
+            margin: '0 0 14px',
+            fontSize: 14,
+            lineHeight: 1.45,
+            color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
+          }}
+        >
+          Set once for this project. Future reports inherit these values until you edit them.
+        </p>
+        <ProjectStickyEditor
+          key={`sticky-${id}`}
+          projectId={id}
+          initialProjectAddress={sticky.projectAddress}
+          initialProjectManager={sticky.projectManager}
+          initialWorkingDaysPerWeek={sticky.workingDaysPerWeek}
+          initialCurrentPhase={sticky.currentPhase}
+          accent={REPORT_THEMES.diary.accent}
+          supabase={supabase}
+          onSaved={(nextSticky) => {
+            setProject((prev) => prev ? {
+              ...prev,
+              site_address: nextSticky.projectAddress || null,
+              client_pm: nextSticky.projectManager || null,
+              working_days_per_week: nextSticky.workingDaysPerWeek
+                ? Number(nextSticky.workingDaysPerWeek)
+                : null,
+              current_phase: nextSticky.currentPhase || null,
+            } : prev)
+          }}
+        />
+      </GlassSection>
+
+      <GlassSection title="Project programme dates" accent={REPORT_THEMES.progress.accent}>
+        <p
+          style={{
+            margin: '0 0 14px',
+            fontSize: 14,
+            lineHeight: 1.45,
+            color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
+          }}
+        >
+          Set once for this project. Used for Project Day on the PROJECT card.
+        </p>
+        <ProjectDatesEditor
+          key={`dates-${id}`}
+          projectId={id}
+          initialStartDate={toDateInputValue(project?.start_date)}
+          initialPlannedCompletionDate={toDateInputValue(project?.planned_completion_date)}
+          accent={REPORT_THEMES.progress.accent}
+          supabase={supabase}
+          onSaved={({ startDate, plannedCompletionDate }) => {
+            setProject((prev) => prev ? {
+              ...prev,
+              start_date: startDate || null,
+              planned_completion_date: plannedCompletionDate || null,
+            } : prev)
+          }}
+        />
+      </GlassSection>
+
+      <div className="premium-dash-cards-grid" style={{ marginBottom: 32, marginTop: 32 }}>
         <div className="premium-dash-card-wrap" style={{ animationDelay: '0ms' }}>
           <ModuleHomeCard
             title="Site Diary"
@@ -199,14 +280,14 @@ export default function ProjectPage() {
                 }}
                 style={recentEntryActionButtonStyle}
               >
-                View / Edit
+                View
               </SecondaryButton>
               <SecondaryButton
                 type="button"
                 onClick={() => router.push(`/dashboard/project/${id}/diary?template=${d.id}`)}
                 style={recentEntryActionButtonStyle}
               >
-                Use as Template
+                Use as Basis for New Diary
               </SecondaryButton>
               <DestructiveButton
                 type="button"

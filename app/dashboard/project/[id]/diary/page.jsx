@@ -46,7 +46,20 @@ import {
   fetchOpenDraft,
 } from '@/lib/diary-draft'
 import { DiarySaveError, DIARY_SAVE_LOG, finalizeSiteDiarySave } from '@/lib/diary-save'
-import { diaryHubHref, existingDiaryHref } from '@/lib/diary-routing'
+import { diaryHubHref, diaryEditHref, existingDiaryHref } from '@/lib/diary-routing'
+import {
+  diaryModeBanner,
+  resolveDiaryInteractionMode,
+} from '@/lib/diary-view-mode'
+import {
+  hydrateAuthorName,
+  hydrateAuthorRole,
+  hydratePlantFormRows,
+  linkedProjectForSavedDiary,
+  postSaveDiaryHref,
+  shouldShowBrandingSelector,
+  shouldShowRecentDiariesOnReportPage,
+} from '@/lib/diary-form-hydrate'
 import { readReportSetupExtras } from '@/lib/report-setup'
 import {
   diaryLinkedProjectSelectColumns,
@@ -58,7 +71,7 @@ import {
   SESSION_EXPIRED_SAVE_MESSAGE,
 } from '@/lib/auth/return-path'
 
-const SHIFT_OPTIONS = ['Day', 'Night', 'Weekend', 'Half day']
+const SHIFT_OPTIONS = ['Day', 'Back', 'Night']
 
 const makeUuid = () => {
   const c = globalThis.crypto;
@@ -274,8 +287,19 @@ export default function SiteDiaryPage() {
   const searchParams = useSearchParams()
   const prefillLast = searchParams.get('prefill') === 'last'
   const editingReportId = searchParams.get('report') || searchParams.get('diaryId') || null
+  const editQuery = searchParams.get('edit')
   const duplicateReportId = (!editingReportId && searchParams.get('duplicate')) || null
   const templateReportId = (!editingReportId && searchParams.get('template')) || duplicateReportId || null
+  // After save, stay on this report in View (banner clears “editing” wording).
+  const [reportIsDraft, setReportIsDraft] = useState(null)
+  const [formReloadToken, setFormReloadToken] = useState(0)
+  const diaryMode = resolveDiaryInteractionMode({
+    reportId: editingReportId,
+    editQuery,
+    isDraft: reportIsDraft,
+  })
+  const isDiaryEditMode = diaryMode === 'edit'
+  const isDiaryViewMode = diaryMode === 'view'
   const router = useRouter()
   const supabase = createClient()
 
@@ -299,6 +323,7 @@ export default function SiteDiaryPage() {
     setSaving(false)
     setJustSaved(false)
     setShowSaveBanner(false)
+    setReportIsDraft(null)
   }, [editingReportId])
 
   // Detect session loss while editing — recover via Sign in CTA (do not leave Save enabled).
@@ -393,8 +418,10 @@ export default function SiteDiaryPage() {
   const [projectReference, setProjectReference] = useState('')
   const [setupLogoPreview, setSetupLogoPreview] = useState(null)
 
-  const openReportForm = useCallback((reportId) => {
-    const href = existingDiaryHref(projectId, reportId)
+  const openReportForm = useCallback((reportId, { mode = 'view' } = {}) => {
+    const href = mode === 'edit'
+      ? diaryEditHref(projectId, reportId)
+      : existingDiaryHref(projectId, reportId)
     if (!href) return
     router.replace(href)
   }, [router, projectId])
@@ -452,7 +479,7 @@ export default function SiteDiaryPage() {
         }
         if (templateReportId) {
           const id = await createTodaysDiaryDraft(supabase, projectId, templateReportId)
-          if (!cancelled) openReportForm(id)
+          if (!cancelled) openReportForm(id, { mode: 'edit' })
           return
         }
         // Consistent entry: A/B hub (edit existing vs start new) — same on phone and laptop.
@@ -509,7 +536,7 @@ export default function SiteDiaryPage() {
         setProjectReference('')
         setSetupLogoPreview(null)
         setLabourRows([emptyLabour()])
-        setPlantRows([emptyPlant()])
+        setPlantRows(hydratePlantFormRows([], makeUuid))
         setEquipmentHireRows([emptyEquipmentHire()])
 
         const applyCover = async (storagePath) => {
@@ -556,6 +583,7 @@ export default function SiteDiaryPage() {
           site_summary: existing.site_summary,
           report_date: existing.report_date,
         })
+        setReportIsDraft(existing.is_draft === true)
 
         let labour
         let plant
@@ -567,7 +595,7 @@ export default function SiteDiaryPage() {
             supabase.from('report_photos').select('url, caption, sequence, layout, location, annotations, overlay_path').eq('report_id', existing.id).order('sequence'),
           ])
           labour = results[0].data
-          plant = results[1].data
+          plant = results[1].error ? [] : results[1].data
           reportPhotos = results[2].data
           if (results[2].error && /annotations|overlay_path/i.test(results[2].error.message || '')) {
             const fallback = await supabase
@@ -589,8 +617,8 @@ export default function SiteDiaryPage() {
         setDelaysIssues(existing.delays_issues || '')
         setActionsRequired(existing.actions || existing.actions_required || '')
         setCompanyReportingFor(existing.company_reporting_for || '')
-        setCreatorName(existing.creator_name || '')
-        setCreatorRole(existing.creator_role || '')
+        setCreatorName(hydrateAuthorName(existing))
+        setCreatorRole(hydrateAuthorRole(existing))
         {
           const extras = readReportSetupExtras(existing.id)
           setProjectReference(extras?.projectReference || '')
@@ -610,6 +638,8 @@ export default function SiteDiaryPage() {
             brandLogoUrl: existing.brand_logo_url || null,
             companyName: '',
           })
+        } else {
+          setBrandingSelection(null)
         }
         await applyCover(existing.cover_photo_url)
         await applySignature(existing.signature_url)
@@ -624,16 +654,11 @@ export default function SiteDiaryPage() {
             hours: row.hours != null ? String(row.hours) : '',
             notes: row.notes || '',
           })))
+        } else {
+          setLabourRows([emptyLabour()])
         }
-        if (plant?.length) {
-          setPlantRows(plant.map((row) => ({
-            key: makeUuid(),
-            plant_type: row.item || '',
-            quantity: row.ref != null ? String(row.ref) : '',
-            hours: row.status != null ? String(row.status) : '',
-            notes: row.notes || '',
-          })))
-        }
+        // Always replace plant rows from this report only (never merge prior diary state).
+        setPlantRows(hydratePlantFormRows(plant, makeUuid))
         if (reportPhotos?.length) {
           const withPreview = await Promise.all(reportPhotos.map(async (p, index) => {
             const preview = await signedUrlForPath(supabase, p.url)
@@ -688,7 +713,7 @@ export default function SiteDiaryPage() {
     }
     load()
     return () => { cancelled = true }
-  }, [projectId, editingReportId, router])
+  }, [projectId, editingReportId, formReloadToken, router])
 
   const handleLocationWalkChange = useCallback((next) => {
     setLocationWalk(next)
@@ -897,12 +922,6 @@ export default function SiteDiaryPage() {
     }
   }, [])
 
-  const projectSubtitle = useMemo(() => {
-    if (!project) return ''
-    const parts = [project.client_name, project.site_address].filter(Boolean)
-    return parts.join(' · ')
-  }, [project])
-
   const projectProgrammeCard = useMemo(
     () => programmeDatesForProjectDetails(project, reportDate || null),
     [project, reportDate],
@@ -1011,8 +1030,11 @@ export default function SiteDiaryPage() {
   const handleProjectChange = (newId) => {
     if (newId && newId !== projectId) {
       let query = ''
-      if (editingReportId) query = `?report=${editingReportId}`
-      else if (duplicateReportId) query = `?duplicate=${duplicateReportId}`
+      if (editingReportId) {
+        query = isDiaryEditMode
+          ? `?report=${editingReportId}&edit=1`
+          : `?report=${editingReportId}`
+      } else if (duplicateReportId) query = `?duplicate=${duplicateReportId}`
       else if (prefillLast) query = '?prefill=last'
       router.push(`/dashboard/project/${newId}/diary${query}`)
     }
@@ -1030,7 +1052,7 @@ export default function SiteDiaryPage() {
 
   const handleContinueDraft = async () => {
     if (!openDraft?.id || startBusy) return
-    openReportForm(openDraft.id)
+    openReportForm(openDraft.id, { mode: 'edit' })
   }
 
   const handleCreateTodaysDiary = async () => {
@@ -1039,7 +1061,7 @@ export default function SiteDiaryPage() {
     setStartError('')
     try {
       const id = await createTodaysDiaryDraft(supabase, projectId)
-      openReportForm(id)
+      openReportForm(id, { mode: 'edit' })
     } catch (err) {
       setStartError(err?.message || 'Could not create today’s diary')
       setStartBusy(false)
@@ -1052,7 +1074,7 @@ export default function SiteDiaryPage() {
     setStartError('')
     try {
       const id = await createBlankDiaryDraft(supabase, projectId)
-      openReportForm(id)
+      openReportForm(id, { mode: 'edit' })
     } catch (err) {
       setStartError(err?.message || 'Could not start blank diary')
       setStartBusy(false)
@@ -1065,12 +1087,67 @@ export default function SiteDiaryPage() {
     setStartError('')
     try {
       const id = await createTodaysDiaryDraft(supabase, projectId, sourceId)
-      openReportForm(id)
+      openReportForm(id, { mode: 'edit' })
     } catch (err) {
       setStartError(err?.message || 'Could not create diary from template')
       setStartBusy(false)
     }
   }
+
+  const handleEnterEditMode = () => {
+    if (!editingReportId) return
+    setJustSaved(false)
+    setShowSaveBanner(false)
+    const href = diaryEditHref(projectId, editingReportId)
+    if (href) router.replace(href)
+  }
+
+  const handleCancelEditMode = () => {
+    if (!editingReportId) return
+    setError('')
+    setJustSaved(false)
+    setShowSaveBanner(false)
+    const href = existingDiaryHref(projectId, editingReportId)
+    if (href) router.replace(href)
+    setFormReloadToken((n) => n + 1)
+  }
+
+  const handleUseAsBasisForNewDiary = async () => {
+    if (!editingReportId || startBusy) return
+    setStartBusy(true)
+    setError('')
+    try {
+      const id = await createTodaysDiaryDraft(supabase, projectId, editingReportId)
+      openReportForm(id, { mode: 'edit' })
+    } catch (err) {
+      setError(err?.message || 'Could not create a new diary from this one')
+    } finally {
+      setStartBusy(false)
+    }
+  }
+
+  const diaryModeBannerCopy = useMemo(
+    () => diaryModeBanner({ mode: diaryMode || 'view', projectName: project?.name || '' }),
+    [diaryMode, project?.name],
+  )
+
+  const linkedProject = useMemo(
+    () => linkedProjectForSavedDiary({
+      reportProjectId: project?.id || projectId,
+      routeProjectId: projectId,
+      projectName: project?.name || '',
+    }),
+    [project?.id, project?.name, projectId],
+  )
+
+  const showBrandingSelector = shouldShowBrandingSelector({
+    hasReportId: Boolean(editingReportId),
+    allowChangeBranding: false,
+  })
+
+  const showRecentOnThisPage = shouldShowRecentDiariesOnReportPage({
+    hasOpenReport: Boolean(editingReportId),
+  })
 
   const diarySaveLog = (...args) => {
     if (process.env.NODE_ENV !== 'production') console.log(DIARY_SAVE_LOG, ...args)
@@ -1085,7 +1162,9 @@ export default function SiteDiaryPage() {
     const path =
       typeof window !== 'undefined'
         ? `${window.location.pathname}${window.location.search}`
-        : `/dashboard/project/${projectId}/diary${editingReportId ? `?report=${editingReportId}` : ''}`
+        : (isDiaryEditMode
+          ? diaryEditHref(projectId, editingReportId)
+          : existingDiaryHref(projectId, editingReportId)) || `/dashboard/project/${projectId}/diary`
     // Full navigation so /login?next=… is always the loaded URL (not a soft push race).
     window.location.assign(loginUrlWithReturn(path))
   }
@@ -1188,11 +1267,6 @@ export default function SiteDiaryPage() {
     try {
       if (!editingReportId) {
         failSave('We couldn’t save your Site Diary because it wasn’t opened correctly. Go back to Site Diary and choose Open Latest Diary or Start New Site Diary.')
-        return
-      }
-
-      if (!siteSummary.trim()) {
-        failSave('Add a short site summary, then tap Save Site Diary.')
         return
       }
 
@@ -1372,8 +1446,8 @@ export default function SiteDiaryPage() {
         return
       }
 
-      // Button confirmation + non-blocking green banner (~3s), then Report Complete.
-      completingRef.current = true
+      // Same diary ID → View mode with persistent Saved confirmation (no complete redirect).
+      setReportIsDraft(false)
       flushSync(() => {
         setSaving(false)
         setJustSaved(true)
@@ -1382,10 +1456,8 @@ export default function SiteDiaryPage() {
       saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
       diarySaveLog('success', { reportId: saved.id })
 
-      if (saveNavTimerRef.current) clearTimeout(saveNavTimerRef.current)
-      saveNavTimerRef.current = setTimeout(() => {
-        router.replace(`/dashboard/project/${projectId}/diary/complete?report=${saved.id}`)
-      }, 3000)
+      const viewHref = postSaveDiaryHref(projectId, saved.id)
+      if (viewHref) router.replace(viewHref)
     } catch (err) {
       const message =
         err instanceof DiarySaveError
@@ -1511,7 +1583,7 @@ export default function SiteDiaryPage() {
                   onClick={() => openReportForm(d.id)}
                   style={recentEntryActionButtonStyle}
                 >
-                  View / Edit
+                  View
                 </SecondaryButton>
                 <SecondaryButton
                   type="button"
@@ -1519,7 +1591,7 @@ export default function SiteDiaryPage() {
                   onClick={() => handleUseAsTemplate(d.id)}
                   style={recentEntryActionButtonStyle}
                 >
-                  Use as Template
+                  Use as Basis for New Diary
                 </SecondaryButton>
               </div>
             </RecentEntryCard>
@@ -1582,17 +1654,66 @@ export default function SiteDiaryPage() {
           ✓ Your Site Diary has been saved.
         </div>
       )}
-      {editingReportId && (
+      {justSaved && isDiaryViewMode && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            background: 'rgba(34,197,94,0.14)',
+            border: '1px solid rgba(34,197,94,0.38)',
+            color: '#4ade80',
+            padding: '12px 14px',
+            fontSize: 14,
+            marginBottom: 16,
+            borderRadius: 10,
+            lineHeight: 1.5,
+            fontWeight: 600,
+          }}
+        >
+          ✓ Saved — you’re viewing this Site Diary.
+        </div>
+      )}
+      {editingReportId && diaryMode && (
         <div style={{ background: `rgba(${DIARY_ACCENT}, 0.08)`, border: `1px solid rgba(${DIARY_ACCENT}, 0.25)`, color: '#F0EDE8', padding: '12px 14px', fontSize: 14, marginBottom: 16, borderRadius: 10, lineHeight: 1.5 }}>
-          You’re editing today’s Site Diary
-          {project?.name ? (
+          {diaryModeBannerCopy.emphasizeProject && project?.name ? (
             <>
-              {' '}
-              for{' '}
+              {isDiaryViewMode ? 'You’re viewing the saved Site Diary for ' : 'You’re editing the saved Site Diary for '}
               <strong style={{ fontWeight: 700, color: 'var(--text)' }}>{project.name}</strong>
+              {isDiaryViewMode ? '.' : '. Make your changes, then tap Save Site Diary when you’re ready.'}
             </>
-          ) : null}
-          . Fill in the sections below, then tap <strong>Save Site Diary</strong> when you’re ready.
+          ) : (
+            diaryModeBannerCopy.text
+          )}
+          {isDiaryViewMode ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+              <PrimaryCTA
+                type="button"
+                accent={DIARY_ACCENT}
+                onClick={handleEnterEditMode}
+                style={{ flex: '1 1 160px', minHeight: 48 }}
+              >
+                Edit This Diary
+              </PrimaryCTA>
+              <SecondaryButton
+                type="button"
+                disabled={startBusy}
+                onClick={handleUseAsBasisForNewDiary}
+                style={{ flex: '1 1 160px', minHeight: 48 }}
+              >
+                Use as Basis for New Diary
+              </SecondaryButton>
+            </div>
+          ) : (
+            <div style={{ marginTop: 12 }}>
+              <SecondaryButton
+                type="button"
+                onClick={handleCancelEditMode}
+                style={{ width: '100%', minHeight: 48 }}
+              >
+                Cancel editing
+              </SecondaryButton>
+            </div>
+          )}
         </div>
       )}
 
@@ -1631,6 +1752,7 @@ export default function SiteDiaryPage() {
               <p style={{ margin: '6px 0 0', fontSize: 14, color: 'color-mix(in srgb, var(--text) 82%, var(--text-2))', lineHeight: 1.45 }}>
                 {[
                   creatorName && `Author: ${creatorName}`,
+                  creatorRole && `Role: ${creatorRole}`,
                   companyReportingFor && `On behalf of: ${companyReportingFor}`,
                   reportDate &&
                     new Date(`${reportDate}T12:00:00`).toLocaleDateString('en-GB', {
@@ -1645,13 +1767,15 @@ export default function SiteDiaryPage() {
               </p>
             </div>
           </div>
-          <SecondaryButton
-            type="button"
-            href={`/dashboard/diary/setup?report=${editingReportId}&project=${projectId}`}
-            style={{ width: '100%', minHeight: 48, marginTop: 12 }}
-          >
-            Edit Report Details
-          </SecondaryButton>
+          {isDiaryEditMode ? (
+            <SecondaryButton
+              type="button"
+              href={`/dashboard/diary/setup?report=${editingReportId}&project=${projectId}`}
+              style={{ width: '100%', minHeight: 48, marginTop: 12 }}
+            >
+              Edit Report Details
+            </SecondaryButton>
+          ) : null}
         </div>
       )}
 
@@ -1660,6 +1784,7 @@ export default function SiteDiaryPage() {
         onSubmit={(e) => {
           // Prevent native navigation that remounts the page and aborts async save.
           e.preventDefault()
+          if (!isDiaryEditMode) return
           if (sessionExpired) {
             goToSignInForSave()
             return
@@ -1667,32 +1792,86 @@ export default function SiteDiaryPage() {
           handleSave(e)
         }}
       >
-        <BrandingSelector
-          value={brandingSelection}
-          onChange={setBrandingSelection}
-          accent={DIARY_ACCENT}
-          autoSelectDefault={!editingReportId}
-        />
+        <fieldset
+          disabled={isDiaryViewMode}
+          style={{ border: 0, margin: 0, padding: 0, minInlineSize: 0 }}
+        >
+        {showBrandingSelector ? (
+          <BrandingSelector
+            value={brandingSelection}
+            onChange={setBrandingSelection}
+            accent={DIARY_ACCENT}
+            autoSelectDefault={!editingReportId}
+          />
+        ) : (
+          <GlassSection title="Report Branding" accent={DIARY_ACCENT}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 14,
+                lineHeight: 1.45,
+                color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
+              }}
+            >
+              {brandingSelection?.brandColor || brandingSelection?.brandLogoUrl || brandingSelection?.brandingId
+                ? 'Branding from this diary is kept as saved. It is not changed when you edit other sections.'
+                : 'No branding is attached to this diary.'}
+            </p>
+            {brandingSelection?.brandColor ? (
+              <p style={{ margin: '10px 0 0', fontSize: 14, color: 'var(--text)' }}>
+                Colour:{' '}
+                <span style={{ fontWeight: 600 }}>{brandingSelection.brandColor}</span>
+              </p>
+            ) : null}
+          </GlassSection>
+        )}
 
         <GlassSection title="Project" accent={DIARY_ACCENT}>
           <label style={labelStyle}>Project</label>
-          <select
-            style={{ ...inputStyle, marginBottom: 8 }}
-            value={projectId}
-            onChange={(e) => handleProjectChange(e.target.value)}
-          >
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          {projectSubtitle && (
-            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#7a92a8', lineHeight: 1.5 }}>{projectSubtitle}</p>
+          {editingReportId ? (
+            <p
+              style={{
+                ...inputStyle,
+                marginBottom: 8,
+                display: 'flex',
+                alignItems: 'center',
+                minHeight: 48,
+                cursor: 'default',
+              }}
+            >
+              {linkedProject.projectName || 'Project'}
+            </p>
+          ) : (
+            <select
+              style={{ ...inputStyle, marginBottom: 8 }}
+              value={projectId}
+              onChange={(e) => handleProjectChange(e.target.value)}
+            >
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
           )}
+          {projectProgrammeCard.stickyRows.map((row) => (
+            <div key={row.key} style={{ marginTop: 4 }}>
+              <label style={labelStyle}>{row.label}</label>
+              <p
+                style={{
+                  margin: '0 0 14px',
+                  fontSize: 15,
+                  lineHeight: 1.4,
+                  color: 'var(--text)',
+                }}
+              >
+                {row.value}
+              </p>
+            </div>
+          ))}
 
           {projectProgrammeCard.status === 'missing' ? (
             <p
               style={{
-                margin: projectSubtitle ? 0 : '4px 0 0',
+                margin: projectProgrammeCard.stickyRows.length ? 0 : '4px 0 0',
                 fontSize: 14,
                 lineHeight: 1.45,
                 color: 'color-mix(in srgb, var(--text) 78%, var(--text-2))',
@@ -1701,7 +1880,7 @@ export default function SiteDiaryPage() {
               {projectProgrammeCard.missingMessage}
             </p>
           ) : (
-            <div style={{ marginTop: projectSubtitle ? 0 : 4 }}>
+            <div style={{ marginTop: projectProgrammeCard.stickyRows.length ? 0 : 4 }}>
               <label style={labelStyle}>Project Start Date</label>
               <p
                 style={{
@@ -1727,36 +1906,65 @@ export default function SiteDiaryPage() {
                   ? 'Not set'
                   : projectProgrammeCard.plannedCompletionDisplay}
               </p>
-
-              {projectProgrammeCard.projectDayLine ? (
-                <>
-                  <label style={{ ...labelStyle, marginBottom: 6 }}>Project Day</label>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 15,
-                      fontWeight: 650,
-                      lineHeight: 1.4,
-                      color: 'var(--text)',
-                    }}
-                  >
-                    {projectProgrammeCard.projectDayLine}
-                  </p>
-                </>
-              ) : null}
             </div>
           )}
+
+          {projectProgrammeCard.afterDateStickyRows.map((row) => (
+            <div key={row.key}>
+              <label style={labelStyle}>{row.label}</label>
+              <p
+                style={{
+                  margin: '0 0 14px',
+                  fontSize: 15,
+                  lineHeight: 1.4,
+                  color: 'var(--text)',
+                }}
+              >
+                {row.value}
+              </p>
+            </div>
+          ))}
+
+          {projectProgrammeCard.projectDayLine ? (
+            <>
+              <label style={{ ...labelStyle, marginBottom: 6 }}>Project Day</label>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 15,
+                  fontWeight: 650,
+                  lineHeight: 1.4,
+                  color: 'var(--text)',
+                }}
+              >
+                {projectProgrammeCard.projectDayLine}
+              </p>
+            </>
+          ) : null}
         </GlassSection>
 
         <GlassSection title="Author & cover" accent={DIARY_ACCENT}>
-          <label style={labelStyle}>Reporting on behalf of</label>
-          <input
-            style={inputStyle}
-            value={companyReportingFor}
-            onChange={(e) => setCompanyReportingFor(e.target.value)}
-            placeholder="e.g. ABC Construction Ltd"
-          />
-
+          {isDiaryViewMode ? (
+            <div style={{ marginBottom: 16 }}>
+              <label style={labelStyle}>Author</label>
+              <p style={{ margin: '0 0 14px', fontSize: 15, lineHeight: 1.4, color: 'var(--text)' }}>
+                {creatorName || '—'}
+              </p>
+              {creatorRole ? (
+                <>
+                  <label style={labelStyle}>Role</label>
+                  <p style={{ margin: '0 0 14px', fontSize: 15, lineHeight: 1.4, color: 'var(--text)' }}>
+                    {creatorRole}
+                  </p>
+                </>
+              ) : null}
+              <label style={labelStyle}>Reporting on behalf of</label>
+              <p style={{ margin: 0, fontSize: 15, lineHeight: 1.4, color: 'var(--text)' }}>
+                {companyReportingFor || '—'}
+              </p>
+            </div>
+          ) : (
+            <>
           <label style={labelStyle}>Author name</label>
           <input
             style={inputStyle}
@@ -1772,6 +1980,16 @@ export default function SiteDiaryPage() {
             onChange={(e) => setCreatorRole(e.target.value)}
             placeholder="e.g. Site Manager"
           />
+
+          <label style={labelStyle}>Reporting on behalf of</label>
+          <input
+            style={inputStyle}
+            value={companyReportingFor}
+            onChange={(e) => setCompanyReportingFor(e.target.value)}
+            placeholder="e.g. ABC Construction Ltd"
+          />
+            </>
+          )}
 
           <label style={labelStyle}>Cover photo</label>
           {coverPhoto?.preview ? (
@@ -1860,21 +2078,23 @@ export default function SiteDiaryPage() {
             value={shiftType}
             onChange={(e) => setShiftType(e.target.value)}
           >
-            {SHIFT_OPTIONS.map((opt) => (
+            {(SHIFT_OPTIONS.includes(shiftType) || !shiftType
+              ? SHIFT_OPTIONS
+              : [...SHIFT_OPTIONS, shiftType]
+            ).map((opt) => (
               <option key={opt} value={opt}>{opt}</option>
             ))}
           </select>
         </GlassSection>
 
         <GlassSection title="Site summary" accent={DIARY_ACCENT}>
-          <label style={labelStyle}>Summary *</label>
+          <label style={labelStyle}>Summary</label>
           <textarea
             style={{ ...textareaStyle, marginBottom: 0 }}
             value={siteSummary}
             onChange={(e) => setSiteSummary(e.target.value)}
             placeholder="Overall progress, key activities, and notable events today…"
             rows={5}
-            required
           />
         </GlassSection>
 
@@ -2245,7 +2465,9 @@ export default function SiteDiaryPage() {
           onChange={handleLocationWalkChange}
           onContinue={continueToSignature}
         />
+        </fieldset>
 
+        {isDiaryEditMode ? (
         <div ref={saveCtaRef} style={{ marginTop: 8 }}>
           {error && (
             <div
@@ -2328,6 +2550,7 @@ export default function SiteDiaryPage() {
             </span>
           </PrimaryCTA>
         </div>
+        ) : null}
         <style>{`
           @keyframes zlog-save-spin {
             to { transform: rotate(360deg); }
@@ -2341,6 +2564,8 @@ export default function SiteDiaryPage() {
         `}</style>
       </form>
 
+      {showRecentOnThisPage ? (
+        <>
       <h2
         style={{
           ...typeTokens.sectionTitle,
@@ -2381,7 +2606,7 @@ export default function SiteDiaryPage() {
                 }}
                 style={recentEntryActionButtonStyle}
               >
-                View / Edit
+                View
               </SecondaryButton>
               <SecondaryButton
                 type="button"
@@ -2389,12 +2614,14 @@ export default function SiteDiaryPage() {
                 onClick={() => handleUseAsTemplate(d.id)}
                 style={recentEntryActionButtonStyle}
               >
-                Use as Template
+                Use as Basis for New Diary
               </SecondaryButton>
             </div>
           </RecentEntryCard>
         ))
       )}
+        </>
+      ) : null}
     </PremiumShell>
   )
 }

@@ -20,7 +20,7 @@ Architecture is **APPROVED and FROZEN**. Source of truth:
 **Shared Photo Workspace** — planning doc: `docs/SHARED_PHOTO_WORKSPACE_ARCHITECTURE.md`.
 
 - **P2A is FROZEN** (foundation + Site Diary host). Do not reopen P2A scope.
-- Do not start **P2B+** until the user explicitly approves.
-- Do not implement Report Workspace shell until Photo Workspace is proven and the user asks for shell work.
+- **P2B Part 1** (camera capture + thumbnails) may proceed when the user asks; do not expand into annotation, AI, PDF, OCR, or upload-queue UI unless asked.
+- Do not start Report Workspace shell until Photo Workspace is proven and the user asks for shell work.
 
 Do not refactor Site Diary save as part of Photo Workspace work.

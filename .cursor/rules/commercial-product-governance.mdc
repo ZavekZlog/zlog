@@ -1,0 +1,159 @@
+---
+description: Commercial product governance — constitution, change levels, freeze, approval
+alwaysApply: true
+---
+
+# Zlog commercial product governance
+
+## Product Constitution (binding — FROZEN)
+
+**ZLOG_PRODUCT_CONSTITUTION v1.3** — `docs/ZLOG_PRODUCT_CONSTITUTION.md`
+
+**Frozen.** Do not casually add Principle 8+. Ideas that do not change whole-product governance belong in a feature contract, the backlog, or a design note — not the Constitution.
+
+### Fundamental Principles (v1.3)
+
+1. Zlog is a **commercial software product**.
+2. The objective is the **highest quality construction reporting platform**, not merely working code.
+3. Every change must **preserve previously approved functionality** unless explicit approval is obtained.
+4. **All visible UI must appear intentionally designed** on supported devices (`docs/contracts/GLOBAL_UI_TEXT_FIT_CONTRACT.md`).
+5. **Working software is not the definition of done. Professional software is.** (`docs/ZLOG_RELEASE_GATE.md`)
+6. **Burden of proof lies with change, not stability.** Approved behaviour is presumed correct until a documented product decision explicitly supersedes it.
+7. **Preserve user trust.** Every change must preserve or improve confidence in the product. Inconsistency, unnecessary friction, regressions, or unexpected behaviour violate this principle even if the code works.
+
+### Never silently change behaviour
+
+If approved behaviour would change → **STOP** and ask for approval.
+
+Existing approved behaviour is **presumed correct**. The change must carry the burden of proof — not the status quo.
+
+### Intentional UI / visual QA (global)
+
+Never: clipped text without intent · overlapping controls · inconsistent spacing · cropped icons/images · controls outside containers · unfinished layout shifts.
+
+If text does not fit: shorten wording (preferred), wrap, enlarge the control, or redesign.
+
+A screen is **not complete** until **every** visible control, label, placeholder, button, dialog, toast, dropdown, validation message, and navigation element has been visually verified on supported mobile viewport(s).
+
+### Release Gate (mandatory)
+
+No screen, feature, or workflow is complete until **all** gates in `docs/ZLOG_RELEASE_GATE.md` pass:
+
+Visual QA · Mobile QA · Functional QA · Regression QA · UX QA · Commercial QA
+
+Any fail → **NOT READY FOR RELEASE**. Never mark complete because code compiles.
+
+### Classify before implementing
+
+Bug Fix · New Feature · Enhancement · Refactor · Architectural Change · UI Polish
+
+### Impact Assessment (any existing workflow)
+
+Before modifying code, identify: screens · components · database tables · migrations · APIs · tests requiring update · possible regressions.
+
+### Contract conflicts
+
+If implementation conflicts with an approved contract → **STOP**. Report: contract · section · conflict · proposed solution. Wait for approval.
+
+Contracts are **append-only** unless explicitly approved. Example:
+
+```text
+The requested change conflicts with Section 3.4 of SITE_DIARY_SCREEN_CONTRACT.md.
+Please confirm you want to amend the contract.
+```
+
+### Regression risk
+
+If preservation of existing behaviour cannot be guaranteed, state **"Regression risk exists."** before changing anything.
+
+### Before asking for commit
+
+State: New behaviour added · Existing behaviour preserved · Known limitations · Regression tests performed.
+
+### Definition of done
+
+**Working software is not the definition of done. Professional software is.**
+
+Incomplete until: implementation finished · tests pass · contracts updated if approved · backlog updated · **full Release Gate** (`docs/ZLOG_RELEASE_GATE.md`) passed.
+
+Any gate fail → **NOT READY FOR RELEASE**.
+
+---
+
+Living backlog: `docs/ZLOG_PRODUCT_BACKLOG.md`
+
+## Contract hierarchy
+
+1. Constitution: `docs/ZLOG_PRODUCT_CONSTITUTION.md` (**v1.3 FROZEN** — no casual Principle 8+)
+2. Product: `docs/PROTECTED_PRODUCT_DECISIONS.md`
+3. Screen: `docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md`
+4. Feature: `docs/contracts/PROJECT_MODEL_CONTRACT.md`, `REPORT_BRANDING_CONTRACT.md`, `PHOTO_WORKSPACE_CONTRACT.md`
+5. Index: `docs/contracts/README.md`
+6. Gaps: `docs/contracts/PENDING_APPROVAL_GAPS.md`
+
+## Small change policy
+
+When the user requests a fix, **first** determine:
+
+- **A)** Isolated (single screen/component, no shared workflow spillover), or  
+- **B)** Affects multiple screens / major workflows
+
+If **more than one screen** or a **major workflow** will be modified: **STOP**. Produce an Impact Report / Assessment. Do **not** implement. Wait for user approval.
+
+## Change size classification
+
+| Level | Scope | Action |
+|-------|--------|--------|
+| **1** | Single component; no shared state | Safe — proceed (still preserve frozen behaviour) |
+| **2** | Shared component, hook, or persistence | Impact Assessment required |
+| **3** | Shared screen, routing, or project model | Approval mandatory before edit |
+| **4** | Architecture, database, contracts, state model | Always approval required |
+
+## Impact report format (non-trivial / Level 2+)
+
+```text
+Requested Change:
+Classification: (Bug Fix | New Feature | Enhancement | Refactor | Architectural Change | UI Polish)
+Files to Modify:
+Screens Affected:
+Components Affected:
+Database Tables:
+Migrations:
+APIs:
+Protected Contracts Read:
+Existing Behaviour:
+Proposed Behaviour:
+Tests Requiring Update:
+Possible Regressions:
+Regression Risks:
+Regression Tests:
+Approval Required: Yes
+```
+
+Mark each control/behaviour **PRESERVE** | **MODIFY** | **RELOCATE** | **REMOVE**. REMOVE needs an explicit user instruction.
+
+## Feature freeze protection
+
+Approved → Implemented → Tested → Accepted ⇒ **FROZEN**.
+
+Frozen features must not be removed, renamed, relocated, redesigned, simplified, refactored, merged, hidden, or reinterpreted unless the user explicitly requests that exact change.
+
+## User approval rule
+
+Never assume “this is probably better.” Ask when shared screens, relocation, persistence, or protected workflows are involved.
+
+**Burden of proof lies with change, not stability.** Approved behaviour is presumed correct until a documented product decision explicitly supersedes it.
+
+## Minimum-diff / no silent removal
+
+Prefer the smallest local change. Do not rewrite shared pages or change styling, wording, ordering, or visibility outside the exact requested scope.
+
+## Contract versioning
+
+Version · Date Updated · Reason Updated · User Decision · Previous Version. No silent contract edits. Append-only unless explicitly approved.
+
+## Site Diary completion gate
+
+`npm run test:site-diary-contract` (UI presence). Manual mobile verification. Completion statement + definition of done from the Constitution.
+
+Never commit or push when the user has forbidden it.

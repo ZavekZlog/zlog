@@ -12,20 +12,38 @@ import {
   BRAND_ACCENT,
 } from '@/lib/premium-ui'
 import { ProjectDatesFields } from '@/components/project/ProjectDatesFields'
+import { ProjectStickyFields } from '@/components/project/ProjectStickyFields'
 import { toDateColumnValue, validateProjectDates } from '@/lib/project-day'
+import {
+  stickyWritePayload,
+  validateStickyProjectFields,
+} from '@/lib/project-sticky-fields'
 
 export default function NewProject() {
   const [name, setName] = useState('')
   const [client, setClient] = useState('')
-  const [siteAddress, setSiteAddress] = useState('')
+  const [status, setStatus] = useState('active')
+  const [projectAddress, setProjectAddress] = useState('')
+  const [projectManager, setProjectManager] = useState('')
+  const [workingDaysPerWeek, setWorkingDaysPerWeek] = useState('')
+  const [currentPhase, setCurrentPhase] = useState('')
+  const [stickyError, setStickyError] = useState('')
   const [startDate, setStartDate] = useState('')
   const [plannedCompletionDate, setPlannedCompletionDate] = useState('')
   const [datesError, setDatesError] = useState('')
-  const [status, setStatus] = useState('active')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const supabase = createClient()
   const router = useRouter()
+
+  const handleStickyChange = (next) => {
+    setProjectAddress(next.projectAddress)
+    setProjectManager(next.projectManager)
+    setWorkingDaysPerWeek(next.workingDaysPerWeek)
+    setCurrentPhase(next.currentPhase)
+    const v = validateStickyProjectFields(next)
+    setStickyError(v.ok ? '' : v.message)
+  }
 
   const handleDatesChange = ({ startDate: s, plannedCompletionDate: p }) => {
     setStartDate(s)
@@ -36,6 +54,12 @@ export default function NewProject() {
 
   const handleCreate = async () => {
     if (!name.trim()) { setError('Project name is required'); return }
+    const sticky = validateStickyProjectFields({ workingDaysPerWeek })
+    if (!sticky.ok) {
+      setStickyError(sticky.message)
+      setError(sticky.message)
+      return
+    }
     const v = validateProjectDates(startDate, plannedCompletionDate)
     if (!v.ok) {
       setDatesError(v.message)
@@ -44,6 +68,12 @@ export default function NewProject() {
     }
     setLoading(true)
     setError('')
+    const stickyPayload = stickyWritePayload({
+      projectAddress,
+      projectManager,
+      workingDaysPerWeek,
+      currentPhase,
+    })
     const start_date = toDateColumnValue(startDate)
     const planned_completion_date = toDateColumnValue(plannedCompletionDate)
     const { data, error: insertError } = await supabase
@@ -51,12 +81,12 @@ export default function NewProject() {
       .insert({
         name: name.trim(),
         client_name: client.trim() || null,
-        site_address: siteAddress.trim() || null,
+        ...stickyPayload,
         start_date,
         planned_completion_date,
         status,
       })
-      .select('id, start_date, planned_completion_date')
+      .select('id, start_date, planned_completion_date, site_address, client_pm, working_days_per_week, current_phase')
       .single()
     if (insertError) {
       setError(insertError.message)
@@ -89,14 +119,6 @@ export default function NewProject() {
           style={inputStyle}
         />
 
-        <label style={labelStyle}>Address</label>
-        <input
-          value={siteAddress}
-          onChange={(e) => setSiteAddress(e.target.value)}
-          placeholder="e.g. 14 High Street, Manchester"
-          style={inputStyle}
-        />
-
         <label style={labelStyle}>Client name</label>
         <input
           value={client}
@@ -117,6 +139,27 @@ export default function NewProject() {
         </select>
       </GlassSection>
 
+      <GlassSection title="Sticky project information" accent={BRAND_ACCENT}>
+        <p
+          style={{
+            margin: '0 0 14px',
+            fontSize: 14,
+            lineHeight: 1.45,
+            color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
+          }}
+        >
+          Set once for this project. Future reports inherit these values until you edit them.
+        </p>
+        <ProjectStickyFields
+          projectAddress={projectAddress}
+          projectManager={projectManager}
+          workingDaysPerWeek={workingDaysPerWeek}
+          currentPhase={currentPhase}
+          onChange={handleStickyChange}
+          error={stickyError}
+        />
+      </GlassSection>
+
       <GlassSection title="Project programme dates" accent={BRAND_ACCENT}>
         <p
           style={{
@@ -126,7 +169,7 @@ export default function NewProject() {
             color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
           }}
         >
-          Set once for this project. Progress reports use these dates for Project Day.
+          Set once for this project. Used for Project Day on the PROJECT card.
         </p>
         <ProjectDatesFields
           startDate={startDate}
@@ -136,7 +179,7 @@ export default function NewProject() {
         />
       </GlassSection>
 
-      <PrimaryCTA onClick={handleCreate} disabled={loading || Boolean(datesError)}>
+      <PrimaryCTA onClick={handleCreate} disabled={loading || Boolean(datesError) || Boolean(stickyError)}>
         {loading ? 'Creating…' : 'Create project'}
       </PrimaryCTA>
     </PremiumShell>

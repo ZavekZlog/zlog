@@ -1,0 +1,38 @@
+---
+description: Protected Site Diary screen/feature contracts — impact report + UI gate
+globs: app/dashboard/diary/**/*,app/dashboard/project/**/diary/**/*,lib/diary-*.js,lib/project-sticky-fields.js,lib/project-day.js,lib/report-setup.js,components/project/**/*,components/branding/**/*
+alwaysApply: false
+---
+
+# Protected Site Diary contracts
+
+## Read first
+
+1. `docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md`
+2. `docs/PROTECTED_SITE_DIARY_CONTRACT.md`
+3. Relevant feature contracts under `docs/contracts/`
+4. `docs/ZLOG_PRODUCT_BACKLOG.md` — open / frozen issues
+5. `docs/contracts/PENDING_APPROVAL_GAPS.md` — do not silently fix listed gaps
+
+## Before editing
+
+Follow **commercial-product-governance** (alwaysApply): classify Level 1–4; if more than one screen or major workflow → STOP for Impact Report + approval; feature freeze; minimum-diff.
+
+## Hard stops
+
+- Setup **Shift** (Day / Back / Night) after programme dates, before Author Name — never drop during unrelated work
+- Author Role directly beneath Author Name
+- Project-level vs report-level ownership split
+- Start from scratch must not inherit prior diary/project/session state
+- Select existing project → sticky from `public.projects` only (no diary content copy) — see backlog ZLOG-003 until fixed
+- View open = no DB write; Edit = same ID; Basis = new ID
+- Branding not forced in normal Edit
+- Summary optional
+- No Recent Diaries list on open report page
+- Do not alter photo / annotation / location-walk during unrelated setup work
+
+## After editing
+
+Run: `npm run test:site-diary-contract`
+
+Completion report must include contracts read, protected items affected, controls preserved vs changed, UI contract test result, full regression result, files changed, and confirmation that no unrelated control or persistence path changed.

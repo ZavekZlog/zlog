@@ -23,6 +23,7 @@ import {
 } from '@/lib/premium-ui'
 import { REPORT_THEMES } from '@/lib/report-theme'
 import { DIARY_MISSING_MESSAGE, existingDiaryHref } from '@/lib/diary-routing'
+import { clearSetupFormDraft } from '@/lib/report-setup'
 
 const DIARY_ACCENT = REPORT_THEMES.diary.accent
 
@@ -103,6 +104,8 @@ function SiteDiaryEntryPage() {
   }
 
   const startNewReport = () => {
+    // Start from scratch must not inherit a prior incomplete setup form.
+    clearSetupFormDraft()
     const q = filterProjectId ? `?project=${filterProjectId}` : ''
     router.push(`/dashboard/diary/setup${q}`)
   }
