@@ -229,7 +229,7 @@ body {
   z-index: 1;
 }
 
-/* Previous-diary card actions — equal weight; purpose via icon accent only */
+/* Previous-diary card actions — equal weight; icons share neutral colour */
 .zlog-diary-peer-action {
   width: auto;
   min-width: 0;
@@ -239,12 +239,12 @@ body {
   padding: 0 14px;
 }
 
-.zlog-diary-peer-action--use .zlog-secondary-cta__icon {
-  color: color-mix(in srgb, var(--rust) 82%, var(--text));
+.zlog-diary-peer-action .zlog-secondary-cta__icon {
+  color: color-mix(in srgb, var(--text) 78%, var(--text-2));
 }
 
-.zlog-diary-peer-action--review .zlog-secondary-cta__icon {
-  color: color-mix(in srgb, var(--text) 78%, var(--text-2));
+.zlog-diary-peer-action:hover:not(:disabled) .zlog-secondary-cta__icon {
+  color: color-mix(in srgb, var(--text) 88%, var(--text-2));
 }
 
 /* Within-module Site Diary choice cards — clearly compact vs dashboard modules */

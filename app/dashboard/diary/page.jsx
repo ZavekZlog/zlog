@@ -81,6 +81,7 @@ function SiteDiaryEntryPage() {
   const [mode, setMode] = useState(null) // null | 'previous'
   const [loading, setLoading] = useState(false)
   const [busyId, setBusyId] = useState(null)
+  const [confirmRow, setConfirmRow] = useState(null)
   const [error, setError] = useState(() => (missingReport ? DIARY_MISSING_MESSAGE : ''))
   const [reports, setReports] = useState([])
 
@@ -88,15 +89,6 @@ function SiteDiaryEntryPage() {
     if (mode === 'previous') return 'Use a Previous Diary'
     return 'Site Diary'
   }, [mode])
-
-  const moduleSubtitle = useMemo(() => {
-    if (mode === 'previous') {
-      return filterProjectId
-        ? 'Choose a previous diary for this project. This creates a new diary for today — the earlier diary stays unchanged.'
-        : 'Choose a diary to use as your starting point. The original will stay unchanged.'
-    }
-    return null
-  }, [mode, filterProjectId])
 
   useEffect(() => {
     if (missingReport) setError(DIARY_MISSING_MESSAGE)
@@ -147,7 +139,19 @@ function SiteDiaryEntryPage() {
     router.push(href)
   }
 
-  const usePreviousForToday = async (row) => {
+  const requestUsePreviousForToday = (row) => {
+    if (!row?.project_id || !row?.id || busyId) return
+    setError('')
+    setConfirmRow(row)
+  }
+
+  const cancelUsePreviousForToday = () => {
+    if (busyId) return
+    setConfirmRow(null)
+  }
+
+  const confirmUsePreviousForToday = async () => {
+    const row = confirmRow
     if (!row?.project_id || !row?.id || busyId) return
     setBusyId(row.id)
     setError('')
@@ -155,6 +159,7 @@ function SiteDiaryEntryPage() {
       const id = await createTodaysDiaryDraft(supabase, row.project_id, row.id)
       const href = diaryFormHref(row.project_id, id)
       if (!href) throw new Error('Missing diary link')
+      setConfirmRow(null)
       router.push(href)
     } catch (err) {
       setError(err?.message || 'We couldn’t start today’s diary from that one. Try again.')
@@ -180,7 +185,6 @@ function SiteDiaryEntryPage() {
 
       <ZlogModulePageHeader
         title={title}
-        subtitle={moduleSubtitle}
         backHref={mode ? undefined : '/dashboard'}
         onBack={mode ? () => setMode(null) : undefined}
       />
@@ -304,7 +308,7 @@ function SiteDiaryEntryPage() {
                       type="button"
                       className="zlog-secondary-cta zlog-diary-peer-action zlog-diary-peer-action--use"
                       disabled={Boolean(busyId)}
-                      onClick={() => usePreviousForToday(row)}
+                      onClick={() => requestUsePreviousForToday(row)}
                       style={{ ...recentEntryActionButtonStyle, flex: '1 1 160px' }}
                     >
                       <CalendarPlus
@@ -314,7 +318,7 @@ function SiteDiaryEntryPage() {
                         className="zlog-secondary-cta__icon"
                       />
                       <span className="zlog-secondary-cta__label">
-                        {busy ? 'Starting…' : 'Use for today'}
+                        {busy ? 'Starting…' : 'Edit for today'}
                       </span>
                     </button>
                     <button
@@ -338,6 +342,91 @@ function SiteDiaryEntryPage() {
             })}
         </>
       )}
+
+      {confirmRow ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="zlog-use-previous-confirm-title"
+          aria-describedby="zlog-use-previous-confirm-message"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 80,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+            background: 'color-mix(in srgb, var(--ink) 72%, transparent)',
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 360,
+              padding: '20px 18px 16px',
+              borderRadius: 12,
+              border: '1px solid color-mix(in srgb, var(--edge) 58%, var(--text) 22%)',
+              background: 'linear-gradient(180deg, color-mix(in srgb, var(--plate) 78%, var(--text) 5%) 0%, color-mix(in srgb, var(--ink) 55%, var(--plate)) 100%)',
+              boxShadow:
+                'inset 0 1px 0 color-mix(in srgb, var(--text), transparent 86%), 0 12px 32px color-mix(in srgb, var(--ink) 55%, transparent)',
+            }}
+          >
+            <h2
+              id="zlog-use-previous-confirm-title"
+              style={{
+                margin: 0,
+                fontSize: 18,
+                fontWeight: 700,
+                lineHeight: 1.25,
+                color: 'var(--text)',
+              }}
+            >
+              Edit this diary for today?
+            </h2>
+            <p
+              id="zlog-use-previous-confirm-message"
+              style={{
+                margin: '10px 0 0',
+                fontSize: 15,
+                lineHeight: 1.45,
+                color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
+              }}
+            >
+              Your original diary will remain saved and unchanged.
+            </p>
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 8,
+                marginTop: 18,
+              }}
+            >
+              <button
+                type="button"
+                className="zlog-secondary-cta zlog-diary-peer-action"
+                disabled={Boolean(busyId)}
+                onClick={cancelUsePreviousForToday}
+                style={{ ...recentEntryActionButtonStyle, flex: '1 1 120px', width: 'auto' }}
+              >
+                <span className="zlog-secondary-cta__label">Cancel</span>
+              </button>
+              <button
+                type="button"
+                className="zlog-secondary-cta zlog-diary-peer-action"
+                disabled={Boolean(busyId)}
+                onClick={confirmUsePreviousForToday}
+                style={{ ...recentEntryActionButtonStyle, flex: '1 1 140px', width: 'auto' }}
+              >
+                <span className="zlog-secondary-cta__label">
+                  {busyId === confirmRow.id ? 'Starting…' : 'Edit for today'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </PremiumShell>
   )
 }
