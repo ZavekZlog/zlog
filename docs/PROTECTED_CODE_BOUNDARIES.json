@@ -1,0 +1,37 @@
+{
+  "version": "1.0.0",
+  "description": "Protected shared areas — narrow feature tasks must not modify these without explicit override.",
+  "override": {
+    "envFlag": "ZLOG_ALLOW_PROTECTED_SCOPE",
+    "envReason": "ZLOG_PROTECTED_SCOPE_REASON",
+    "cliFlag": "--allow-protected",
+    "cliReason": "--reason",
+    "rule": "Both flag AND non-empty reason required. Override is deliberate and logged; never automatic."
+  },
+  "protectedPaths": [
+    "app/(auth)/",
+    "app/layout.tsx",
+    "app/globals.css",
+    "lib/auth/",
+    "lib/supabase/",
+    "components/dashboard/DashboardTopBar.jsx",
+    "lib/premium-ui.jsx",
+    "lib/premium-ui.js",
+    "middleware.js",
+    "middleware.ts",
+    "supabase/migrations/",
+    "docs/ZLOG_PRODUCT_CONSTITUTION.md"
+  ],
+  "protectedGlobs": [
+    "**/report*brand*",
+    "**/pdf/**",
+    "lib/report-theme.*"
+  ],
+  "notes": [
+    "Authentication/login and Sign out/session handling live under app/(auth)/ and lib/auth/ plus DashboardTopBar.",
+    "PremiumShell/shared layout and brand chrome live primarily in lib/premium-ui.jsx.",
+    "Global responsive styles: app/globals.css.",
+    "Database migrations: supabase/migrations/.",
+    "Report/PDF branding pipeline: report-theme and related report branding modules."
+  ]
+}

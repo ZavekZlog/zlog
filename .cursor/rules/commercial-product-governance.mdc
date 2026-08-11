@@ -148,6 +148,27 @@ Never assume “this is probably better.” Ask when shared screens, relocation,
 
 Prefer the smallest local change. Do not rewrite shared pages or change styling, wording, ordering, or visibility outside the exact requested scope.
 
+## Change plan before production edits (mandatory)
+
+Before modifying production code, state:
+
+```text
+INTENDED FILES TO CHANGE:
+- file A — reason
+- file B — reason
+
+PROTECTED FILES TOUCHED:
+- none
+```
+
+Protected shared areas: `docs/PROTECTED_CODE_BOUNDARIES.md` (+ JSON).  
+Executable gate: `npm run check:protected-scope` (**HARD FAIL** on dirty protected paths).
+
+If implementation later requires an additional protected/shared file:
+
+**STOP.** Do not modify it automatically. Explain why and obtain **explicit user approval**.  
+Only then use the intentional override (`ZLOG_ALLOW_PROTECTED_SCOPE` + `ZLOG_PROTECTED_SCOPE_REASON`, or `--allow-protected --reason`).
+
 ## Contract versioning
 
 Version · Date Updated · Reason Updated · User Decision · Previous Version. No silent contract edits. Append-only unless explicitly approved.
@@ -155,5 +176,9 @@ Version · Date Updated · Reason Updated · User Decision · Previous Version. 
 ## Site Diary completion gate
 
 `npm run test:site-diary-contract` (UI presence). Manual mobile verification. Completion statement + definition of done from the Constitution.
+
+**Hard regression gate (auth + diary contracts + scope + UI E2E):** `npm run test:release-gate`
+
+Approved behaviour registry (test-linked): `docs/contracts/APPROVED_BEHAVIOUR_REGISTRY.json`
 
 Never commit or push when the user has forbidden it.

@@ -24,6 +24,9 @@ Related freeze docs:
 
 Regression gate: `npm run test:site-diary-contract` (must assert **UI presence / order**, not helpers alone)
 
+**Hard product regression gate:** `npm run test:release-gate`  
+**Behaviour registry:** `docs/contracts/APPROVED_BEHAVIOUR_REGISTRY.json`
+
 ---
 
 ## 1. Site Diary entry / setup

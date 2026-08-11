@@ -1,10 +1,10 @@
 # Zlog Release Gate (Mandatory)
 
-**Version:** 1.0.2  
-**Date Updated:** 2026-08-07  
-**Reason Updated:** Commercial QA includes Preserve User Trust (Constitution Principle 7)  
-**User Decision:** Principle 7 – Preserve User Trust  
-**Previous Version:** 1.0.1  
+**Version:** 1.0.3  
+**Date Updated:** 2026-08-11  
+**Reason Updated:** Wire executable `test:release-gate` + behaviour registry  
+**User Decision:** Build hard anti-regression gate (Phases 2–6)  
+**Previous Version:** 1.0.2  
 
 Parent: `docs/ZLOG_PRODUCT_CONSTITUTION.md`  
 Global UI: `docs/contracts/GLOBAL_UI_TEXT_FIT_CONTRACT.md`
@@ -122,3 +122,17 @@ A feature is **NOT COMPLETE** until:
 6. Commercial QA passes  
 
 Completion reports must list gate results (pass / fail / N/A with reason). Any fail → **NOT READY FOR RELEASE**.
+
+---
+
+## Automated hard regression gate
+
+In addition to the checklist above, run:
+
+```bash
+npm run test:release-gate
+```
+
+This executes auth behavioural tests, Site Diary contracts, golden-journey contract suites, protected-scope HARD FAIL check, behaviour-registry integrity, and Playwright UI-only auth E2E.
+
+A green automated gate is **necessary but not sufficient**. Items marked `manualQA` in `docs/contracts/APPROVED_BEHAVIOUR_REGISTRY.json` (e.g. live Supabase login/sign-out, browser password Save/offer, device scroll feel) remain mandatory Release Gate manual QA.

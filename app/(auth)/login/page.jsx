@@ -12,6 +12,8 @@ import {
   inputStyle,
 } from '@/lib/premium-ui'
 import {
+  consumeLoginSubmitIntent,
+  markLoginSubmitIntent,
   passwordInputType,
   passwordVisibilityLabel,
   readLoginFormCredentials,
@@ -20,7 +22,7 @@ import { safeAppReturnPath } from '@/lib/auth/return-path'
 
 /**
  * Sign-in — inherits re-centred ZlogBrandWordmark glow.
- * Auth runs only on explicit user action: Sign In click or Enter/Return.
+ * Auth runs only on explicit user action: Sign In submit or Enter/Return.
  *
  * Credential source (M0-02):
  * - Email/password inputs are uncontrolled (no React value / defaultValue).
@@ -29,11 +31,14 @@ import { safeAppReturnPath } from '@/lib/auth/return-path'
  *   (autocomplete="username" / "current-password"), not app-held credentials.
  * - After sign-out (?signedOut=1), any in-DOM form values are cleared once;
  *   the browser may then autofill again — that is expected and preferred.
+ * - Form uses conventional submit semantics so the browser can save credentials;
+ *   password is left in the DOM through successful navigation (not cleared early).
  */
 export default function Login() {
   const supabase = createClient()
   const router = useRouter()
   const formRef = useRef(null)
+  const authIntentRef = useRef(false)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -103,6 +108,7 @@ export default function Login() {
     try {
       // Password is passed only to Supabase Auth in-memory for this request.
       // It is never written to localStorage, sessionStorage, cookies, or logs.
+      // Leave password in the DOM through navigation so the browser can offer Save.
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -112,11 +118,6 @@ export default function Login() {
         setErrorMsg(error.message)
         setLoading(false)
         return
-      }
-
-      // Drop password from the DOM after a successful auth handoff.
-      if (passwordInput && 'value' in passwordInput) {
-        passwordInput.value = ''
       }
 
       const next = safeAppReturnPath(
@@ -130,19 +131,27 @@ export default function Login() {
     }
   }
 
-  /** Autofill may fire submit; never authenticate from that path. */
+  /**
+   * Conventional form submit (password-manager friendly).
+   * Autofill alone must not authenticate — requires prior Sign In / Enter intent.
+   */
   const handleFormSubmit = (e) => {
     e.preventDefault()
+    if (!consumeLoginSubmitIntent(authIntentRef)) return
+    void authenticate()
   }
 
-  /** Enter/Return in a field is an explicit user action — allow sign-in. */
+  /** Enter/Return marks explicit intent; native submit then authenticates. */
   const handleFormKeyDown = (e) => {
     if (e.key !== 'Enter') return
     if (e.nativeEvent?.isComposing) return
     const tag = e.target?.tagName
     if (tag === 'TEXTAREA' || tag === 'BUTTON') return
-    e.preventDefault()
-    authenticate()
+    markLoginSubmitIntent(authIntentRef)
+  }
+
+  const handleSignInClick = () => {
+    markLoginSubmitIntent(authIntentRef)
   }
 
   return (
@@ -183,6 +192,7 @@ export default function Login() {
 
           <form
             ref={formRef}
+            method="post"
             onSubmit={handleFormSubmit}
             onKeyDown={handleFormKeyDown}
             className="space-y-4"
@@ -252,7 +262,7 @@ export default function Login() {
               </div>
             </div>
 
-            <PrimaryCTA type="button" onClick={authenticate} disabled={loading} className="w-full">
+            <PrimaryCTA type="submit" onClick={handleSignInClick} disabled={loading} className="w-full">
               {loading ? 'Signing in...' : 'Sign In'}
             </PrimaryCTA>
           </form>

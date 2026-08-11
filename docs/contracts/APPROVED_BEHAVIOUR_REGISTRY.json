@@ -1,0 +1,187 @@
+{
+  "version": "1.0.0",
+  "updated": "2026-08-11",
+  "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage.",
+  "behaviours": [
+    {
+      "id": "AUTH-001",
+      "description": "Explicit Sign In required (autofill alone must not authenticate)",
+      "area": "auth",
+      "tests": [
+        "lib/auth/login-form.test.js",
+        "e2e/golden-a-auth.spec.js"
+      ],
+      "manualQA": false
+    },
+    {
+      "id": "AUTH-002",
+      "description": "Browser-compatible credential autofill semantics (form attrs + submit); Save/offer is manual",
+      "area": "auth",
+      "tests": [
+        "lib/auth/login-form.test.js",
+        "e2e/golden-a-auth.spec.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Chrome/Edge Save password and later autofill offer cannot be reliably automated without controlling the browser vault. Automated tests protect form semantics only."
+    },
+    {
+      "id": "AUTH-003",
+      "description": "No plaintext password persistence in Zlog app storage",
+      "area": "auth",
+      "tests": [
+        "lib/auth/login-form.test.js"
+      ],
+      "manualQA": false
+    },
+    {
+      "id": "AUTH-004",
+      "description": "Sign out works and terminates authenticated application session",
+      "area": "auth",
+      "tests": [
+        "lib/auth/sign-out.test.js",
+        "lib/auth/login-form.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Full Login→Dashboard→Sign out→Login with a real Supabase session is MANUAL QA / future authenticated E2E. Unit + wiring tests cover orchestration without credentials."
+    },
+    {
+      "id": "DIARY-001",
+      "description": "Two-choice Site Diary entry (Start New / Use Previous equal status)",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-site-diary-contract.test.js",
+        "lib/golden-journeys/journey-b-new-diary.test.js"
+      ],
+      "manualQA": false
+    },
+    {
+      "id": "DIARY-002",
+      "description": "Setup hierarchy: Reporting Company → Reporting on behalf of → Author → Project Details",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-site-diary-contract.test.js",
+        "lib/diary-setup-author.test.js",
+        "lib/golden-journeys/journey-b-new-diary.test.js"
+      ],
+      "manualQA": false
+    },
+    {
+      "id": "DIARY-003",
+      "description": "Author is never derived from email / local-part / username",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-setup-blank.test.js",
+        "lib/golden-journeys/journey-b-new-diary.test.js"
+      ],
+      "manualQA": false
+    },
+    {
+      "id": "DIARY-004",
+      "description": "New diary does not enter existing-diary edit mode",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-site-diary-contract.test.js",
+        "lib/diary-view-mode.test.js",
+        "lib/golden-journeys/journey-b-new-diary.test.js"
+      ],
+      "manualQA": false
+    },
+    {
+      "id": "DIARY-005",
+      "description": "Previous diary source immutable; result is a new record",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-site-diary-contract.test.js",
+        "lib/diary-view-mode.test.js",
+        "lib/golden-journeys/journey-c-previous-diary.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Browser journey with real saved diaries requires authenticated E2E. Helpers + source contracts protect immutability rules."
+    },
+    {
+      "id": "DIARY-006",
+      "description": "No developer/storage language in user-visible Site Diary setup copy",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-site-diary-contract.test.js",
+        "lib/golden-journeys/journey-b-new-diary.test.js"
+      ],
+      "manualQA": false
+    },
+    {
+      "id": "DIARY-007",
+      "description": "No Report Branding / hex colour panel on Site Diary workbench",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-site-diary-contract.test.js",
+        "lib/golden-journeys/journey-b-new-diary.test.js"
+      ],
+      "manualQA": false
+    },
+    {
+      "id": "DIARY-008",
+      "description": "Signature at end of Site Diary workbench (not near beginning)",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-site-diary-contract.test.js",
+        "lib/golden-journeys/journey-b-new-diary.test.js"
+      ],
+      "manualQA": false
+    },
+    {
+      "id": "DIARY-009",
+      "description": "No redundant Project recap on workbench",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-site-diary-contract.test.js",
+        "lib/golden-journeys/journey-b-new-diary.test.js"
+      ],
+      "manualQA": false
+    },
+    {
+      "id": "DIARY-010",
+      "description": "No duplicate Author / Reporting On Behalf fields in workbench",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-site-diary-contract.test.js",
+        "lib/golden-journeys/journey-b-new-diary.test.js"
+      ],
+      "manualQA": false
+    },
+    {
+      "id": "DIARY-011",
+      "description": "Setup scrolls vertically",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-site-diary-contract.test.js",
+        "lib/golden-journeys/journey-b-new-diary.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Static overflowY contract is automated; live scroll feel on device remains manual Visual/Mobile QA."
+    },
+    {
+      "id": "DIARY-012",
+      "description": "No horizontal overflow (viewport fit)",
+      "area": "site-diary",
+      "tests": [
+        "lib/premium-ui-layout-contract.test.js",
+        "lib/diary-site-diary-contract.test.js",
+        "lib/golden-journeys/journey-b-new-diary.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Static no-100vw / overflow contracts automated; device horizontal scroll remains Release Gate Visual QA."
+    },
+    {
+      "id": "DIARY-013",
+      "description": "Saved diary opens in neutral VIEW mode; Edit is explicit",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-view-mode.test.js",
+        "lib/diary-site-diary-contract.test.js",
+        "lib/golden-journeys/journey-d-saved-diary.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Authenticated browser open→view→edit journey is future E2E; mode helpers + UI chrome contracts are automated."
+    }
+  ]
+}

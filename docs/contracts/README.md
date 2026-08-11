@@ -54,3 +54,7 @@ Where an older document conflicts with a **newer explicit user decision that als
 7. Completion reports must list contracts read, controls preserved/changed, and gate results.
 
 Regression gate: `npm run test:site-diary-contract`
+
+**Hard product regression gate:** `npm run test:release-gate`  
+**Approved behaviours (test-linked):** `docs/contracts/APPROVED_BEHAVIOUR_REGISTRY.json`  
+**Protected shared paths:** `docs/PROTECTED_CODE_BOUNDARIES.md`

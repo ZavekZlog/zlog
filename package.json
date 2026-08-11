@@ -8,7 +8,13 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --test lib/labour-from-register.test.js lib/photo-schedule.test.js lib/photo-annotations/model.test.js lib/photo-annotations/render.test.js lib/ai-annotation/area-groups.test.js lib/auth/login-form.test.js lib/auth/sign-out.test.js lib/diary-save.test.js lib/photo-workspace/photo-workspace.test.js lib/diary-routing.test.js lib/diary-view-mode.test.js lib/diary-form-hydrate.test.js lib/diary-setup-author.test.js lib/diary-setup-blank.test.js lib/project-day.test.js lib/project-sticky-fields.test.js lib/diary-setup-project-dates.test.js lib/diary-setup-continue.test.js lib/diary-project-details.test.js lib/diary-site-diary-contract.test.js lib/premium-ui-layout-contract.test.js",
-    "test:site-diary-contract": "node --test lib/diary-site-diary-contract.test.js lib/diary-setup-blank.test.js lib/diary-setup-author.test.js lib/diary-view-mode.test.js lib/diary-form-hydrate.test.js lib/diary-routing.test.js lib/diary-setup-continue.test.js lib/diary-setup-project-dates.test.js lib/diary-save.test.js lib/project-day.test.js lib/project-sticky-fields.test.js lib/premium-ui-layout-contract.test.js"
+    "test:site-diary-contract": "node --test lib/diary-site-diary-contract.test.js lib/diary-setup-blank.test.js lib/diary-setup-author.test.js lib/diary-view-mode.test.js lib/diary-form-hydrate.test.js lib/diary-routing.test.js lib/diary-setup-continue.test.js lib/diary-setup-project-dates.test.js lib/diary-save.test.js lib/project-day.test.js lib/project-sticky-fields.test.js lib/premium-ui-layout-contract.test.js",
+    "test:auth": "node --test lib/auth/login-form.test.js lib/auth/sign-out.test.js lib/auth/return-path.test.js",
+    "test:golden-journeys": "node --test lib/golden-journeys/journey-b-new-diary.test.js lib/golden-journeys/journey-c-previous-diary.test.js lib/golden-journeys/journey-d-saved-diary.test.js",
+    "check:protected-scope": "node scripts/check-protected-scope.mjs",
+    "check:behaviour-registry": "node scripts/check-behaviour-registry.mjs",
+    "test:e2e": "playwright test",
+    "test:release-gate": "node --test lib/auth/login-form.test.js lib/auth/sign-out.test.js lib/auth/return-path.test.js lib/diary-site-diary-contract.test.js lib/diary-setup-blank.test.js lib/diary-setup-author.test.js lib/diary-view-mode.test.js lib/diary-form-hydrate.test.js lib/diary-routing.test.js lib/diary-setup-continue.test.js lib/premium-ui-layout-contract.test.js lib/golden-journeys/journey-b-new-diary.test.js lib/golden-journeys/journey-c-previous-diary.test.js lib/golden-journeys/journey-d-saved-diary.test.js scripts/check-protected-scope.test.js && node scripts/check-behaviour-registry.mjs && node scripts/check-protected-scope.mjs && playwright test"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
@@ -22,6 +28,7 @@
     "signature_pad": "^5.1.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
