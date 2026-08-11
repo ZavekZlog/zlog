@@ -1,9 +1,9 @@
 'use client'
 
 /**
- * Site Diary entry hub — same on all devices.
- * A) Open Latest Diary → pick a recent diary and continue it
- * B) Start New Report → setup (choose/create project)
+ * Site Diary entry hub — today’s Site Diary choice.
+ * A) Start a New Diary → setup
+ * B) Use a Previous Diary → pick one to start today from it (new diary), or open to review
  */
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
@@ -11,21 +11,56 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   PremiumShell,
-  GlassSection,
+  ZlogModulePageHeader,
+  ModuleHomeCard,
   PrimaryCTA,
   SecondaryButton,
   RecentEntryCard,
-  typeTokens,
   recentEntryDateStyle,
   recentEntrySummaryStyle,
   recentEntryActionsStyle,
   recentEntryActionButtonStyle,
+  dashboardCardInteractionCss,
 } from '@/lib/premium-ui'
 import { REPORT_THEMES } from '@/lib/report-theme'
 import { DIARY_MISSING_MESSAGE, existingDiaryHref } from '@/lib/diary-routing'
+import { createTodaysDiaryDraft } from '@/lib/diary-draft'
+import { diaryFormHref } from '@/lib/diary-setup-continue'
 import { clearSetupFormDraft } from '@/lib/report-setup'
 
 const DIARY_ACCENT = REPORT_THEMES.diary.accent
+
+const IconNewDiary = (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path
+      d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-6Z"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinejoin="round"
+    />
+    <path d="M14 2v6h6" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
+    <path d="M12 18v-6M9 15h6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+  </svg>
+)
+
+const IconPreviousDiary = (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path
+      d="M8 4h7l4 4v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinejoin="round"
+    />
+    <path d="M15 4v4h4" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
+    <path
+      d="M5 9H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-1"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinejoin="round"
+      opacity="0.85"
+    />
+  </svg>
+)
 
 function formatReportDate(iso) {
   if (!iso) return 'No date'
@@ -43,23 +78,32 @@ function SiteDiaryEntryPage() {
   const missingReport = searchParams.get('missing') === '1'
   const supabase = createClient()
 
-  const [mode, setMode] = useState(null) // null | 'edit' | 'new'
+  const [mode, setMode] = useState(null) // null | 'previous'
   const [loading, setLoading] = useState(false)
+  const [busyId, setBusyId] = useState(null)
   const [error, setError] = useState(() => (missingReport ? DIARY_MISSING_MESSAGE : ''))
   const [reports, setReports] = useState([])
 
   const title = useMemo(() => {
-    if (mode === 'edit') return 'Open Latest Diary'
-    if (mode === 'new') return 'Start New Report'
+    if (mode === 'previous') return 'Use a Previous Diary'
     return 'Site Diary'
   }, [mode])
+
+  const moduleSubtitle = useMemo(() => {
+    if (mode === 'previous') {
+      return filterProjectId
+        ? 'Choose a previous diary for this project. This creates a new diary for today — the earlier diary stays unchanged.'
+        : 'Choose a previous diary. This creates a new diary for today — the earlier diary stays unchanged.'
+    }
+    return null
+  }, [mode, filterProjectId])
 
   useEffect(() => {
     if (missingReport) setError(DIARY_MISSING_MESSAGE)
   }, [missingReport])
 
   useEffect(() => {
-    if (mode !== 'edit') return
+    if (mode !== 'previous') return
     let cancelled = false
     const load = async () => {
       setLoading(true)
@@ -79,9 +123,9 @@ function SiteDiaryEntryPage() {
         const { data, error: qErr } = await query
         if (qErr) throw qErr
         if (!cancelled) setReports(data || [])
-      } catch (err) {
+      } catch {
         if (!cancelled) {
-          setError('We couldn’t load your latest diaries. Check your connection and try again.')
+          setError('We couldn’t load your diaries. Check your connection and try again.')
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -96,15 +140,29 @@ function SiteDiaryEntryPage() {
   const openExistingReport = (row) => {
     const href = existingDiaryHref(row?.project_id, row?.id)
     if (!href) {
-      setError('That diary can’t be opened. Try another one, or start a new Site Diary.')
+      setError('That diary can’t be opened. Try another one, or start a new diary.')
       return
     }
-    // Exact existing report — never create a new row here.
+    // Exact existing report — View first; never create a new row here.
     router.push(href)
   }
 
+  const usePreviousForToday = async (row) => {
+    if (!row?.project_id || !row?.id || busyId) return
+    setBusyId(row.id)
+    setError('')
+    try {
+      const id = await createTodaysDiaryDraft(supabase, row.project_id, row.id)
+      const href = diaryFormHref(row.project_id, id)
+      if (!href) throw new Error('Missing diary link')
+      router.push(href)
+    } catch (err) {
+      setError(err?.message || 'We couldn’t start today’s diary from that one. Try again.')
+      setBusyId(null)
+    }
+  }
+
   const startNewReport = () => {
-    // Start from scratch must not inherit a prior incomplete setup form.
     clearSetupFormDraft()
     const q = filterProjectId ? `?project=${filterProjectId}` : ''
     router.push(`/dashboard/diary/setup${q}`)
@@ -112,12 +170,19 @@ function SiteDiaryEntryPage() {
 
   return (
     <PremiumShell
-      title={title}
-      onBack={mode ? () => setMode(null) : undefined}
-      backHref={mode ? undefined : '/dashboard'}
+      hideModuleNav
       accent={DIARY_ACCENT}
       maxWidth={560}
     >
+      <style>{dashboardCardInteractionCss}</style>
+
+      <ZlogModulePageHeader
+        title={title}
+        subtitle={moduleSubtitle}
+        backHref={mode ? undefined : '/dashboard'}
+        onBack={mode ? () => setMode(null) : undefined}
+      />
+
       {error && (
         <div
           style={{
@@ -128,6 +193,7 @@ function SiteDiaryEntryPage() {
             fontSize: 14,
             marginBottom: 16,
             borderRadius: 10,
+            lineHeight: 1.45,
           }}
         >
           {error}
@@ -135,62 +201,48 @@ function SiteDiaryEntryPage() {
       )}
 
       {mode === null && (
-        <>
-          <p
-            style={{
-              ...typeTokens.body,
-              margin: '0 0 20px',
-              fontSize: 15,
-              lineHeight: 1.5,
-              color: 'color-mix(in srgb, var(--text) 90%, var(--text-2))',
-            }}
-          >
-            Choose whether to open your latest Site Diary or start a new one.
-          </p>
-
-          <GlassSection title="Open Saved Diaries" accent={DIARY_ACCENT}>
-            <p style={{ margin: '0 0 14px', fontSize: 14, lineHeight: 1.5, color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))' }}>
-              Open a previously saved Site Diary to review it or save time by updating it instead of creating a new diary from scratch.
-            </p>
-            <PrimaryCTA type="button" accent={DIARY_ACCENT} onClick={() => setMode('edit')}>
-              Open Saved Diaries
-            </PrimaryCTA>
-          </GlassSection>
-
-          <GlassSection title="Start New Report" accent={DIARY_ACCENT}>
-            <p style={{ margin: '0 0 14px', fontSize: 14, lineHeight: 1.5, color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))' }}>
-              Start a new Site Diary for a different project or a completely new report.
-            </p>
-            <SecondaryButton type="button" onClick={startNewReport}>
-              Start New Site Diary
-            </SecondaryButton>
-          </GlassSection>
-        </>
+        <div
+          className="zlog-diary-entry-choices"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gap: 16,
+            alignItems: 'stretch',
+          }}
+        >
+          <div className="premium-dash-card-wrap" style={{ animationDelay: '0ms', minHeight: 148 }}>
+            <ModuleHomeCard
+              title="Start a New Diary"
+              description="Blank diary for today."
+              icon={IconNewDiary}
+              accent={DIARY_ACCENT}
+              onClick={startNewReport}
+              style={{ minHeight: 148, padding: '16px 14px 14px' }}
+            />
+          </div>
+          <div className="premium-dash-card-wrap" style={{ animationDelay: '70ms', minHeight: 148 }}>
+            <ModuleHomeCard
+              title="Use a Previous Diary"
+              description="Use an earlier diary as your starting point."
+              icon={IconPreviousDiary}
+              accent={DIARY_ACCENT}
+              onClick={() => setMode('previous')}
+              style={{ minHeight: 148, padding: '16px 14px 14px' }}
+            />
+          </div>
+        </div>
       )}
 
-      {mode === 'edit' && (
+      {mode === 'previous' && (
         <>
-          <p
-            style={{
-              margin: '0 0 16px',
-              fontSize: 14,
-              lineHeight: 1.5,
-              color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
-            }}
-          >
-            {filterProjectId
-              ? 'Choose your latest Site Diary for this project. Tap one to open it and update it for today.'
-              : 'Choose your latest Site Diary below. Tap one to open it and update it for today.'}
-          </p>
-
-          {loading && <p style={{ color: 'var(--text-2)' }}>Loading your latest diaries…</p>}
+          {loading && <p style={{ color: 'var(--text-2)' }}>Loading your diaries…</p>}
 
           {!loading && reports.length === 0 && (
-            <div style={{ padding: '24px 0', color: 'var(--text-2)', fontSize: 14, lineHeight: 1.5 }}>
+            <div style={{ padding: '8px 0 24px', color: 'var(--text-2)', fontSize: 14, lineHeight: 1.5 }}>
               No Site Diaries yet{filterProjectId ? ' for this project' : ''}.
               <div style={{ marginTop: 14 }}>
                 <SecondaryButton type="button" onClick={startNewReport}>
-                  Start New Site Diary
+                  Start a New Diary
                 </SecondaryButton>
               </div>
             </div>
@@ -201,6 +253,7 @@ function SiteDiaryEntryPage() {
               const projectName = row.projects?.name || 'Project'
               const shift = row.shift || '—'
               const summary = (row.site_summary || '').trim()
+              const busy = busyId === row.id
               return (
                 <RecentEntryCard key={row.id} accent={DIARY_ACCENT}>
                   <div style={recentEntryDateStyle}>{projectName}</div>
@@ -223,13 +276,23 @@ function SiteDiaryEntryPage() {
                       {summary}
                     </div>
                   ) : null}
-                  <div style={recentEntryActionsStyle}>
+                  <div style={{ ...recentEntryActionsStyle, flexWrap: 'wrap', gap: 10 }}>
+                    <PrimaryCTA
+                      type="button"
+                      accent={DIARY_ACCENT}
+                      disabled={Boolean(busyId)}
+                      onClick={() => usePreviousForToday(row)}
+                      style={{ ...recentEntryActionButtonStyle, flex: '1 1 160px' }}
+                    >
+                      {busy ? 'Starting…' : 'Use for today'}
+                    </PrimaryCTA>
                     <SecondaryButton
                       type="button"
+                      disabled={Boolean(busyId)}
                       onClick={() => openExistingReport(row)}
-                      style={recentEntryActionButtonStyle}
+                      style={{ ...recentEntryActionButtonStyle, flex: '1 1 140px' }}
                     >
-                      Open this diary
+                      Open to review
                     </SecondaryButton>
                   </div>
                 </RecentEntryCard>

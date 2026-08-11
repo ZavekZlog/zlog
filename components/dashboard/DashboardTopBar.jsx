@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { ZlogBrandRegion, BRAND_HEADER_SPACE } from '@/lib/premium-ui'
+import { SIGN_OUT_LOGIN_HREF, performDashboardSignOut } from '@/lib/auth/sign-out'
 
 const UTILITY_RADIUS = 10
 
@@ -38,12 +39,25 @@ export function DashboardTopBar() {
   const [signingOut, setSigningOut] = useState(false)
 
   const handleSignOut = async () => {
+    if (signingOut) return
     setSigningOut(true)
-    // Clears Supabase auth session/cookies only — never stores or clears a raw password
-    // (Zlog does not persist passwords). Login form DOM is reset via ?signedOut=1.
-    await supabase.auth.signOut()
-    router.replace('/login?signedOut=1')
-    router.refresh()
+    try {
+      // Clears local auth session only — never stores or clears a raw password.
+      // Login form DOM is reset via ?signedOut=1. Always navigate even if signOut hangs/throws.
+      await performDashboardSignOut({
+        signOut: (options) => supabase.auth.signOut(options),
+        goToLogin: (href) => {
+          const target = href || SIGN_OUT_LOGIN_HREF
+          router.replace(target)
+          router.refresh()
+          if (typeof window !== 'undefined') {
+            window.location.assign(target)
+          }
+        },
+      })
+    } finally {
+      setSigningOut(false)
+    }
   }
 
   return (

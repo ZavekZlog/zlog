@@ -34,7 +34,7 @@
 | Final save | `finalizeSiteDiarySave` — UPDATE-only by report id; verify SELECT |
 | Open existing | `?report=` on `/dashboard/project/{projectId}/diary` via `existingDiaryHref` |
 | Never | Create a replacement diary when opening a selected existing record |
-| Hub copy | “Open Saved Diaries” is user-facing; routing unchanged |
+| Hub copy | Dashboard → `/dashboard/diary`; “Start a new diary” / “Use a previous diary” (site language; no implementation terms) |
 | Docs | `docs/M0_SAVE_LIFECYCLE.md`, `lib/diary-routing.js` |
 | Site Diary UX / screen | **`docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md`** + `docs/PROTECTED_SITE_DIARY_CONTRACT.md`; gate `npm run test:site-diary-contract` |
 | Shift options | **Day / Back / Night** (authoritative; supersedes older Weekend / Half day listings in draft specs) |

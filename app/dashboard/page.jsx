@@ -12,7 +12,6 @@ import {
 } from '@/lib/premium-ui'
 import { REPORT_THEME_LIST } from '@/lib/report-theme'
 import { DashboardTopBar } from '@/components/dashboard/DashboardTopBar'
-import { clearSetupFormDraft } from '@/lib/report-setup'
 
 /** Dashboard vertical rhythm (8px grid) — clear air under header before report cards */
 const SPACE = {
@@ -67,9 +66,8 @@ export default function DashboardPage() {
           disabled={disabled}
           onClick={() => {
             if (isDiary) {
-              // New Site Diary → setup directly (Open Saved Diaries stays on /dashboard/diary).
-              clearSetupFormDraft()
-              router.push('/dashboard/diary/setup')
+              // Site Diary → hub (Start a new diary / Use a previous diary).
+              router.push('/dashboard/diary')
               return
             }
             if (project?.id) router.push(`/dashboard/project/${project.id}/${card.path}`)

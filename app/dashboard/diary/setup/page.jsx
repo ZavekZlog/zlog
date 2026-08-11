@@ -50,7 +50,9 @@ import {
   updateDiarySetupFields,
 } from '@/lib/diary-draft'
 import {
-  scratchSetupAuthorFromProfile,
+  resolveSignedInAuthorProfile,
+  persistSignedInAuthorProfile,
+  isAccountDerivedAuthorName,
   clearSetupFormDraft,
   readReportSetupExtras,
   todayIsoDate,
@@ -108,6 +110,7 @@ function SiteDiarySetupPage() {
   const [author, setAuthor] = useState('')
   const [authorRole, setAuthorRole] = useState('')
   const [shift, setShift] = useState(DEFAULT_SITE_DIARY_SHIFT)
+  const [reportingCompany, setReportingCompany] = useState('')
   const [reportingOnBehalfOf, setReportingOnBehalfOf] = useState('')
   const [reportDate, setReportDate] = useState(todayIsoDate())
   const [projectReference, setProjectReference] = useState('')
@@ -164,8 +167,7 @@ function SiteDiarySetupPage() {
       setLoading(true)
       setError('')
       try {
-        const [{ data: { user } }, { data: projectRows }, profile] = await Promise.all([
-          supabase.auth.getUser(),
+        const [{ data: projectRows }, profile] = await Promise.all([
           supabase
             .from('projects')
             .select(projectsSetupSelectColumns())
@@ -176,17 +178,13 @@ function SiteDiarySetupPage() {
         if (cancelled) return
         setProjects(projectRows || [])
 
-        // Always resolve profile author before any form apply. A cancelled effect
-        // must not continue with authorName:'' and wipe a remounted form (Strict Mode).
-        let profileName = ''
-        if (user) {
-          const { data: userRow } = await supabase
-            .from('users')
-            .select('full_name')
-            .eq('id', user.id)
-            .maybeSingle()
-          profileName = scratchSetupAuthorFromProfile(user, userRow)
-        }
+        // Author from signed-in profile / auth metadata only.
+        // public.users may be missing (404) — resolver must not blank the form.
+        // Do not resolve author from prior diary, project, or session draft.
+        const authorProfile = await resolveSignedInAuthorProfile(supabase)
+        const profileName = authorProfile.authorName
+        const profileRole = authorProfile.authorRole
+        const signedInUser = authorProfile.user
         if (cancelled) return
 
         // Editing an existing diary's setup details
@@ -220,12 +218,18 @@ function SiteDiarySetupPage() {
           setProjectManager(sticky.projectManager)
           setWorkingDaysPerWeek(sticky.workingDaysPerWeek)
           setCurrentPhase(sticky.currentPhase)
-          // Edit/View setup: saved diary values win; profile is fallback only.
-          setAuthor(report?.creator_name || profileName || '')
-          setAuthorRole(hydrateAuthorRole(report))
+          // Edit/View setup: saved diary values win; never keep account-derived aliases.
+          const savedAuthor = String(report?.creator_name || '').trim()
+          const safeSavedAuthor =
+            savedAuthor && !isAccountDerivedAuthorName(savedAuthor, signedInUser)
+              ? savedAuthor
+              : ''
+          setAuthor(safeSavedAuthor || profileName || '')
+          setAuthorRole(hydrateAuthorRole(report) || profileRole || '')
           setShift(hydrateShift(report?.shift))
+          setReportingCompany(profile?.company_name || '')
           setReportingOnBehalfOf(
-            report?.company_reporting_for || profile?.company_name || '',
+            report?.company_reporting_for || '',
           )
           setReportDate(report?.report_date || todayIsoDate())
           setProjectReference(extras?.projectReference || '')
@@ -244,7 +248,7 @@ function SiteDiarySetupPage() {
 
         // Brand-new diary setup — never restore a prior session draft / last diary.
         // (Edit Report Details uses editingReportId above; Use as Basis is a separate route.)
-        // Scratch creator sticky: signed-in profile only — not prior diary, project, or draft.
+        // Scratch author: signed-in profile only — not prior diary, project, or draft.
         if (!shouldRestoreSetupFormDraft({ editingReportId })) {
           clearSetupFormDraft()
         }
@@ -256,14 +260,17 @@ function SiteDiarySetupPage() {
 
         const fresh = initialiseNewDiarySetupState({
           authorName: profileName,
+          authorRole: profileRole,
           reportDate: todayIsoDate(),
           companyProfile: profile,
           existingProject,
         })
         if (cancelled) return
         applyFormSnapshot(fresh)
-        // Explicit profile sticky — do not rely solely on snapshot apply path.
+        // Explicit profile author — do not rely solely on snapshot apply path.
         setAuthor(fresh.author)
+        setAuthorRole(fresh.authorRole)
+        setReportingCompany(profile?.company_name || '')
 
         const logoPath = fresh.logoStoragePath
         if (logoPath) {
@@ -364,7 +371,6 @@ function SiteDiarySetupPage() {
       })
       applyStickyFormState(cleared)
       setProjectReference('')
-      setAuthorRole('')
       setReportingOnBehalfOf('')
       setProjectDatesError('')
       setStickyFieldsError('')
@@ -398,7 +404,7 @@ function SiteDiarySetupPage() {
     const project = existingProjects.find((p) => p.id === projectId)
     if (!project) return
 
-    // Sticky + programme only — do not copy diary content from latest report.
+    // Project fields only — do not copy diary content from latest report.
     const merged = mergeProjectIntoSetupState({}, project)
     applyStickyFormState(merged)
     setProjectDatesError('')
@@ -430,7 +436,6 @@ function SiteDiarySetupPage() {
       applyStickyFormState(cleared)
       setProjectName(nextName)
       setProjectReference('')
-      setAuthorRole('')
       setReportingOnBehalfOf('')
       setProjectDatesError('')
       setStickyFieldsError('')
@@ -545,6 +550,16 @@ function SiteDiarySetupPage() {
         setSaving(false)
         return
       }
+
+      // Persist the explicit name confirmed on setup — never invent from email.
+      try {
+        await persistSignedInAuthorProfile(supabase, {
+          authorName: author,
+          authorRole,
+        })
+      } catch {
+        // Profile persist is best-effort; diary continue already succeeded.
+      }
       // Keep saving=true until route change unmounts this screen.
     } catch (err) {
       setError(err?.message || 'Could not continue to Site Diary')
@@ -557,12 +572,12 @@ function SiteDiarySetupPage() {
       router.push(`/dashboard/project/${editingProjectId}/diary?report=${editingReportId}`)
       return
     }
-    router.push('/dashboard')
+    router.push('/dashboard/diary')
   }
 
   if (loading) {
     return (
-      <PremiumShell title="New Site Diary" backHref="/dashboard" accent={BRAND_ACCENT} maxWidth={520}>
+      <PremiumShell title="New Site Diary" backHref="/dashboard/diary" accent={BRAND_ACCENT} maxWidth={520}>
         <p style={{ color: 'var(--text-2)', fontSize: 16 }}>Loading…</p>
       </PremiumShell>
     )
@@ -572,7 +587,7 @@ function SiteDiarySetupPage() {
     <PremiumShell
       title="New Site Diary"
       onBack={handleBack}
-      backHref="/dashboard"
+      backHref="/dashboard/diary"
       accent={BRAND_ACCENT}
       maxWidth={520}
     >
@@ -585,7 +600,7 @@ function SiteDiarySetupPage() {
           color: 'color-mix(in srgb, var(--text) 90%, var(--text-2))',
         }}
       >
-        You’re setting up a <strong>new</strong> Site Diary. Confirm the project and date below, then continue to fill in today’s details.
+        Confirm the details for today’s Site Diary, then continue.
       </p>
 
       {error && (
@@ -605,7 +620,110 @@ function SiteDiarySetupPage() {
         </div>
       )}
 
-      <GlassSection title="Project and date" accent={BRAND_ACCENT}>
+      <GlassSection title="Reporting Company" accent={BRAND_ACCENT}>
+        <label style={setupLabelStyle}>Reporting Company Name</label>
+        <input
+          value={reportingCompany}
+          onChange={(e) => setReportingCompany(e.target.value)}
+          placeholder="Your company name"
+          autoComplete="organization"
+          style={setupInputStyle}
+          aria-label="Reporting Company Name"
+        />
+
+        <label style={setupLabelStyle}>Reporting Company Logo</label>
+        {logoPreview ? (
+          <div style={{ marginBottom: 20 }}>
+            <img
+              src={logoPreview}
+              alt="Reporting company logo preview"
+              style={{
+                display: 'block',
+                width: '100%',
+                maxHeight: 180,
+                objectFit: 'contain',
+                borderRadius: 12,
+                background: 'color-mix(in srgb, var(--plate) 70%, var(--ink))',
+                border: '1px solid var(--edge)',
+                marginBottom: 12,
+                padding: 12,
+              }}
+            />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ position: 'relative' }}>
+                <SecondaryButton type="button" style={{ width: '100%', minHeight: 48 }}>
+                  Replace
+                </SecondaryButton>
+                <input
+                  type="file"
+                  accept="image/*"
+                  aria-label="Replace reporting company logo"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    e.target.value = ''
+                    if (file) handleLogoFiles([file])
+                  }}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    opacity: 0,
+                    cursor: 'pointer',
+                    fontSize: 16,
+                  }}
+                />
+              </div>
+              <SecondaryButton type="button" onClick={removeLogo} style={{ width: '100%', minHeight: 48 }}>
+                Remove
+              </SecondaryButton>
+            </div>
+          </div>
+        ) : (
+          <div style={{ marginBottom: 0 }}>
+            <ImageSourceButtons
+              onFiles={handleLogoFiles}
+              cameraLabel="Take Photo"
+              galleryLabel="Upload Photo"
+              stacked
+            />
+          </div>
+        )}
+      </GlassSection>
+
+      <GlassSection title="Reporting On Behalf Of" accent={BRAND_ACCENT}>
+        <label style={setupLabelStyle}>Reporting On Behalf Of *</label>
+        <input
+          value={reportingOnBehalfOf}
+          onChange={(e) => setReportingOnBehalfOf(e.target.value)}
+          placeholder="Client, main contractor, or organisation"
+          autoComplete="organization"
+          style={{ ...setupInputStyle, marginBottom: 0 }}
+          required
+        />
+      </GlassSection>
+
+      <GlassSection title="Author" accent={BRAND_ACCENT}>
+        <label style={setupLabelStyle}>Author Name *</label>
+        <input
+          value={author}
+          onChange={(e) => setAuthor(e.target.value)}
+          placeholder="Your name"
+          autoComplete="name"
+          style={setupInputStyle}
+          required
+        />
+
+        <label style={setupLabelStyle}>Author Role</label>
+        <input
+          type="text"
+          value={authorRole}
+          onChange={(e) => setAuthorRole(e.target.value)}
+          placeholder="e.g. Site Manager"
+          autoComplete="organization-title"
+          style={{ ...setupInputStyle, marginBottom: 0 }}
+        />
+      </GlassSection>
+
+      <GlassSection title="Project Details" accent={BRAND_ACCENT}>
         <label style={setupLabelStyle}>Project Name *</label>
         <input
           value={projectName}
@@ -625,39 +743,17 @@ function SiteDiarySetupPage() {
           </datalist>
         ) : null}
 
-        <div style={{ marginBottom: 4 }}>
-          <p
-            style={{
-              margin: '0 0 12px',
-              fontSize: 14,
-              lineHeight: 1.45,
-              color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
-            }}
-          >
-            Sticky project information (set once for this project)
-          </p>
-          <ProjectStickyFields
-            projectAddress={projectAddress}
-            projectManager={projectManager}
-            workingDaysPerWeek={workingDaysPerWeek}
-            currentPhase={currentPhase}
-            onChange={handleStickyFieldsChange}
-            error={stickyFieldsError}
-          />
-        </div>
+        <ProjectStickyFields
+          projectAddress={projectAddress}
+          projectManager={projectManager}
+          workingDaysPerWeek={workingDaysPerWeek}
+          currentPhase={currentPhase}
+          onChange={handleStickyFieldsChange}
+          error={stickyFieldsError}
+        />
 
         {showProjectDatesOnSetup() ? (
           <div style={{ marginBottom: 4 }}>
-            <p
-              style={{
-                margin: '0 0 12px',
-                fontSize: 14,
-                lineHeight: 1.45,
-                color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
-              }}
-            >
-              Project programme dates (set once for this project)
-            </p>
             <ProjectDatesFields
               startDate={projectStartDate}
               plannedCompletionDate={projectPlannedCompletionDate}
@@ -683,49 +779,12 @@ function SiteDiarySetupPage() {
           ) : null}
         </select>
 
-        <div style={{ marginTop: 8, marginBottom: 4 }}>
-          <p
-            style={{
-              margin: '0 0 12px',
-              fontSize: 14,
-              fontWeight: 650,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              lineHeight: 1.45,
-              color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
-            }}
-          >
-            Report Author
-          </p>
-          <label style={setupLabelStyle}>Author Name *</label>
-          <input
-            value={author}
-            onChange={(e) => setAuthor(e.target.value)}
-            placeholder="Your name"
-            autoComplete="name"
-            style={setupInputStyle}
-            required
-          />
-
-          <label style={setupLabelStyle}>Author Role</label>
-          <input
-            type="text"
-            value={authorRole}
-            onChange={(e) => setAuthorRole(e.target.value)}
-            placeholder="e.g. Site Manager"
-            autoComplete="organization-title"
-            style={setupInputStyle}
-          />
-        </div>
-
-        <label style={setupLabelStyle}>Reporting On Behalf Of *</label>
+        <label style={setupLabelStyle}>Project Reference</label>
         <input
-          value={reportingOnBehalfOf}
-          onChange={(e) => setReportingOnBehalfOf(e.target.value)}
-          placeholder="Company or client name"
-          autoComplete="organization"
+          value={projectReference}
+          onChange={(e) => setProjectReference(e.target.value)}
+          placeholder="Optional job or reference number"
           style={setupInputStyle}
-          required
         />
 
         <label style={setupLabelStyle}>Report Date *</label>
@@ -733,73 +792,8 @@ function SiteDiarySetupPage() {
           type="date"
           value={reportDate}
           onChange={(e) => setReportDate(e.target.value)}
-          style={setupInputStyle}
-          required
-        />
-
-        <label style={setupLabelStyle}>Company / Client Logo</label>
-        {logoPreview ? (
-          <div style={{ marginBottom: 20 }}>
-            <img
-              src={logoPreview}
-              alt="Company or client logo preview"
-              style={{
-                display: 'block',
-                width: '100%',
-                maxHeight: 180,
-                objectFit: 'contain',
-                borderRadius: 12,
-                background: 'color-mix(in srgb, var(--plate) 70%, var(--ink))',
-                border: '1px solid var(--edge)',
-                marginBottom: 12,
-                padding: 12,
-              }}
-            />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div style={{ position: 'relative' }}>
-                <SecondaryButton type="button" style={{ width: '100%', minHeight: 48 }}>
-                  Replace
-                </SecondaryButton>
-                <input
-                  type="file"
-                  accept="image/*"
-                  aria-label="Replace logo"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    e.target.value = ''
-                    if (file) handleLogoFiles([file])
-                  }}
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    opacity: 0,
-                    cursor: 'pointer',
-                    fontSize: 16,
-                  }}
-                />
-              </div>
-              <SecondaryButton type="button" onClick={removeLogo} style={{ width: '100%', minHeight: 48 }}>
-                Remove
-              </SecondaryButton>
-            </div>
-          </div>
-        ) : (
-          <div style={{ marginBottom: 20 }}>
-            <ImageSourceButtons
-              onFiles={handleLogoFiles}
-              cameraLabel="Take Photo"
-              galleryLabel="Upload Photo"
-              stacked
-            />
-          </div>
-        )}
-
-        <label style={setupLabelStyle}>Project Reference</label>
-        <input
-          value={projectReference}
-          onChange={(e) => setProjectReference(e.target.value)}
-          placeholder="Optional job or reference number"
           style={{ ...setupInputStyle, marginBottom: 0 }}
+          required
         />
       </GlassSection>
 
@@ -809,7 +803,7 @@ function SiteDiarySetupPage() {
         disabled={saving}
         style={{ minHeight: 52, fontSize: 16, marginBottom: 12 }}
       >
-        {saving ? 'Continuing…' : 'Continue to fill in your diary'}
+        {saving ? 'Continuing…' : 'Continue to Site Diary'}
       </PrimaryCTA>
 
       {error ? (

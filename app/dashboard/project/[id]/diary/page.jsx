@@ -46,10 +46,12 @@ import {
   fetchOpenDraft,
 } from '@/lib/diary-draft'
 import { DiarySaveError, DIARY_SAVE_LOG, finalizeSiteDiarySave } from '@/lib/diary-save'
-import { diaryHubHref, diaryEditHref, existingDiaryHref } from '@/lib/diary-routing'
+import { diaryHubHref, diaryEditHref, diaryComposeHref, existingDiaryHref } from '@/lib/diary-routing'
 import {
   diaryModeBanner,
   resolveDiaryInteractionMode,
+  isDiaryWritableMode,
+  showExistingDiaryModeChrome,
 } from '@/lib/diary-view-mode'
 import {
   hydrateAuthorName,
@@ -70,8 +72,6 @@ import {
   loginUrlWithReturn,
   SESSION_EXPIRED_SAVE_MESSAGE,
 } from '@/lib/auth/return-path'
-
-const SHIFT_OPTIONS = ['Day', 'Back', 'Night']
 
 const makeUuid = () => {
   const c = globalThis.crypto;
@@ -288,6 +288,7 @@ export default function SiteDiaryPage() {
   const prefillLast = searchParams.get('prefill') === 'last'
   const editingReportId = searchParams.get('report') || searchParams.get('diaryId') || null
   const editQuery = searchParams.get('edit')
+  const composeQuery = searchParams.get('compose')
   const duplicateReportId = (!editingReportId && searchParams.get('duplicate')) || null
   const templateReportId = (!editingReportId && searchParams.get('template')) || duplicateReportId || null
   // After save, stay on this report in View (banner clears “editing” wording).
@@ -296,10 +297,14 @@ export default function SiteDiaryPage() {
   const diaryMode = resolveDiaryInteractionMode({
     reportId: editingReportId,
     editQuery,
+    composeQuery,
     isDraft: reportIsDraft,
   })
-  const isDiaryEditMode = diaryMode === 'edit'
+  // Writable = compose (new draft) or explicit edit. View is read-only.
+  const isDiaryEditMode = isDiaryWritableMode(diaryMode)
   const isDiaryViewMode = diaryMode === 'view'
+  const isDiaryExplicitEditMode = diaryMode === 'edit'
+  const showDiaryModeChrome = showExistingDiaryModeChrome(diaryMode)
   const router = useRouter()
   const supabase = createClient()
 
@@ -419,9 +424,12 @@ export default function SiteDiaryPage() {
   const [setupLogoPreview, setSetupLogoPreview] = useState(null)
 
   const openReportForm = useCallback((reportId, { mode = 'view' } = {}) => {
-    const href = mode === 'edit'
-      ? diaryEditHref(projectId, reportId)
-      : existingDiaryHref(projectId, reportId)
+    const href =
+      mode === 'edit'
+        ? diaryEditHref(projectId, reportId)
+        : mode === 'compose'
+          ? diaryComposeHref(projectId, reportId)
+          : existingDiaryHref(projectId, reportId)
     if (!href) return
     router.replace(href)
   }, [router, projectId])
@@ -479,7 +487,7 @@ export default function SiteDiaryPage() {
         }
         if (templateReportId) {
           const id = await createTodaysDiaryDraft(supabase, projectId, templateReportId)
-          if (!cancelled) openReportForm(id, { mode: 'edit' })
+          if (!cancelled) openReportForm(id, { mode: 'compose' })
           return
         }
         // Consistent entry: A/B hub (edit existing vs start new) — same on phone and laptop.
@@ -1027,19 +1035,6 @@ export default function SiteDiaryPage() {
     setEquipmentHireRows((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)))
   }
 
-  const handleProjectChange = (newId) => {
-    if (newId && newId !== projectId) {
-      let query = ''
-      if (editingReportId) {
-        query = isDiaryEditMode
-          ? `?report=${editingReportId}&edit=1`
-          : `?report=${editingReportId}`
-      } else if (duplicateReportId) query = `?duplicate=${duplicateReportId}`
-      else if (prefillLast) query = '?prefill=last'
-      router.push(`/dashboard/project/${newId}/diary${query}`)
-    }
-  }
-
   const removeCoverPhoto = () => {
     if (coverPhoto?.file && coverPhoto.preview) URL.revokeObjectURL(coverPhoto.preview)
     setCoverPhoto(null)
@@ -1052,7 +1047,7 @@ export default function SiteDiaryPage() {
 
   const handleContinueDraft = async () => {
     if (!openDraft?.id || startBusy) return
-    openReportForm(openDraft.id, { mode: 'edit' })
+    openReportForm(openDraft.id, { mode: 'compose' })
   }
 
   const handleCreateTodaysDiary = async () => {
@@ -1061,7 +1056,7 @@ export default function SiteDiaryPage() {
     setStartError('')
     try {
       const id = await createTodaysDiaryDraft(supabase, projectId)
-      openReportForm(id, { mode: 'edit' })
+      openReportForm(id, { mode: 'compose' })
     } catch (err) {
       setStartError(err?.message || 'Could not create today’s diary')
       setStartBusy(false)
@@ -1074,7 +1069,7 @@ export default function SiteDiaryPage() {
     setStartError('')
     try {
       const id = await createBlankDiaryDraft(supabase, projectId)
-      openReportForm(id, { mode: 'edit' })
+      openReportForm(id, { mode: 'compose' })
     } catch (err) {
       setStartError(err?.message || 'Could not start blank diary')
       setStartBusy(false)
@@ -1087,7 +1082,7 @@ export default function SiteDiaryPage() {
     setStartError('')
     try {
       const id = await createTodaysDiaryDraft(supabase, projectId, sourceId)
-      openReportForm(id, { mode: 'edit' })
+      openReportForm(id, { mode: 'compose' })
     } catch (err) {
       setStartError(err?.message || 'Could not create diary from template')
       setStartBusy(false)
@@ -1118,7 +1113,7 @@ export default function SiteDiaryPage() {
     setError('')
     try {
       const id = await createTodaysDiaryDraft(supabase, projectId, editingReportId)
-      openReportForm(id, { mode: 'edit' })
+      openReportForm(id, { mode: 'compose' })
     } catch (err) {
       setError(err?.message || 'Could not create a new diary from this one')
     } finally {
@@ -1162,9 +1157,11 @@ export default function SiteDiaryPage() {
     const path =
       typeof window !== 'undefined'
         ? `${window.location.pathname}${window.location.search}`
-        : (isDiaryEditMode
+        : (isDiaryExplicitEditMode
           ? diaryEditHref(projectId, editingReportId)
-          : existingDiaryHref(projectId, editingReportId)) || `/dashboard/project/${projectId}/diary`
+          : diaryMode === 'compose'
+            ? diaryComposeHref(projectId, editingReportId)
+            : existingDiaryHref(projectId, editingReportId)) || `/dashboard/project/${projectId}/diary`
     // Full navigation so /login?next=… is always the loaded URL (not a soft push race).
     window.location.assign(loginUrlWithReturn(path))
   }
@@ -1673,7 +1670,7 @@ export default function SiteDiaryPage() {
           ✓ Saved — you’re viewing this Site Diary.
         </div>
       )}
-      {editingReportId && diaryMode && (
+      {editingReportId && showDiaryModeChrome && (
         <div style={{ background: `rgba(${DIARY_ACCENT}, 0.08)`, border: `1px solid rgba(${DIARY_ACCENT}, 0.25)`, color: '#F0EDE8', padding: '12px 14px', fontSize: 14, marginBottom: 16, borderRadius: 10, lineHeight: 1.5 }}>
           {diaryModeBannerCopy.emphasizeProject && project?.name ? (
             <>
@@ -1703,7 +1700,7 @@ export default function SiteDiaryPage() {
                 Use as Basis for New Diary
               </SecondaryButton>
             </div>
-          ) : (
+          ) : isDiaryExplicitEditMode ? (
             <div style={{ marginTop: 12 }}>
               <SecondaryButton
                 type="button"
@@ -1713,11 +1710,11 @@ export default function SiteDiaryPage() {
                 Cancel editing
               </SecondaryButton>
             </div>
-          )}
+          ) : null}
         </div>
       )}
 
-      {(project?.name || creatorName || companyReportingFor || reportDate) && (
+      {(project?.name || reportDate) && (
         <div
           style={{
             background: 'var(--plate)',
@@ -1747,20 +1744,18 @@ export default function SiteDiaryPage() {
             ) : null}
             <div style={{ minWidth: 0, flex: 1 }}>
               <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3 }}>
-                {project?.name || 'Project'}
+                {linkedProject.projectName || project?.name || 'Project'}
               </p>
               <p style={{ margin: '6px 0 0', fontSize: 14, color: 'color-mix(in srgb, var(--text) 82%, var(--text-2))', lineHeight: 1.45 }}>
                 {[
-                  creatorName && `Author: ${creatorName}`,
-                  creatorRole && `Role: ${creatorRole}`,
-                  companyReportingFor && `On behalf of: ${companyReportingFor}`,
                   reportDate &&
                     new Date(`${reportDate}T12:00:00`).toLocaleDateString('en-GB', {
                       day: 'numeric',
                       month: 'short',
                       year: 'numeric',
                     }),
-                  projectReference && `Ref: ${projectReference}`,
+                  shiftType && `${shiftType} Shift`,
+                  projectProgrammeCard.projectDayLine,
                 ]
                   .filter(Boolean)
                   .join(' · ')}
@@ -1803,197 +1798,12 @@ export default function SiteDiaryPage() {
             accent={DIARY_ACCENT}
             autoSelectDefault={!editingReportId}
           />
-        ) : (
-          <GlassSection title="Report Branding" accent={DIARY_ACCENT}>
-            <p
-              style={{
-                margin: 0,
-                fontSize: 14,
-                lineHeight: 1.45,
-                color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
-              }}
-            >
-              {brandingSelection?.brandColor || brandingSelection?.brandLogoUrl || brandingSelection?.brandingId
-                ? 'Branding from this diary is kept as saved. It is not changed when you edit other sections.'
-                : 'No branding is attached to this diary.'}
-            </p>
-            {brandingSelection?.brandColor ? (
-              <p style={{ margin: '10px 0 0', fontSize: 14, color: 'var(--text)' }}>
-                Colour:{' '}
-                <span style={{ fontWeight: 600 }}>{brandingSelection.brandColor}</span>
-              </p>
-            ) : null}
-          </GlassSection>
-        )}
+        ) : null}
 
-        <GlassSection title="Project" accent={DIARY_ACCENT}>
-          <label style={labelStyle}>Project</label>
-          {editingReportId ? (
-            <p
-              style={{
-                ...inputStyle,
-                marginBottom: 8,
-                display: 'flex',
-                alignItems: 'center',
-                minHeight: 48,
-                cursor: 'default',
-              }}
-            >
-              {linkedProject.projectName || 'Project'}
-            </p>
-          ) : (
-            <select
-              style={{ ...inputStyle, marginBottom: 8 }}
-              value={projectId}
-              onChange={(e) => handleProjectChange(e.target.value)}
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          )}
-          {projectProgrammeCard.stickyRows.map((row) => (
-            <div key={row.key} style={{ marginTop: 4 }}>
-              <label style={labelStyle}>{row.label}</label>
-              <p
-                style={{
-                  margin: '0 0 14px',
-                  fontSize: 15,
-                  lineHeight: 1.4,
-                  color: 'var(--text)',
-                }}
-              >
-                {row.value}
-              </p>
-            </div>
-          ))}
-
-          {projectProgrammeCard.status === 'missing' ? (
-            <p
-              style={{
-                margin: projectProgrammeCard.stickyRows.length ? 0 : '4px 0 0',
-                fontSize: 14,
-                lineHeight: 1.45,
-                color: 'color-mix(in srgb, var(--text) 78%, var(--text-2))',
-              }}
-            >
-              {projectProgrammeCard.missingMessage}
-            </p>
-          ) : (
-            <div style={{ marginTop: projectProgrammeCard.stickyRows.length ? 0 : 4 }}>
-              <label style={labelStyle}>Project Start Date</label>
-              <p
-                style={{
-                  margin: '0 0 14px',
-                  fontSize: 15,
-                  lineHeight: 1.4,
-                  color: 'var(--text)',
-                }}
-              >
-                {projectProgrammeCard.startNotSet ? 'Not set' : projectProgrammeCard.startDisplay}
-              </p>
-
-              <label style={labelStyle}>Planned Completion Date</label>
-              <p
-                style={{
-                  margin: '0 0 14px',
-                  fontSize: 15,
-                  lineHeight: 1.4,
-                  color: 'var(--text)',
-                }}
-              >
-                {projectProgrammeCard.plannedCompletionNotSet
-                  ? 'Not set'
-                  : projectProgrammeCard.plannedCompletionDisplay}
-              </p>
-            </div>
-          )}
-
-          {projectProgrammeCard.afterDateStickyRows.map((row) => (
-            <div key={row.key}>
-              <label style={labelStyle}>{row.label}</label>
-              <p
-                style={{
-                  margin: '0 0 14px',
-                  fontSize: 15,
-                  lineHeight: 1.4,
-                  color: 'var(--text)',
-                }}
-              >
-                {row.value}
-              </p>
-            </div>
-          ))}
-
-          {projectProgrammeCard.projectDayLine ? (
-            <>
-              <label style={{ ...labelStyle, marginBottom: 6 }}>Project Day</label>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 15,
-                  fontWeight: 650,
-                  lineHeight: 1.4,
-                  color: 'var(--text)',
-                }}
-              >
-                {projectProgrammeCard.projectDayLine}
-              </p>
-            </>
-          ) : null}
-        </GlassSection>
-
-        <GlassSection title="Author & cover" accent={DIARY_ACCENT}>
-          {isDiaryViewMode ? (
-            <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle}>Author</label>
-              <p style={{ margin: '0 0 14px', fontSize: 15, lineHeight: 1.4, color: 'var(--text)' }}>
-                {creatorName || '—'}
-              </p>
-              {creatorRole ? (
-                <>
-                  <label style={labelStyle}>Role</label>
-                  <p style={{ margin: '0 0 14px', fontSize: 15, lineHeight: 1.4, color: 'var(--text)' }}>
-                    {creatorRole}
-                  </p>
-                </>
-              ) : null}
-              <label style={labelStyle}>Reporting on behalf of</label>
-              <p style={{ margin: 0, fontSize: 15, lineHeight: 1.4, color: 'var(--text)' }}>
-                {companyReportingFor || '—'}
-              </p>
-            </div>
-          ) : (
-            <>
-          <label style={labelStyle}>Author name</label>
-          <input
-            style={inputStyle}
-            value={creatorName}
-            onChange={(e) => setCreatorName(e.target.value)}
-            placeholder="e.g. Colin Walker"
-          />
-
-          <label style={labelStyle}>Author role</label>
-          <input
-            style={inputStyle}
-            value={creatorRole}
-            onChange={(e) => setCreatorRole(e.target.value)}
-            placeholder="e.g. Site Manager"
-          />
-
-          <label style={labelStyle}>Reporting on behalf of</label>
-          <input
-            style={inputStyle}
-            value={companyReportingFor}
-            onChange={(e) => setCompanyReportingFor(e.target.value)}
-            placeholder="e.g. ABC Construction Ltd"
-          />
-            </>
-          )}
-
+        <GlassSection title="Cover photo" accent={DIARY_ACCENT}>
           <label style={labelStyle}>Cover photo</label>
           {coverPhoto?.preview ? (
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 0 }}>
               <img
                 src={coverPhoto.preview}
                 alt="Cover"
@@ -2002,89 +1812,23 @@ export default function SiteDiaryPage() {
               <button type="button" onClick={removeCoverPhoto} style={removeRowStyle}>Remove cover photo</button>
             </div>
           ) : (
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 0 }}>
               <ImageSourceButtons
                 onFiles={onCoverDrop}
                 hint="One cover image for this report"
               />
             </div>
           )}
-
-          <div ref={signatureSectionRef}>
-          <label style={labelStyle}>Signature</label>
-          {(signatureMode === 'carried' || signatureMode === 'accepted') && signature?.preview ? (
-            <div style={{ marginBottom: 0 }}>
-              <img
-                src={signature.preview}
-                alt="Signature"
-                style={{ maxWidth: '100%', maxHeight: 120, objectFit: 'contain', borderRadius: 8, display: 'block', marginBottom: 10, background: '#fff', padding: 8 }}
-              />
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                {signatureMode === 'carried' && (
-                  <SecondaryButton type="button" onClick={useExistingSignature}>
-                    Use Existing Signature
-                  </SecondaryButton>
-                )}
-                <SecondaryButton type="button" onClick={resignSignature}>
-                  Re-sign / Clear
-                </SecondaryButton>
-              </div>
-            </div>
-          ) : (
-            <div style={{ marginBottom: 0 }}>
-              <canvas
-                ref={attachSignatureCanvas}
-                style={{
-                  touchAction: 'none',
-                  userSelect: 'none',
-                  WebkitUserSelect: 'none',
-                  width: '100%',
-                  height: 120,
-                  display: 'block',
-                  borderRadius: 8,
-                  background: '#fff',
-                  marginBottom: 10,
-                }}
-              />
-              <SecondaryButton type="button" onClick={clearSignaturePad}>
-                Clear
-              </SecondaryButton>
-            </div>
-          )}
-          </div>
         </GlassSection>
 
-        <GlassSection title="Report details" accent={DIARY_ACCENT}>
-          <label style={labelStyle}>Report date</label>
-          <input
-            type="date"
-            style={inputStyle}
-            value={reportDate}
-            onChange={(e) => setReportDate(e.target.value)}
-            required
-          />
-
+        <GlassSection title="Weather" accent={DIARY_ACCENT}>
           <label style={labelStyle}>Weather</label>
           <input
-            style={inputStyle}
+            style={{ ...inputStyle, marginBottom: 0 }}
             value={weather}
             onChange={(e) => setWeather(e.target.value)}
             placeholder="e.g. Overcast, 12°C, light rain PM"
           />
-
-          <label style={labelStyle}>Shift type</label>
-          <select
-            style={{ ...inputStyle, marginBottom: 0 }}
-            value={shiftType}
-            onChange={(e) => setShiftType(e.target.value)}
-          >
-            {(SHIFT_OPTIONS.includes(shiftType) || !shiftType
-              ? SHIFT_OPTIONS
-              : [...SHIFT_OPTIONS, shiftType]
-            ).map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-          </select>
         </GlassSection>
 
         <GlassSection title="Site summary" accent={DIARY_ACCENT}>
@@ -2465,6 +2209,51 @@ export default function SiteDiaryPage() {
           onChange={handleLocationWalkChange}
           onContinue={continueToSignature}
         />
+
+        <GlassSection title="Signature" accent={DIARY_ACCENT}>
+          <div ref={signatureSectionRef}>
+            <label style={labelStyle}>Signature</label>
+            {(signatureMode === 'carried' || signatureMode === 'accepted') && signature?.preview ? (
+              <div style={{ marginBottom: 0 }}>
+                <img
+                  src={signature.preview}
+                  alt="Signature"
+                  style={{ maxWidth: '100%', maxHeight: 120, objectFit: 'contain', borderRadius: 8, display: 'block', marginBottom: 10, background: '#fff', padding: 8 }}
+                />
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                  {signatureMode === 'carried' && (
+                    <SecondaryButton type="button" onClick={useExistingSignature}>
+                      Use Existing Signature
+                    </SecondaryButton>
+                  )}
+                  <SecondaryButton type="button" onClick={resignSignature}>
+                    Re-sign / Clear
+                  </SecondaryButton>
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginBottom: 0 }}>
+                <canvas
+                  ref={attachSignatureCanvas}
+                  style={{
+                    touchAction: 'none',
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                    width: '100%',
+                    height: 120,
+                    display: 'block',
+                    borderRadius: 8,
+                    background: '#fff',
+                    marginBottom: 10,
+                  }}
+                />
+                <SecondaryButton type="button" onClick={clearSignaturePad}>
+                  Clear
+                </SecondaryButton>
+              </div>
+            )}
+          </div>
+        </GlassSection>
         </fieldset>
 
         {isDiaryEditMode ? (

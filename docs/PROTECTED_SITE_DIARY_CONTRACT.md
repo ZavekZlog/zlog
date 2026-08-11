@@ -95,11 +95,12 @@ Canonical helpers: `lib/diary-setup-shift.js` (`SITE_DIARY_SHIFT_OPTIONS`, setup
 
 ## 5. Author (setup order)
 
-1. Project Information (sticky + programme dates)
-2. **Shift**
-3. **Author Name** (immediately after Shift / project block)
-4. **Author Role** directly beneath Author Name (free text, e.g. Site Manager)
-5. Reporting on Behalf Of, Report Date, branding…
+1. Reporting Company (company name + logo)
+2. Reporting On Behalf Of
+3. **Author Name** + **Author Role**
+4. Project Details (including Project Manager, Shift, Report Date, …)
+
+Author Name comes from the signed-in profile only on scratch / Use for today — never from a previous diary.
 
 Do not invent Author Role when none was saved.
 

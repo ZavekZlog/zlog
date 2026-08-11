@@ -1,22 +1,24 @@
 # Site Diary — Screen Contract
 
 **Layer:** B — Screen  
-**Version:** 1.1.1  
-**Date Updated:** 2026-08-07  
-**Reason Updated:** Link Global UI Text Fit contract; overflow audit required for setup/hub/diary UI  
-**User Decision:** GLOBAL UI CONSTITUTION — TEXT MUST ALWAYS FIT  
-**Previous Version:** 1.1.0  
+**Version:** 1.2.0  
+**Date Updated:** 2026-08-10  
+**Reason Updated:** Restore approved entry hub + locked setup hierarchy (Reporting Company first); ban implementation terminology in UI  
+**User Decision:** SITE DIARY WORKFLOW REGRESSION FIX  
+**Previous Version:** 1.1.1  
 
 **Status:** Binding production contract  
 **Routes:**
 
-- Hub: `/dashboard/diary` (Open Saved Diaries; optional Start New → setup)
+- Hub: `/dashboard/diary` (Today’s Report: Start a new diary / Use a previous diary)
 - Setup: `/dashboard/diary/setup`
 - Diary form: `/dashboard/project/[id]/diary`
 
 **Supersedes (UI order / Shift):** Informal notes and `docs/ZLOG_FUNCTIONAL_SPEC_V1.md` passages that still list shift as Day / Night / Weekend / Half day. **Authoritative shift options are Day / Back / Night.**
 
-**Supersedes (v1.0.0 §2 project selector):** The separate **Which project is this diary for?** control is removed. Project choice is via **Project Name** only.
+**Supersedes (v1.1.x §5 dashboard entry):** Dashboard Site Diary opens the **hub** (`/dashboard/diary`), not setup directly.
+
+**Supersedes (v1.1.x §2 setup sequence):** Locked hierarchy is Reporting Company → Reporting On Behalf Of → Author → Project Details (Project Manager is inside Project Details only).
 
 Parent: `docs/PROTECTED_PRODUCT_DECISIONS.md`  
 Behaviour summary: `docs/PROTECTED_SITE_DIARY_CONTRACT.md`  
@@ -39,47 +41,47 @@ Refactoring, cleanup, simplification, deduplication, modernisation, “better UX
 
 Route: `/dashboard/diary/setup`  
 Title: **New Site Diary**  
-Navigation: visible **Back** control.
+Navigation: visible **Back** control (to Site Diary hub).
 
-### PROJECT AND DATE
+### REPORTING COMPANY
 
-1. **Project Name** — single control for project choice:
-   - Select / choose an **existing** project name → load that project’s **sticky** information from `public.projects` and retain `project_id`
-   - Type a **new** project name → create a new project on Continue (no sticky leak from a prior selection)
-   - There is **no** separate “Which project is this diary for?” screen or dropdown
+1. **Reporting Company Name** — from the signed-in user’s company branding profile when available  
+2. **Reporting Company Logo** — branding / logo for who is producing the report
 
-### STICKY PROJECT INFORMATION
+### REPORTING ON BEHALF OF
 
-2. **Project Address**
-3. **Project Manager**
-4. **Working Days per Week**
-5. **Current Phase**
-6. **Project Description** — once implemented (not in live schema yet)
-7. **Project Start Date**
-8. **Planned Completion Date**
-9. **Project Day** — calculated where displayed (typically diary Project card, not necessarily setup)
+3. **Reporting On Behalf Of** — client / main contractor / organisation
 
-### SHIFT
+### AUTHOR
 
-10. **Shift** — options exactly: **Day**, **Back**, **Night**  
-    Position: after programme dates; **before** Report Author. Must never disappear during unrelated work.
+4. **Author Name** — from explicitly saved profile author name only (`users.full_name` / auth `user_metadata.full_name`); never from email, username, or a previous diary  
+5. **Author Role** — free text from explicit profile job title when present; never invent a role
 
-### REPORT AUTHOR
+### PROJECT DETAILS
 
-11. **Author Name**
-12. **Author Role** — directly beneath Author Name; free text; never invent a role
-
-### REPORT DETAILS
-
-13. **Reporting On Behalf Of**
-14. **Report Date**
-15. **Branding / logo** (Company / Client Logo on setup)
+6. **Project Name** — single control for project choice:
+   - Select / choose an **existing** project name → load that project’s remembered project fields from `public.projects` and retain `project_id`
+   - Type a **new** project name → create a new project on Continue (no leak from a prior selection)
+7. **Project Address**
+8. **Project Manager** — must remain inside Project Details (never above Reporting Company)
+9. **Working Days per Week**
+10. **Current Phase**
+11. **Project Description** — once implemented (not in live schema yet)
+12. **Project Start Date**
+13. **Planned Completion Date**
+14. **Shift** — options exactly: **Day**, **Back**, **Night**
+15. **Report Date**
 16. **Project Reference** where currently approved on this screen
-17. **Cover Photo** where currently approved (today: diary form, not setup)
 
-Primary CTA: **Continue to fill in your diary**
+Primary CTA: **Continue to Site Diary**
 
-Project-level fields must not be mixed into report-level persistence. Visually, Shift and Author are report-level and must remain in the sequence above.
+### UI language (mandatory)
+
+User-visible copy must never include implementation terms such as: sticky, sticky fields, persistent, persistence, stored values, inherited values, database fields, cached project information, “remembered for this project”.
+
+Setup introduction (exact): **Confirm the details for today's Site Diary, then continue.**
+
+Do not show helper lines that explain persistence (for example “Programme dates for this project”).
 
 ---
 
@@ -87,11 +89,11 @@ Project-level fields must not be mixed into report-level persistence. Visually, 
 
 | Flow | Contract |
 |------|----------|
-| **A. Start from scratch** | Blank project + diary setup; Author Name may prefill from profile; Report Date may be today; approved default branding may load; all other project/report fields blank |
-| **B. Select existing project** | Via **Project Name** matching an existing project; load sticky fields from `public.projects`; keep `project_id`; do **not** copy diary content |
-| **C. View saved diary** | Read-only; no DB write on open; neutral wording; **Edit This Diary**; **Use as Basis for New Diary** |
-| **D. Edit saved diary** | Same diary ID; rehydrate saved values; no duplicate; save → View |
-| **E. Use as Basis** | New diary ID; original unchanged; only approved reusable fields |
+| **A. Start a new diary** | Hub → setup; blank project + diary setup; Author Name prefills from profile; Report Date may be today; approved default branding / company name may load; all other project/report fields blank |
+| **B. Select existing project** | Via **Project Name** matching an existing project; load remembered project fields from `public.projects`; keep `project_id`; do **not** copy diary content |
+| **C. Use a previous diary** | Hub list → **Use for today** creates a **new** diary ID from the selected diary (appropriate reusable fields only); Author from profile, not source; **Open to review** opens the exact existing report in View |
+| **D. View saved diary** | Read-only; no DB write on open; neutral wording; **Edit This Diary**; **Use as Basis for New Diary** |
+| **E. Edit saved diary** | Same diary ID; rehydrate saved values; no duplicate; save → View |
 
 State from one flow must not leak into another.
 
@@ -118,12 +120,16 @@ Protected interactions:
 
 ## 5. Hub screen and Dashboard entry
 
-**Dashboard → New Site Diary** opens **`/dashboard/diary/setup` directly** (clears setup session draft; scratch init). No intermediate project-selection page.
+**Dashboard → Site Diary** opens **`/dashboard/diary`** (Today’s Report hub).
 
-Route `/dashboard/diary` (**Open Saved Diaries** hub) remains **completely separate**:
+Hub choices (clear site language):
 
-- **Open Saved Diaries** → open exact existing report (`?report=`)
-- **Start New Site Diary** (if shown on hub) → setup (clears setup session draft; scratch init)
+- **Start a New Diary** → `/dashboard/diary/setup` (clears setup session draft; blank init for today)
+  - Supporting text: Start with a blank diary for today.
+- **Use a Previous Diary** → list prior diaries:
+  - Supporting text: Start today's diary using details from an earlier diary.
+  - **Use for today** → creates a **new** diary ID (source diary unchanged)
+  - **Open to review** → exact existing report in View (`?report=`)
 
 ---
 

@@ -122,6 +122,23 @@ export const premiumScopedCss = `
     transform: translateY(1px);
     filter: brightness(0.96);
   }
+  .zlog-module-back-btn:hover {
+    border-color: color-mix(in srgb, var(--edge) 70%, transparent);
+    background: color-mix(in srgb, var(--plate) 42%, transparent);
+    color: var(--text);
+  }
+  .zlog-module-back-btn:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--text) 35%, transparent);
+    outline-offset: 2px;
+    border-color: color-mix(in srgb, var(--edge) 70%, transparent);
+    background: color-mix(in srgb, var(--plate) 42%, transparent);
+    color: var(--text);
+  }
+  .zlog-module-back-btn:active {
+    background: color-mix(in srgb, var(--plate) 58%, transparent);
+    border-color: color-mix(in srgb, var(--edge) 85%, transparent);
+    color: var(--text);
+  }
   .zlog-header-utility-card:not(:disabled):hover {
     border-color: color-mix(in srgb, var(--edge) 100%, var(--text) 12%);
     filter: brightness(1.06);
@@ -552,6 +569,27 @@ export const BRAND_HEADER_SPACE = {
 }
 
 /**
+ * Atmospheric brand glow geometry — sized to the wordmark box, never 100vw.
+ * 100vw includes the scrollbar gutter and forces horizontal overflow past the
+ * layout viewport (fails the Global Mobile UI no-horizontal-scroll rule).
+ */
+export const BRAND_ATMOSPHERIC_GLOW_STYLE = {
+  position: 'absolute',
+  left: '50%',
+  top: '50%',
+  transform: 'translate(-50%, -50%)',
+  width: '100%',
+  maxWidth: '100%',
+  height: '180px',
+  pointerEvents: 'none',
+  opacity: 0.42,
+  filter: 'blur(45px)',
+  background:
+    'radial-gradient(ellipse 65% 75% at 50% 50%, color-mix(in srgb, var(--rust), transparent 38%) 0%, color-mix(in srgb, var(--rust), transparent 72%) 48%, color-mix(in srgb, var(--rust), transparent 94%) 75%, rgba(13,15,18,0) 92%)',
+  zIndex: 0,
+}
+
+/**
  * FINAL LOCKED brand masthead — --rust Z + warm log; opacity 0.42 glow.
  * Authenticated screens consume this only via ZlogBrandRegion (size md).
  * size lg remains for public auth pages (login/signup).
@@ -577,24 +615,13 @@ export function ZlogBrandWordmark({ size = 'lg', centered = true, style = {} }) 
         ...style,
       }}
     >
-      {/* Approved atmospheric radial glow — do not restyle per page */}
+      {/* Approved atmospheric radial glow — do not restyle per page.
+          Width must NOT use 100vw: vw includes the scrollbar gutter and overflows
+          the layout viewport (horizontal scroll). Size to the wordmark box instead. */}
       <div
         aria-hidden
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: '50%',
-          transform: 'translate(-50%, -50%)',
-          width: '100vw',
-          maxWidth: '100vw',
-          height: '180px',
-          pointerEvents: 'none',
-          opacity: 0.42,
-          filter: 'blur(45px)',
-          background:
-            'radial-gradient(ellipse 65% 75% at 50% 50%, color-mix(in srgb, var(--rust), transparent 38%) 0%, color-mix(in srgb, var(--rust), transparent 72%) 48%, color-mix(in srgb, var(--rust), transparent 94%) 75%, rgba(13,15,18,0) 92%)',
-          zIndex: 0,
-        }}
+        data-zlog-brand-glow=""
+        style={BRAND_ATMOSPHERIC_GLOW_STYLE}
       />
       <h1
         style={{
@@ -691,6 +718,9 @@ export function PremiumBackButton({ onClick, href, label = 'Back' }) {
  * LOCKED report-module navigation — Back + page title as one workspace header row.
  * Sits beneath ZlogBrandRegion. Used by all report modules via ZlogInternalHeader / PremiumShell.
  * Do not reinvent Back/title chrome per page.
+ *
+ * For stronger module identity (hub / chooser screens), prefer ZlogModulePageHeader
+ * inside page content with hideModuleNav on the shell — Site Diary is the reference.
  */
 export function ReportModuleNav({
   title,
@@ -763,6 +793,147 @@ export function ReportModuleNav({
   )
 }
 
+const moduleBackControlStyle = {
+  boxSizing: 'border-box',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'flex-start',
+  gap: 6,
+  minHeight: 44,
+  margin: 0,
+  // Flush left with title / card grid; pad right/vertical for touch target only.
+  padding: '10px 12px 10px 0',
+  borderRadius: 8,
+  border: '1px solid transparent',
+  background: 'transparent',
+  color: 'color-mix(in srgb, var(--text) 78%, var(--text-2))',
+  boxShadow: 'none',
+  fontFamily: 'inherit',
+  fontSize: 15,
+  fontWeight: 600,
+  letterSpacing: '0.01em',
+  lineHeight: 1,
+  cursor: 'pointer',
+  textDecoration: 'none',
+  touchAction: 'manipulation',
+  WebkitTapHighlightColor: 'transparent',
+}
+
+/**
+ * Restrained module navigation — arrow + Back, not a CTA pill.
+ * Transparent at rest; subtle plate/border only on hover/focus/press.
+ */
+export function ZlogModuleBackControl({ href, onClick, label = 'Back' }) {
+  const className = 'zlog-module-back-btn'
+  const content = (
+    <>
+      <span aria-hidden style={{ fontSize: 17, lineHeight: 1, fontWeight: 600 }}>
+        ←
+      </span>
+      <span>{label}</span>
+    </>
+  )
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={className}
+        style={moduleBackControlStyle}
+        onClick={onClick}
+        aria-label={`Go ${label.toLowerCase()}`}
+      >
+        {content}
+      </Link>
+    )
+  }
+  return (
+    <button
+      type="button"
+      className={className}
+      style={moduleBackControlStyle}
+      onClick={onClick}
+      aria-label={`Go ${label.toLowerCase()}`}
+    >
+      {content}
+    </button>
+  )
+}
+
+/**
+ * Module page header — Back + dominant module title + optional supporting copy.
+ * Sits in the page content column (same width/alignment as cards), beneath ZlogBrandRegion.
+ * Reference implementation: Site Diary hub. Other modules may adopt later.
+ */
+export function ZlogModulePageHeader({
+  title,
+  subtitle = null,
+  onBack,
+  backHref,
+  style,
+}) {
+  const showBack = Boolean(backHref || onBack)
+
+  return (
+    <header
+      className="zlog-module-page-header"
+      style={{
+        boxSizing: 'border-box',
+        width: '100%',
+        // Tighter when no supporting copy — title sits directly above primary task UI.
+        marginBottom: subtitle ? 28 : 20,
+        ...style,
+      }}
+    >
+      {showBack ? (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-start',
+            minHeight: 44,
+            marginBottom: 8,
+          }}
+        >
+          <ZlogModuleBackControl href={backHref} onClick={onBack} />
+        </div>
+      ) : null}
+
+      {title ? (
+        <h1
+          className="zlog-module-page-title"
+          style={{
+            margin: 0,
+            fontFamily: 'var(--font-space-grotesk), sans-serif',
+            fontSize: 'clamp(28px, 7vw, 34px)',
+            fontWeight: 800,
+            letterSpacing: '-0.03em',
+            lineHeight: 1.12,
+            color: 'var(--text)',
+          }}
+        >
+          {title}
+        </h1>
+      ) : null}
+
+      {subtitle ? (
+        <p
+          className="zlog-module-page-subtitle"
+          style={{
+            margin: title ? '12px 0 0' : 0,
+            fontSize: 16,
+            fontWeight: 400,
+            lineHeight: 1.45,
+            color: 'color-mix(in srgb, var(--text) 86%, var(--text-2))',
+            maxWidth: '34em',
+          }}
+        >
+          {subtitle}
+        </p>
+      ) : null}
+    </header>
+  )
+}
+
 /**
  * Sub-page chrome: ZlogBrandRegion + ReportModuleNav (Back / title).
  * Brand spacing comes only from ZlogBrandRegion — do not add wordmark margins here.
@@ -777,8 +948,9 @@ export function ZlogInternalHeader({
   backHref,
   accent: _accent = DIARY_ACCENT,
   trailing = null,
+  hideModuleNav = false,
 }) {
-  const showNavRow = Boolean(backHref || onBack || title || trailing)
+  const showNavRow = !hideModuleNav && Boolean(backHref || onBack || title || trailing)
 
   return (
     <header
@@ -828,6 +1000,7 @@ export function SubPageLayout({
   children,
   maxWidth,
   trailing = null,
+  hideModuleNav = false,
 }) {
   const contentMaxWidth = maxWidth ?? 448
 
@@ -835,17 +1008,21 @@ export function SubPageLayout({
     <div className="min-h-screen bg-[#0d0f12] text-[#f3f4f6] flex flex-col px-4 pb-6 pt-0 selection:bg-[#ff5500]/30">
       <style>{premiumScopedCss}</style>
 
-      <div className="w-full max-w-md mx-auto flex flex-col items-center">
+      <div
+        className="w-full mx-auto flex flex-col items-center"
+        style={{ maxWidth: contentMaxWidth }}
+      >
         <SubPageHeader
-          title={title}
-          onBack={onBack}
-          backHref={backHref}
+          title={hideModuleNav ? undefined : title}
+          onBack={hideModuleNav ? undefined : onBack}
+          backHref={hideModuleNav ? undefined : backHref}
           accent={accent}
-          trailing={trailing}
+          trailing={hideModuleNav ? null : trailing}
+          hideModuleNav={hideModuleNav}
         />
       </div>
 
-      <main className="w-full max-w-md mx-auto flex-1" style={{ maxWidth: contentMaxWidth }}>
+      <main className="w-full mx-auto flex-1" style={{ maxWidth: contentMaxWidth }}>
         {children}
       </main>
     </div>
