@@ -669,7 +669,7 @@ export function ZlogBackControl({
   const classes = `zlog-secondary-cta zlog-back-cta ${className}`.trim()
   const content = (
     <>
-      <ArrowLeft size={18} strokeWidth={2.5} aria-hidden className="zlog-secondary-cta__icon" />
+      <ArrowLeft size={15} strokeWidth={2.5} aria-hidden className="zlog-secondary-cta__icon" />
       <span className="zlog-secondary-cta__label">{label}</span>
     </>
   )
@@ -870,6 +870,7 @@ export function ZlogInternalHeader({
   accent: _accent = DIARY_ACCENT,
   trailing = null,
   hideModuleNav = false,
+  brandRegionStyle,
 }) {
   const showNavRow = !hideModuleNav && Boolean(backHref || onBack || title || trailing)
 
@@ -889,7 +890,7 @@ export function ZlogInternalHeader({
         pointerEvents: 'auto',
       }}
     >
-      <ZlogBrandRegion />
+      <ZlogBrandRegion style={brandRegionStyle} />
 
       {showNavRow ? (
         <ReportModuleNav
@@ -922,6 +923,7 @@ export function SubPageLayout({
   maxWidth,
   trailing = null,
   hideModuleNav = false,
+  brandRegionStyle,
 }) {
   const contentMaxWidth = maxWidth ?? 448
 
@@ -940,6 +942,7 @@ export function SubPageLayout({
           accent={accent}
           trailing={hideModuleNav ? null : trailing}
           hideModuleNav={hideModuleNav}
+          brandRegionStyle={brandRegionStyle}
         />
       </div>
 

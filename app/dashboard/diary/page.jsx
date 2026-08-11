@@ -8,12 +8,12 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { CalendarPlus, Eye } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import {
   PremiumShell,
   ZlogModulePageHeader,
   ModuleHomeCard,
-  PrimaryCTA,
   SecondaryButton,
   RecentEntryCard,
   recentEntryDateStyle,
@@ -93,7 +93,7 @@ function SiteDiaryEntryPage() {
     if (mode === 'previous') {
       return filterProjectId
         ? 'Choose a previous diary for this project. This creates a new diary for today — the earlier diary stays unchanged.'
-        : 'Choose a previous diary. This creates a new diary for today — the earlier diary stays unchanged.'
+        : 'Choose a diary to use as your starting point. The original will stay unchanged.'
     }
     return null
   }, [mode, filterProjectId])
@@ -173,6 +173,8 @@ function SiteDiaryEntryPage() {
       hideModuleNav
       accent={DIARY_ACCENT}
       maxWidth={560}
+      /* Entry hub only: tighten air below wordmark (~25%); keep pad-top / logo size. */
+      brandRegionStyle={{ paddingBottom: 30 }}
     >
       <style>{dashboardCardInteractionCss}</style>
 
@@ -206,28 +208,28 @@ function SiteDiaryEntryPage() {
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-            gap: 16,
-            alignItems: 'stretch',
+            gap: 12,
+            alignItems: 'start',
           }}
         >
-          <div className="premium-dash-card-wrap" style={{ animationDelay: '0ms', minHeight: 148 }}>
+          <div className="premium-dash-card-wrap" style={{ animationDelay: '0ms' }}>
             <ModuleHomeCard
               title="Start a New Diary"
-              description="Blank diary for today."
+              description="Enter everything from scratch."
               icon={IconNewDiary}
               accent={DIARY_ACCENT}
               onClick={startNewReport}
-              style={{ minHeight: 148, padding: '16px 14px 14px' }}
+              style={{ minHeight: 0, height: 'auto', padding: '8px 12px 8px' }}
             />
           </div>
-          <div className="premium-dash-card-wrap" style={{ animationDelay: '70ms', minHeight: 148 }}>
+          <div className="premium-dash-card-wrap" style={{ animationDelay: '70ms' }}>
             <ModuleHomeCard
               title="Use a Previous Diary"
-              description="Use an earlier diary as your starting point."
+              description="Carry over recurring details."
               icon={IconPreviousDiary}
               accent={DIARY_ACCENT}
               onClick={() => setMode('previous')}
-              style={{ minHeight: 148, padding: '16px 14px 14px' }}
+              style={{ minHeight: 0, height: 'auto', padding: '8px 12px 8px' }}
             />
           </div>
         </div>
@@ -255,18 +257,32 @@ function SiteDiaryEntryPage() {
               const summary = (row.site_summary || '').trim()
               const busy = busyId === row.id
               return (
-                <RecentEntryCard key={row.id} accent={DIARY_ACCENT}>
-                  <div style={recentEntryDateStyle}>{projectName}</div>
-                  <div style={recentEntrySummaryStyle}>
+                <RecentEntryCard
+                  key={row.id}
+                  accent={DIARY_ACCENT}
+                  style={{ padding: '8px 12px 8px 14px', marginBottom: 8 }}
+                >
+                  <div style={{ ...recentEntryDateStyle, minHeight: 0, lineHeight: 1.25 }}>
+                    {projectName}
+                  </div>
+                  <div
+                    style={{
+                      ...recentEntrySummaryStyle,
+                      marginTop: 2,
+                      minHeight: 0,
+                      lineHeight: 1.35,
+                    }}
+                  >
                     {formatReportDate(row.report_date)} · Shift: {shift}
                   </div>
                   {summary ? (
                     <div
                       style={{
                         fontSize: 13,
-                        lineHeight: 1.45,
+                        lineHeight: 1.35,
                         opacity: 0.85,
-                        marginBottom: 10,
+                        marginTop: 4,
+                        marginBottom: 0,
                         display: '-webkit-box',
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: 'vertical',
@@ -276,24 +292,46 @@ function SiteDiaryEntryPage() {
                       {summary}
                     </div>
                   ) : null}
-                  <div style={{ ...recentEntryActionsStyle, flexWrap: 'wrap', gap: 10 }}>
-                    <PrimaryCTA
+                  <div
+                    style={{
+                      ...recentEntryActionsStyle,
+                      flexWrap: 'wrap',
+                      gap: 8,
+                      marginTop: 8,
+                    }}
+                  >
+                    <button
                       type="button"
-                      accent={DIARY_ACCENT}
+                      className="zlog-secondary-cta zlog-diary-peer-action zlog-diary-peer-action--use"
                       disabled={Boolean(busyId)}
                       onClick={() => usePreviousForToday(row)}
                       style={{ ...recentEntryActionButtonStyle, flex: '1 1 160px' }}
                     >
-                      {busy ? 'Starting…' : 'Use for today'}
-                    </PrimaryCTA>
-                    <SecondaryButton
+                      <CalendarPlus
+                        size={16}
+                        strokeWidth={2.5}
+                        aria-hidden
+                        className="zlog-secondary-cta__icon"
+                      />
+                      <span className="zlog-secondary-cta__label">
+                        {busy ? 'Starting…' : 'Use for today'}
+                      </span>
+                    </button>
+                    <button
                       type="button"
+                      className="zlog-secondary-cta zlog-diary-peer-action zlog-diary-peer-action--review"
                       disabled={Boolean(busyId)}
                       onClick={() => openExistingReport(row)}
                       style={{ ...recentEntryActionButtonStyle, flex: '1 1 140px' }}
                     >
-                      Open to review
-                    </SecondaryButton>
+                      <Eye
+                        size={16}
+                        strokeWidth={2.5}
+                        aria-hidden
+                        className="zlog-secondary-cta__icon"
+                      />
+                      <span className="zlog-secondary-cta__label">Open to review</span>
+                    </button>
                   </div>
                 </RecentEntryCard>
               )
@@ -308,7 +346,13 @@ export default function SiteDiaryEntryRoute() {
   return (
     <Suspense
       fallback={
-        <PremiumShell title="Site Diary" backHref="/dashboard" accent={DIARY_ACCENT} maxWidth={560}>
+        <PremiumShell
+          title="Site Diary"
+          backHref="/dashboard"
+          accent={DIARY_ACCENT}
+          maxWidth={560}
+          brandRegionStyle={{ paddingBottom: 30 }}
+        >
           <p style={{ color: 'var(--text-2)' }}>Loading…</p>
         </PremiumShell>
       }
