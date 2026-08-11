@@ -4,34 +4,15 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { ZlogBrandRegion, BRAND_HEADER_SPACE } from '@/lib/premium-ui'
+import { ZlogBrandRegion } from '@/lib/premium-ui'
 import { SIGN_OUT_LOGIN_HREF, performDashboardSignOut } from '@/lib/auth/sign-out'
 
-const UTILITY_RADIUS = 10
-
-const utilityCardBase = {
-  boxSizing: 'border-box',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 6,
-  minHeight: 40,
-  padding: '7px 10px',
-  borderRadius: UTILITY_RADIUS,
-  border: '1px solid color-mix(in srgb, var(--edge) 52%, transparent)',
-  background:
-    'linear-gradient(165deg, color-mix(in srgb, var(--plate) 70%, var(--ink) 30%) 0%, color-mix(in srgb, var(--ink) 72%, var(--plate)) 100%)',
-  boxShadow:
-    'inset 0 1px 0 color-mix(in srgb, var(--edge-highlight) 40%, transparent), 0 2px 8px color-mix(in srgb, var(--ink) 22%, transparent)',
-  color: 'var(--text)',
-  fontFamily: 'inherit',
-  textDecoration: 'none',
-  cursor: 'pointer',
-  lineHeight: 1.15,
-}
+/** Safe inset from the viewport/header edge (matches dashboard content padX). */
+const HEADER_EDGE_PAD_X = 20
 
 /**
- * Dashboard masthead — LOCKED ZlogBrandRegion, then Sign out.
- * Project/client context lives on Report Setup, not the dashboard.
+ * Dashboard masthead — Zlog independently centred; Sign out anchored to the
+ * padded page-right edge (not grouped with the wordmark, not card-column-aligned).
  */
 export function DashboardTopBar() {
   const router = useRouter()
@@ -69,44 +50,39 @@ export function DashboardTopBar() {
         overflow: 'hidden',
         background: 'color-mix(in srgb, var(--ink) 72%, var(--plate))',
         borderBottom: '1px solid var(--edge-highlight)',
-        padding: `0 ${BRAND_HEADER_SPACE.headerPadX}px ${BRAND_HEADER_SPACE.headerPadX}px`,
+        padding: `0 ${HEADER_EDGE_PAD_X}px 8px`,
       }}
     >
-      <ZlogBrandRegion />
-
       <div
-        className="zlog-header-utility-row"
+        className="zlog-dashboard-masthead"
         style={{
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'stretch',
-          justifyContent: 'flex-end',
-          gap: 8,
+          position: 'relative',
           width: '100%',
-          maxWidth: 420,
-          margin: '0 auto',
+          margin: 0,
         }}
       >
         <button
           type="button"
-          className="zlog-header-utility-card zlog-header-utility-card--signout"
+          className="zlog-secondary-cta zlog-dashboard-signout"
           disabled={signingOut}
           onClick={handleSignOut}
-          style={{
-            ...utilityCardBase,
-            flex: '0 0 auto',
-            justifyContent: 'center',
-            paddingInline: 14,
-            fontSize: 13,
-            fontWeight: 600,
-            color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
-            cursor: signingOut ? 'wait' : 'pointer',
-            opacity: signingOut ? 0.7 : 1,
-          }}
+          aria-label={signingOut ? 'Signing out' : 'Sign out'}
         >
-          <LogOut size={14} strokeWidth={2} aria-hidden style={{ flexShrink: 0, opacity: 0.85 }} />
-          <span>{signingOut ? 'Signing out…' : 'Sign out'}</span>
+          <LogOut size={18} strokeWidth={2.5} aria-hidden className="zlog-secondary-cta__icon" />
+          <span className="zlog-secondary-cta__label">
+            {signingOut ? 'Signing out…' : 'Sign out'}
+          </span>
         </button>
+
+        <ZlogBrandRegion
+          style={{
+            minHeight: 64,
+            paddingTop: 20,
+            paddingBottom: 12,
+            /* Clear the far-right CTA on narrow viewports; wordmark stays page-centred */
+            paddingInline: 118,
+          }}
+        />
       </div>
     </header>
   )

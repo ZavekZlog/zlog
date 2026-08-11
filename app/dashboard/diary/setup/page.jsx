@@ -7,7 +7,7 @@ import {
   PremiumShell,
   GlassSection,
   PrimaryCTA,
-  SecondaryButton,
+  ZlogBackControl,
   labelStyle,
   inputStyle,
   BRAND_ACCENT,
@@ -825,14 +825,11 @@ function SiteDiarySetupPage() {
         </div>
       ) : null}
 
-      <SecondaryButton
-        type="button"
+      <ZlogBackControl
         onClick={handleBack}
         disabled={saving}
-        style={{ width: '100%', minHeight: 48, marginBottom: 32 }}
-      >
-        Back
-      </SecondaryButton>
+        style={{ marginBottom: 32 }}
+      />
     </PremiumShell>
   )
 }

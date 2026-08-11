@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { REPORT_THEMES } from '@/lib/report-theme'
 
 export const DIARY_ACCENT = REPORT_THEMES.diary.accent
@@ -121,23 +122,6 @@ export const premiumScopedCss = `
   .zlog-secondary-btn:not(:disabled):active {
     transform: translateY(1px);
     filter: brightness(0.96);
-  }
-  .zlog-module-back-btn:hover {
-    border-color: color-mix(in srgb, var(--edge) 70%, transparent);
-    background: color-mix(in srgb, var(--plate) 42%, transparent);
-    color: var(--text);
-  }
-  .zlog-module-back-btn:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--text) 35%, transparent);
-    outline-offset: 2px;
-    border-color: color-mix(in srgb, var(--edge) 70%, transparent);
-    background: color-mix(in srgb, var(--plate) 42%, transparent);
-    color: var(--text);
-  }
-  .zlog-module-back-btn:active {
-    background: color-mix(in srgb, var(--plate) 58%, transparent);
-    border-color: color-mix(in srgb, var(--edge) 85%, transparent);
-    color: var(--text);
   }
   .zlog-header-utility-card:not(:disabled):hover {
     border-color: color-mix(in srgb, var(--edge) 100%, var(--text) 12%);
@@ -562,7 +546,7 @@ export const BRAND_HEADER_SPACE = {
   /** Gap after page nav / utility row before first content (~24–32) */
   belowControls: 24,
   /** Shared report-module nav row height (Back + title baseline) */
-  navRowMinHeight: 40,
+  navRowMinHeight: 48,
   /** Dashboard: utility row → report-card grid */
   headerToContent: 28,
   headerPadX: 16,
@@ -671,47 +655,57 @@ export function ZlogBrandRegion({ style = {} } = {}) {
   )
 }
 
-export function PremiumBackButton({ onClick, href, label = 'Back' }) {
-  const style = {
-    ...premiumBackPillStyle(),
-    position: 'relative',
-    zIndex: 50,
-    pointerEvents: 'auto',
-    touchAction: 'manipulation',
-    textDecoration: 'none',
-  }
+/**
+ * Canonical Zlog Back control — same .zlog-secondary-cta plate as dashboard Sign out.
+ */
+export function ZlogBackControl({
+  href,
+  onClick,
+  label = 'Back',
+  className = '',
+  style,
+  disabled = false,
+}) {
+  const classes = `zlog-secondary-cta zlog-back-cta ${className}`.trim()
   const content = (
     <>
-      <span className="premium-back-btn__arrow" aria-hidden>
-        ←
-      </span>
-      <span>{label}</span>
+      <ArrowLeft size={18} strokeWidth={2.5} aria-hidden className="zlog-secondary-cta__icon" />
+      <span className="zlog-secondary-cta__label">{label}</span>
     </>
   )
+  const aria = `Go ${String(label).toLowerCase()}`
+
   if (href) {
     return (
       <Link
         href={href}
-        className="premium-back-btn zlog-secondary-btn"
+        className={classes}
         style={style}
-        aria-label={`Go ${label.toLowerCase()}`}
         onClick={onClick}
+        aria-label={aria}
       >
         {content}
       </Link>
     )
   }
+
   return (
     <button
       type="button"
-      className="premium-back-btn zlog-secondary-btn"
-      onClick={onClick}
+      className={classes}
       style={style}
-      aria-label={`Go ${label.toLowerCase()}`}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={aria}
     >
       {content}
     </button>
   )
+}
+
+/** @deprecated Prefer ZlogBackControl — kept as a thin alias for existing imports. */
+export function PremiumBackButton({ onClick, href, label = 'Back' }) {
+  return <ZlogBackControl href={href} onClick={onClick} label={label} />
 }
 
 /**
@@ -728,26 +722,12 @@ export function ReportModuleNav({
   backHref,
   trailing = null,
 }) {
-  const backClassName =
-    'zlog-report-nav-back shrink-0 inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-xs font-semibold tracking-wide transition-colors border cursor-pointer font-inherit no-underline'
-  const backStyle = {
-    borderColor: 'color-mix(in srgb, var(--edge) 48%, transparent)',
-    color: 'color-mix(in srgb, var(--text) 68%, var(--text-2))',
-    background: 'color-mix(in srgb, var(--ink) 55%, var(--plate))',
-    boxShadow: 'none',
-  }
-
-  const backControl = backHref ? (
-    <Link href={backHref} className={backClassName} style={backStyle} onClick={onBack}>
-      <span aria-hidden>←</span> Back
-    </Link>
-  ) : onBack ? (
-    <button type="button" className={backClassName} style={backStyle} onClick={onBack}>
-      <span aria-hidden>←</span> Back
-    </button>
-  ) : (
-    <div className="shrink-0 w-[4.5rem]" aria-hidden />
-  )
+  const backControl =
+    backHref || onBack ? (
+      <ZlogBackControl href={backHref} onClick={onBack} />
+    ) : (
+      <div className="shrink-0" style={{ width: 88 }} aria-hidden />
+    )
 
   return (
     <nav
@@ -788,75 +768,16 @@ export function ReportModuleNav({
         <div style={{ flex: 1 }} aria-hidden />
       )}
 
-      {trailing || <div className="shrink-0 w-[4.5rem]" aria-hidden />}
+      {trailing || <div className="shrink-0" style={{ width: 88 }} aria-hidden />}
     </nav>
   )
 }
 
-const moduleBackControlStyle = {
-  boxSizing: 'border-box',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'flex-start',
-  gap: 6,
-  minHeight: 44,
-  margin: 0,
-  // Flush left with title / card grid; pad right/vertical for touch target only.
-  padding: '10px 12px 10px 0',
-  borderRadius: 8,
-  border: '1px solid transparent',
-  background: 'transparent',
-  color: 'color-mix(in srgb, var(--text) 78%, var(--text-2))',
-  boxShadow: 'none',
-  fontFamily: 'inherit',
-  fontSize: 15,
-  fontWeight: 600,
-  letterSpacing: '0.01em',
-  lineHeight: 1,
-  cursor: 'pointer',
-  textDecoration: 'none',
-  touchAction: 'manipulation',
-  WebkitTapHighlightColor: 'transparent',
-}
-
 /**
- * Restrained module navigation — arrow + Back, not a CTA pill.
- * Transparent at rest; subtle plate/border only on hover/focus/press.
+ * Module Back — alias of ZlogBackControl (Site Diary hub / module page headers).
  */
 export function ZlogModuleBackControl({ href, onClick, label = 'Back' }) {
-  const className = 'zlog-module-back-btn'
-  const content = (
-    <>
-      <span aria-hidden style={{ fontSize: 17, lineHeight: 1, fontWeight: 600 }}>
-        ←
-      </span>
-      <span>{label}</span>
-    </>
-  )
-  if (href) {
-    return (
-      <Link
-        href={href}
-        className={className}
-        style={moduleBackControlStyle}
-        onClick={onClick}
-        aria-label={`Go ${label.toLowerCase()}`}
-      >
-        {content}
-      </Link>
-    )
-  }
-  return (
-    <button
-      type="button"
-      className={className}
-      style={moduleBackControlStyle}
-      onClick={onClick}
-      aria-label={`Go ${label.toLowerCase()}`}
-    >
-      {content}
-    </button>
-  )
+  return <ZlogBackControl href={href} onClick={onClick} label={label} />
 }
 
 /**

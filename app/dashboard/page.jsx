@@ -8,14 +8,13 @@ import {
   premiumScopedCss,
   dashboardCardInteractionCss,
   ModuleHomeCard,
-  BRAND_HEADER_SPACE,
 } from '@/lib/premium-ui'
 import { REPORT_THEME_LIST } from '@/lib/report-theme'
 import { DashboardTopBar } from '@/components/dashboard/DashboardTopBar'
 
-/** Dashboard vertical rhythm (8px grid) — clear air under header before report cards */
+/** Dashboard vertical rhythm (8px grid) — tight air under compact masthead before report cards */
 const SPACE = {
-  contentTop: BRAND_HEADER_SPACE.headerToContent,
+  contentTop: 16,
   contentX: 20,
   contentBottom: 24,
 }
