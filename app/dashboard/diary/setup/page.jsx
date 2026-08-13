@@ -1,12 +1,13 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   PremiumShell,
   GlassSection,
   PrimaryCTA,
+  SecondaryButton,
   ZlogBackControl,
   labelStyle,
   inputStyle,
@@ -31,6 +32,11 @@ import {
   shouldRestoreSetupFormDraft,
 } from '@/lib/diary-setup-blank'
 import {
+  fetchReportingCompanyForReport,
+  fetchStickyReportingCompany,
+  persistReportingCompanyIdentity,
+} from '@/lib/diary-reporting-company'
+import {
   DEFAULT_SITE_DIARY_SHIFT,
   SITE_DIARY_SHIFT_OPTIONS,
   hydrateShift,
@@ -49,6 +55,11 @@ import {
   fetchDefaultCompanyProfile,
   updateDiarySetupFields,
 } from '@/lib/diary-draft'
+import {
+  coverPhotoStateFromSaved,
+  resolveCoverPhotoPreviewUrl,
+  resolveCoverPhotoUrlForSave,
+} from '@/lib/diary-cover-photo'
 import {
   resolveSignedInAuthorProfile,
   persistSignedInAuthorProfile,
@@ -121,6 +132,11 @@ function SiteDiarySetupPage() {
   const [logoObjectUrl, setLogoObjectUrl] = useState(null)
   const [brandingId, setBrandingId] = useState(null)
   const [brandColor, setBrandColor] = useState(null)
+
+  /** Edit-existing only — cover lives on diary compose for new diaries. */
+  const [coverPhoto, setCoverPhoto] = useState(null)
+  const loadedCoverPathRef = useRef(null)
+  const coverRemovedRef = useRef(false)
 
   const existingProjects = useMemo(
     () => (projects || []).filter((p) => p?.id && p?.name),
@@ -227,20 +243,40 @@ function SiteDiarySetupPage() {
           setAuthor(safeSavedAuthor || profileName || '')
           setAuthorRole(hydrateAuthorRole(report) || profileRole || '')
           setShift(hydrateShift(report?.shift))
-          setReportingCompany(profile?.company_name || '')
           setReportingOnBehalfOf(
             report?.company_reporting_for || '',
           )
           setReportDate(report?.report_date || todayIsoDate())
           setProjectReference(extras?.projectReference || '')
-          setBrandingId(report?.branding_id || profile?.id || null)
-          setBrandColor(report?.brand_color || profile?.brand_color || null)
 
-          const logoPath = report?.brand_logo_url || null
+          // Coherent Reporting Company — name + logo from the same identity (never mix).
+          const companyIdentity = await fetchReportingCompanyForReport(supabase, report)
+          if (cancelled) return
+          setReportingCompany(companyIdentity.companyName || '')
+          setBrandingId(companyIdentity.brandingId || null)
+          setBrandColor(companyIdentity.brandColor || null)
+          const logoPath = companyIdentity.logoStoragePath || null
           setLogoStoragePath(logoPath)
           if (logoPath) {
             const preview = await signedLogoUrl(supabase, logoPath)
             if (!cancelled) setLogoPreview(preview)
+          } else if (!cancelled) {
+            setLogoPreview(null)
+          }
+
+          // Existing Cover Photo — keep storagePath even if preview signing fails.
+          const coverPath = report?.cover_photo_url || null
+          if (coverPath) {
+            loadedCoverPathRef.current = coverPath
+            coverRemovedRef.current = false
+            const coverPreview = await resolveCoverPhotoPreviewUrl(supabase, coverPath)
+            if (!cancelled) {
+              setCoverPhoto(coverPhotoStateFromSaved(coverPath, coverPreview))
+            }
+          } else {
+            loadedCoverPathRef.current = null
+            coverRemovedRef.current = false
+            setCoverPhoto(null)
           }
           setLoading(false)
           return
@@ -258,11 +294,22 @@ function SiteDiarySetupPage() {
             ? (projectRows || []).find((p) => p.id === editingProjectId) || null
             : null
 
+        // Sticky Reporting Company = latest saved identity (name+logo paired), not a stale default name.
+        const stickyCompany = await fetchStickyReportingCompany(supabase)
+        if (cancelled) return
+
         const fresh = initialiseNewDiarySetupState({
           authorName: profileName,
           authorRole: profileRole,
           reportDate: todayIsoDate(),
-          companyProfile: profile,
+          companyProfile: stickyCompany.brandingId
+            ? {
+                id: stickyCompany.brandingId,
+                company_name: stickyCompany.companyName,
+                logo_url: stickyCompany.logoStoragePath,
+                brand_color: stickyCompany.brandColor,
+              }
+            : profile,
           existingProject,
         })
         if (cancelled) return
@@ -270,9 +317,12 @@ function SiteDiarySetupPage() {
         // Explicit profile author — do not rely solely on snapshot apply path.
         setAuthor(fresh.author)
         setAuthorRole(fresh.authorRole)
-        setReportingCompany(profile?.company_name || '')
+        setReportingCompany(stickyCompany.companyName || profile?.company_name || '')
+        setBrandingId(stickyCompany.brandingId || fresh.brandingId || null)
+        setBrandColor(stickyCompany.brandColor || fresh.brandColor || null)
+        setLogoStoragePath(stickyCompany.logoStoragePath || fresh.logoStoragePath || null)
 
-        const logoPath = fresh.logoStoragePath
+        const logoPath = stickyCompany.logoStoragePath || fresh.logoStoragePath
         if (logoPath) {
           const preview = await signedLogoUrl(supabase, logoPath)
           if (!cancelled) setLogoPreview(preview)
@@ -462,6 +512,30 @@ function SiteDiarySetupPage() {
     setLogoStoragePath(null)
   }
 
+  const handleCoverFiles = (files) => {
+    const file = files?.[0]
+    if (!file) return
+    setError('')
+    coverRemovedRef.current = false
+    setCoverPhoto((prev) => {
+      if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
+      return {
+        file,
+        preview: URL.createObjectURL(file),
+        storagePath: null,
+      }
+    })
+  }
+
+  const removeCoverPhoto = () => {
+    setCoverPhoto((prev) => {
+      if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
+      return null
+    })
+    coverRemovedRef.current = true
+    loadedCoverPathRef.current = null
+  }
+
   const handleProjectDatesChange = ({ startDate, plannedCompletionDate }) => {
     setProjectStartDate(startDate)
     setProjectPlannedCompletionDate(plannedCompletionDate)
@@ -489,6 +563,25 @@ function SiteDiarySetupPage() {
     return path
   }
 
+  const uploadCoverIfNeeded = async (userId, reportId) => {
+    if (!coverPhoto?.file) {
+      return resolveCoverPhotoUrlForSave({
+        coverPhoto,
+        loadedCoverPath: loadedCoverPathRef.current,
+        coverRemoved: coverRemovedRef.current,
+      })
+    }
+    const ext = coverPhoto.file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const path = `${userId}/${reportId || 'pending'}/cover.${ext}`
+    const { error: upErr } = await supabase.storage
+      .from('site-photos')
+      .upload(path, coverPhoto.file, { contentType: coverPhoto.file.type || 'image/jpeg', upsert: false })
+    if (upErr) throw new Error('We couldn’t upload the cover photo. Check your connection and try again.')
+    loadedCoverPathRef.current = path
+    coverRemovedRef.current = false
+    return path
+  }
+
   const handleContinue = async () => {
     if (saving) return
 
@@ -498,11 +591,33 @@ function SiteDiarySetupPage() {
     setStickyFieldsError('')
 
     try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('You must be signed in')
+
       let brandLogoUrl = logoStoragePath
       if (logoFile) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) throw new Error('You must be signed in')
         brandLogoUrl = await uploadLogoIfNeeded(user.id)
+      }
+
+      // Persist Reporting Company as one identity (name + logo + metadata) before draft write.
+      const companySnapshot = await persistReportingCompanyIdentity(supabase, {
+        companyName: reportingCompany,
+        logoUrl: brandLogoUrl || null,
+        brandingId,
+        brandColor,
+      })
+      const nextBrandingId = companySnapshot.brandingId || brandingId
+      const nextBrandColor = companySnapshot.brandColor || brandColor
+      const nextLogoUrl = companySnapshot.brandLogoUrl !== undefined
+        ? companySnapshot.brandLogoUrl
+        : brandLogoUrl || null
+      setBrandingId(nextBrandingId)
+      setBrandColor(nextBrandColor)
+      setLogoStoragePath(nextLogoUrl)
+
+      let coverPhotoUrl
+      if (editingReportId) {
+        coverPhotoUrl = await uploadCoverIfNeeded(user.id, editingReportId)
       }
 
       const result = await runDiarySetupContinue({
@@ -521,17 +636,19 @@ function SiteDiarySetupPage() {
           workingDaysPerWeek,
           currentPhase,
           projectReference,
-          brandLogoUrl: brandLogoUrl || null,
-          brandingId,
-          brandColor,
+          brandLogoUrl: nextLogoUrl,
+          brandingId: nextBrandingId,
+          brandColor: nextBrandColor,
+          reportingCompany: companySnapshot.companyName || reportingCompany,
+          ...(editingReportId ? { coverPhotoUrl } : {}),
         },
         existingProjects,
         selectedProjectId,
         editingReportId,
         editingProjectId,
         getUser: async () => {
-          const { data: { user } } = await supabase.auth.getUser()
-          return user
+          const { data: { user: u } } = await supabase.auth.getUser()
+          return u
         },
         persistProject: (plan) => persistSetupProject({ supabase, plan }),
         createDraft: (fields) => createDiaryDraftFromSetup(supabase, fields),
@@ -689,6 +806,115 @@ function SiteDiarySetupPage() {
         )}
       </GlassSection>
 
+      {editingReportId ? (
+        <GlassSection title="Cover photo" accent={BRAND_ACCENT}>
+          <label style={setupLabelStyle}>Cover photo</label>
+          {coverPhoto?.preview ? (
+            <div style={{ marginBottom: 0 }}>
+              <img
+                src={coverPhoto.preview}
+                alt="Cover photo"
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  maxHeight: 200,
+                  objectFit: 'cover',
+                  borderRadius: 12,
+                  border: '1px solid var(--edge)',
+                  marginBottom: 12,
+                }}
+              />
+              <p
+                style={{
+                  margin: '0 0 12px',
+                  fontSize: 14,
+                  color: 'color-mix(in srgb, var(--text) 82%, var(--text-2))',
+                  lineHeight: 1.45,
+                }}
+              >
+                Cover photo is attached to this diary.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div style={{ position: 'relative' }}>
+                  <SecondaryButton type="button" style={{ width: '100%', minHeight: 48 }}>
+                    Replace
+                  </SecondaryButton>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    aria-label="Replace cover photo"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      e.target.value = ''
+                      if (file) handleCoverFiles([file])
+                    }}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      opacity: 0,
+                      cursor: 'pointer',
+                      fontSize: 16,
+                    }}
+                  />
+                </div>
+                <SecondaryButton type="button" onClick={removeCoverPhoto} style={{ width: '100%', minHeight: 48 }}>
+                  Remove
+                </SecondaryButton>
+              </div>
+            </div>
+          ) : coverPhoto?.storagePath ? (
+            <div style={{ marginBottom: 0 }}>
+              <p
+                style={{
+                  margin: '0 0 12px',
+                  fontSize: 14,
+                  color: 'color-mix(in srgb, var(--text) 82%, var(--text-2))',
+                  lineHeight: 1.45,
+                }}
+              >
+                Cover photo is attached to this diary.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div style={{ position: 'relative' }}>
+                  <SecondaryButton type="button" style={{ width: '100%', minHeight: 48 }}>
+                    Replace
+                  </SecondaryButton>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    aria-label="Replace cover photo"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      e.target.value = ''
+                      if (file) handleCoverFiles([file])
+                    }}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      opacity: 0,
+                      cursor: 'pointer',
+                      fontSize: 16,
+                    }}
+                  />
+                </div>
+                <SecondaryButton type="button" onClick={removeCoverPhoto} style={{ width: '100%', minHeight: 48 }}>
+                  Remove
+                </SecondaryButton>
+              </div>
+            </div>
+          ) : (
+            <div style={{ marginBottom: 0 }}>
+              <ImageSourceButtons
+                onFiles={handleCoverFiles}
+                cameraLabel="Take Photo"
+                galleryLabel="Upload Photo"
+                stacked
+              />
+            </div>
+          )}
+        </GlassSection>
+      ) : null}
+
       <GlassSection title="Reporting On Behalf Of" accent={BRAND_ACCENT}>
         <label style={setupLabelStyle}>Reporting On Behalf Of *</label>
         <input
@@ -803,7 +1029,13 @@ function SiteDiarySetupPage() {
         disabled={saving}
         style={{ minHeight: 52, fontSize: 16, marginBottom: 12 }}
       >
-        {saving ? 'Continuing…' : 'Continue to Site Diary'}
+        {saving
+          ? editingReportId
+            ? 'Saving…'
+            : 'Continuing…'
+          : editingReportId
+            ? 'Save and Continue'
+            : 'Continue to Site Diary'}
       </PrimaryCTA>
 
       {error ? (

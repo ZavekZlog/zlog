@@ -56,6 +56,19 @@ The distinction that remains: the logo Z and the PrimaryCTA share --rust as
 material; they are still different objects (brand asset vs control). What is not
 allowed is a fourth local orange gradient or a flat --action button approximating
 PrimaryCTA.
+
+TEXT ZLOG WORDMARK — locked
+Text-rendered Zlog wordmarks must reuse the established Zlog Z accent token/style
+already used by the approved app headers — there is ONE source of truth:
+• “Z” = var(--rust) via ZLOG_TEXT_WORDMARK_Z_COLOR / ZlogTextWordmarkLetters
+  (--rust resolves to #B8431C in globals.css; do not substitute #F5A623,
+  --action, or any other orange hex)
+• “log” = warm white / --text (or the local wordmark light colour)
+Do not make the whole wordmark orange. Do not add glow, gradient, outline, or
+shadow to the text Z. The standalone riveted/graphical Z artwork is NOT governed
+by this rule. Report/client branding is NOT governed by this rule.
+Always render text wordmarks via ZlogTextWordmarkLetters, ZlogWordmark, or
+ZlogBrandWordmark — do not hard-code a one-off Z colour per screen.
 Warm over cool — approved
 The palette was fighting itself: warm text (#F4F2EF), warm rust, against cool
 blue-grey body text (#93a7b9, #8ea2b5, #A3B5C4) and a navy card gradient
@@ -231,6 +244,38 @@ one thing — the recording — rendered in three places. That's not three calls
 action. A second orange element representing a different action is a violation.
 This is the test, not a judgement call: can you name the single action the
 orange is pointing at? If it takes two names, the screen has two accents.
+
+CTA hierarchy — permanent UI contract (all report modules)
+Orange (PrimaryCTA / rust powder-coat) is reserved for the genuine PRIMARY /
+PROGRESSION action that moves the current task forward. Examples: Continue,
+Save Area, Save / Share, Complete Report, Generate / Preview Report, and other
+clearly intended next-step actions.
+Orange must NOT be used merely because an action is important or clickable.
+Decision rules (decidable on sight):
+1. ONE clear intended next step → orange PrimaryCTA is appropriate.
+2. TWO OR MORE equal choices → EqualChoiceButton (strong neutral) or
+   equal-weight cards. Do not arbitrarily make one orange. Peers must share
+   identical visual weight — important actions, no preferred route.
+   Example: “Edit This Diary” and “Use as Basis for New Diary” are equal
+   routes — both EqualChoiceButton. Same for “Add Another Area” vs “No More
+   Areas — Continue” after an area is saved.
+3. Secondary / supporting actions → SecondaryButton (ordinary neutral / nav).
+CTA visual ladder (decidable):
+• PrimaryCTA — orange powder-coat progression
+• EqualChoiceButton — strong charcoal equal-choice (no solid orange fill;
+  restrained rust edge/glow on hover only)
+• SecondaryButton — ordinary secondary / cancel / back / review
+Orange remains reserved for genuine primary/progression only.
+4. Destructive actions → established destructive/red treatment where appropriate
+   (§16). Never orange.
+5. Back / Cancel / Review / alternative navigation → never compete visually with
+   the primary progression CTA.
+6. Do not introduce multiple competing orange CTAs within the same decision group.
+7. Orange should communicate: “This is the principal action that moves my
+   current task forward.”
+Applies to Site Diary, Site Survey, Site Progress, Site Snag List, Site H&S,
+and every future report workflow. Context matters — do not blanket-recolour
+buttons; audit the decision group first.
 8. Lighting
 Glow is the signature. It's also the easiest thing here to ruin, because it
 works, and things that work get overused.
@@ -313,6 +358,10 @@ all 16 rgba() literals → tokens
 backdrop-filter / -webkit-backdrop-filter → removed
 14. Rules for agents
 PrimaryCTA is LOCKED — do not flatten, do not approximate, do not alter without explicit sign-off. All orange CTAs render via PrimaryCTA.
+Follow §7 CTA hierarchy: one orange progression action per decision group;
+equal significant choices use EqualChoiceButton (matched peers); ordinary
+secondary/cancel/back use SecondaryButton; never orange a peer alternative
+merely because it is important.
 Never type a colour. No hex, no rgba(), no named colours. Tokens only.
 Shadows and borders are colour too — that's where the leaks happen.
 Never type a radius. Use the §4 lookup.

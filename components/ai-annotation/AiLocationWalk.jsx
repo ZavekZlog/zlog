@@ -23,6 +23,7 @@ import {
   GlassSection,
   PrimaryCTA,
   SecondaryButton,
+  EqualChoiceButton,
   inputStyle,
   labelStyle,
 } from '@/lib/premium-ui'
@@ -35,10 +36,10 @@ import {
   layoutToPerPage,
   moveItem,
   perPageToLayout,
-  photosMissingDescription,
   readRecentAreas,
   rememberRecentArea,
 } from '@/lib/ai-annotation/area-groups'
+import { normalizeRotationDegrees } from '@/lib/diary-pdf-layout'
 
 /** @typedef {'create' | 'after_save' | 'review'} WalkPhase */
 
@@ -68,6 +69,8 @@ function SavedAreaCard({
   onAddPhotos,
   onRemovePhoto,
   onRotatePhoto,
+  onCaptionChange,
+  onAssignedToChange,
   globalOffset,
   isFirst,
   isLast,
@@ -172,7 +175,7 @@ function SavedAreaCard({
               disabled={capturing}
               stacked
               cameraLabel="Take Photo"
-              galleryLabel="Add Multiple Photos"
+              galleryLabel="Upload 1 or More Photos"
             />
           </div>
 
@@ -182,6 +185,8 @@ function SavedAreaCard({
             onOpen={onOpenPhoto}
             onDelete={onRemovePhoto}
             onRotate={onRotatePhoto}
+            onCaptionChange={onCaptionChange}
+            onAssignedToChange={onAssignedToChange}
           />
         </div>
       )}
@@ -483,7 +488,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   const rotatePhoto = (groupId, photoId) => {
     const bump = (photo) => ({
       ...photo,
-      rotationDegrees: ((Number(photo.rotationDegrees) || 0) + 90) % 360,
+      rotationDegrees: normalizeRotationDegrees((Number(photo.rotationDegrees) || 0) + 90),
     })
     if (groupId === '__draft__') {
       setDraftPhotos((prev) => prev.map((p) => (p.id === photoId ? bump(p) : p)))
@@ -559,19 +564,10 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
 
   const continueToSignature = () => {
     if (!locationWalk.length) return
-    const missing = photosMissingDescription(locationWalk)
-    if (missing.length > 0) {
-      const n = missing.length
-      setWalkError(
-        n === 1
-          ? '1 photo still needs a description.'
-          : `${n} photos still need descriptions.`,
-      )
-      openFirstIncompletePhoto()
-      return
-    }
     setWalkError('')
-    setPhase('review')
+    // Close the Location Walk action stage — do not require another Save Area.
+    setExpandedIds(new Set())
+    setPhase('handed_off')
     onContinueToSignature?.()
   }
 
@@ -670,6 +666,12 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
               onAddPhotos={(files) => handleFiles(files, group.id)}
               onRemovePhoto={(photoId) => removePhoto(group.id, photoId)}
               onRotatePhoto={(photoId) => rotatePhoto(group.id, photoId)}
+              onCaptionChange={(photoId, text) =>
+                patchPhoto(group.id, photoId, { acceptedDescription: text })
+              }
+              onAssignedToChange={(photoId, text) =>
+                patchPhoto(group.id, photoId, { assignedTo: text })
+              }
             />
           ))}
         </div>
@@ -733,7 +735,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
               disabled={capturing}
               stacked
               cameraLabel="Take Photo"
-              galleryLabel="Add Multiple Photos"
+              galleryLabel="Upload 1 or More Photos"
             />
           </div>
 
@@ -744,6 +746,16 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
               onOpen={(pi) => openViewer(isEditing ? editingGroupId : '__draft__', pi)}
               onDelete={(photoId) => removePhoto(isEditing ? editingGroupId : '__draft__', photoId)}
               onRotate={(photoId) => rotatePhoto(isEditing ? editingGroupId : '__draft__', photoId)}
+              onCaptionChange={(photoId, text) =>
+                patchPhoto(isEditing ? editingGroupId : '__draft__', photoId, {
+                  acceptedDescription: text,
+                })
+              }
+              onAssignedToChange={(photoId, text) =>
+                patchPhoto(isEditing ? editingGroupId : '__draft__', photoId, {
+                  assignedTo: text,
+                })
+              }
             />
           ) : null}
           {photoError ? <p style={fieldErrorStyle}>{photoError}</p> : null}
@@ -804,17 +816,17 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
             {lastSaved.perPage} per page
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <PrimaryCTA type="button" accent={accent} onClick={beginCreate} style={primaryTap}>
+            <EqualChoiceButton type="button" onClick={beginCreate} style={primaryTap}>
               {copy.addAnother}
-            </PrimaryCTA>
-            <SecondaryButton
+            </EqualChoiceButton>
+            <EqualChoiceButton
               type="button"
               disabled={!locationWalk.length}
               onClick={continueToSignature}
               style={{ ...primaryTap, opacity: locationWalk.length ? 1 : 0.45 }}
             >
               {copy.continueReport}
-            </SecondaryButton>
+            </EqualChoiceButton>
           </div>
         </div>
       )}
@@ -827,14 +839,44 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
             </PrimaryCTA>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
-              <PrimaryCTA type="button" accent={accent} onClick={beginCreate} style={primaryTap}>
+              <EqualChoiceButton type="button" onClick={beginCreate} style={primaryTap}>
                 {copy.addAnother}
-              </PrimaryCTA>
-              <SecondaryButton type="button" onClick={continueToSignature} style={primaryTap}>
+              </EqualChoiceButton>
+              <EqualChoiceButton type="button" onClick={continueToSignature} style={primaryTap}>
                 {copy.continueReport}
-              </SecondaryButton>
+              </EqualChoiceButton>
             </div>
           )}
+        </div>
+      )}
+
+      {phase === 'handed_off' && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            padding: '14px 14px',
+            borderRadius: 12,
+            border: '1px solid var(--edge)',
+            background: 'var(--plate)',
+          }}
+        >
+          <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', marginBottom: 6 }}>
+            Location Walk complete
+          </div>
+          <p
+            style={{
+              margin: '0 0 12px',
+              fontSize: 14,
+              lineHeight: 1.45,
+              color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
+            }}
+          >
+            Continue with your signature below. You can still add another area if needed.
+          </p>
+          <SecondaryButton type="button" onClick={beginCreate} style={primaryTap}>
+            {copy.addAnother}
+          </SecondaryButton>
         </div>
       )}
 

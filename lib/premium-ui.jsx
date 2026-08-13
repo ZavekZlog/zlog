@@ -123,6 +123,30 @@ export const premiumScopedCss = `
     transform: translateY(1px);
     filter: brightness(0.96);
   }
+  .zlog-equal-choice-btn {
+    transition:
+      border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      filter 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .zlog-equal-choice-btn:not(:disabled):hover {
+    border-color: color-mix(in srgb, var(--rust) 38%, var(--edge));
+    background: color-mix(in srgb, var(--plate), var(--text) 14%);
+    box-shadow:
+      inset 0 1px 0 var(--edge-highlight),
+      0 0 0 1px color-mix(in srgb, var(--rust) 18%, transparent),
+      0 0 16px color-mix(in srgb, var(--rust) 16%, transparent);
+  }
+  .zlog-equal-choice-btn:not(:disabled):active {
+    transform: translateY(1px);
+    filter: brightness(0.97);
+    box-shadow:
+      inset 0 1px 0 var(--edge-highlight),
+      0 0 0 1px color-mix(in srgb, var(--rust) 12%, transparent),
+      0 0 10px color-mix(in srgb, var(--rust) 10%, transparent);
+  }
   .zlog-header-utility-card:not(:disabled):hover {
     border-color: color-mix(in srgb, var(--edge) 100%, var(--text) 12%);
     filter: brightness(1.06);
@@ -446,6 +470,66 @@ export function SecondaryButton({
   )
 }
 
+/**
+ * Strong neutral / equal-choice action — between PrimaryCTA (orange progression)
+ * and SecondaryButton (ordinary secondary / nav).
+ * Use when two or more significant routes share equal hierarchy.
+ * Never solid orange fill; peers must stay visually matched.
+ */
+export function equalChoiceButtonStyle(disabled = false) {
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 48,
+    padding: '12px 16px',
+    background: 'color-mix(in srgb, var(--plate), var(--text) 11%)',
+    border: '1px solid color-mix(in srgb, var(--edge) 42%, var(--text) 38%)',
+    borderRadius: '12px',
+    color: 'var(--text)',
+    fontWeight: 600,
+    fontSize: 15,
+    fontFamily: 'inherit',
+    letterSpacing: '0.015em',
+    cursor: disabled ? 'wait' : 'pointer',
+    opacity: disabled ? 0.7 : 1,
+    lineHeight: 1.2,
+    textDecoration: 'none',
+    boxSizing: 'border-box',
+    boxShadow:
+      'inset 0 1px 0 var(--edge-highlight), 0 1px 4px color-mix(in srgb, var(--ink) 35%, transparent)',
+  }
+}
+
+export function EqualChoiceButton({
+  children,
+  disabled = false,
+  type = 'button',
+  onClick,
+  href,
+  style,
+  className = '',
+}) {
+  const merged = {
+    ...equalChoiceButtonStyle(disabled),
+    ...style,
+  }
+  const classNames = `zlog-equal-choice-btn ${className}`.trim()
+  if (href) {
+    return (
+      <Link href={href} className={classNames} style={merged} onClick={onClick}>
+        {children}
+      </Link>
+    )
+  }
+  return (
+    <button type={type} disabled={disabled} onClick={onClick} className={classNames} style={merged}>
+      {children}
+    </button>
+  )
+}
+
 export function destructiveButtonStyle(disabled = false) {
   return {
     ...secondaryButtonStyle(disabled),
@@ -502,7 +586,26 @@ export function premiumBackPillStyle() {
   }
 }
 
-/** Subtle Zlog wordmark — orange “Z” (matches riveted Z), warm white “log” */
+/**
+ * TEXT Zlog wordmark Z accent — alias of the established app-header token only.
+ * Source of truth: CSS --rust (globals.css). Do not hard-code a separate hex.
+ */
+export const ZLOG_TEXT_WORDMARK_Z_COLOR = 'var(--rust)'
+
+/**
+ * Text letters for the Zlog product wordmark.
+ * Z = var(--rust) · log = warm white (--text). No glow/gradient/outline on the Z.
+ */
+export function ZlogTextWordmarkLetters({ zStyle = {}, logStyle = {} } = {}) {
+  return (
+    <>
+      <span style={{ color: ZLOG_TEXT_WORDMARK_Z_COLOR, ...zStyle }}>Z</span>
+      <span style={{ color: 'var(--text)', ...logStyle }}>log</span>
+    </>
+  )
+}
+
+/** Subtle Zlog wordmark — orange “Z” (var(--rust)), warm white “log” */
 export function ZlogWordmark({ style } = {}) {
   return (
     <div
@@ -513,8 +616,7 @@ export function ZlogWordmark({ style } = {}) {
         ...style,
       }}
     >
-      <span style={{ color: 'var(--rust)' }}>Z</span>
-      <span style={{ color: 'var(--text)' }}>log</span>
+      <ZlogTextWordmarkLetters />
     </div>
   )
 }
@@ -574,7 +676,7 @@ export const BRAND_ATMOSPHERIC_GLOW_STYLE = {
 }
 
 /**
- * FINAL LOCKED brand masthead — --rust Z + warm log; opacity 0.42 glow.
+ * FINAL LOCKED brand masthead — text wordmark Z = var(--rust), log = warm white; opacity 0.42 glow.
  * Authenticated screens consume this only via ZlogBrandRegion (size md).
  * size lg remains for public auth pages (login/signup).
  */
@@ -619,7 +721,7 @@ export function ZlogBrandWordmark({ size = 'lg', centered = true, style = {} }) 
           margin: 0,
         }}
       >
-        <span style={{ color: 'var(--rust)' }}>Z</span>log
+        <ZlogTextWordmarkLetters logStyle={{ color: '#f3f4f6' }} />
       </h1>
     </div>
   )

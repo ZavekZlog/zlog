@@ -13,6 +13,7 @@ import {
   textareaStyle,
   PrimaryCTA,
   SecondaryButton,
+  EqualChoiceButton,
   DIARY_ACCENT,
   RecentEntryCard,
   premiumDiaryEmptyClass,
@@ -33,11 +34,11 @@ import { fileToVisionDataUrl, parseSignInSheetImage } from '@/lib/parse-signin-s
 import { BrandingSelector, brandingPayload } from '@/components/branding/BrandingSelector'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
 import { SignInOperativeReview } from '@/components/diary/SignInOperativeReview'
+import { DiaryDailyRecordSections } from '@/components/diary/DiaryDailyRecordSections'
 import { PhotoWorkspace } from '@/components/photo-workspace'
 import {
   flattenAreaGroups,
   groupPhotosByArea,
-  photosMissingDescription,
 } from '@/lib/ai-annotation/area-groups'
 import { hasAnnotations } from '@/lib/photo-annotations'
 import {
@@ -46,6 +47,19 @@ import {
   fetchOpenDraft,
 } from '@/lib/diary-draft'
 import { DiarySaveError, DIARY_SAVE_LOG, finalizeSiteDiarySave } from '@/lib/diary-save'
+import {
+  hsIncidentsFromDb,
+  hsIncidentsPayload,
+  rfisFromDb,
+  rfisPayload,
+  variationsFromDb,
+  variationsPayload,
+} from '@/lib/diary-daily-records'
+import {
+  coverPhotoStateFromSaved,
+  resolveCoverPhotoPreviewUrl,
+  resolveCoverPhotoUrlForSave,
+} from '@/lib/diary-cover-photo'
 import { diaryHubHref, diaryEditHref, diaryComposeHref, existingDiaryHref } from '@/lib/diary-routing'
 import {
   diaryModeBanner,
@@ -255,9 +269,7 @@ function labourRowHasData(row) {
 }
 
 async function signedUrlForPath(supabase, path) {
-  if (!path) return null
-  const { data } = await supabase.storage.from('site-photos').createSignedUrl(path, 3600)
-  return data?.signedUrl ?? null
+  return resolveCoverPhotoPreviewUrl(supabase, path)
 }
 
 function dataUrlToBlob(dataUrl) {
@@ -402,6 +414,9 @@ export default function SiteDiaryPage() {
   const [scanSheetPreview, setScanSheetPreview] = useState(null)
   const [plantRows, setPlantRows] = useState([emptyPlant()])
   const [equipmentHireRows, setEquipmentHireRows] = useState([emptyEquipmentHire()])
+  const [hsIncidents, setHsIncidents] = useState([])
+  const [rfis, setRfis] = useState([])
+  const [variations, setVariations] = useState([])
   const [visitors, setVisitors] = useState('')
   const [delaysIssues, setDelaysIssues] = useState('')
   const [actionsRequired, setActionsRequired] = useState('')
@@ -415,6 +430,8 @@ export default function SiteDiaryPage() {
   const [creatorName, setCreatorName] = useState('')
   const [creatorRole, setCreatorRole] = useState('')
   const [coverPhoto, setCoverPhoto] = useState(null)
+  const loadedCoverPathRef = useRef(null)
+  const coverRemovedRef = useRef(false)
   const [signature, setSignature] = useState(null)
   const [signatureMode, setSignatureMode] = useState('draw') // 'carried' | 'accepted' | 'draw'
   const [brandingSelection, setBrandingSelection] = useState(null)
@@ -531,6 +548,8 @@ export default function SiteDiaryPage() {
         setPhotos([])
         setLocationWalk([])
         setCoverPhoto(null)
+        loadedCoverPathRef.current = null
+        coverRemovedRef.current = false
         setSignature(null)
         setSignatureMode('draw')
         setBrandingSelection(null)
@@ -546,12 +565,22 @@ export default function SiteDiaryPage() {
         setLabourRows([emptyLabour()])
         setPlantRows(hydratePlantFormRows([], makeUuid))
         setEquipmentHireRows([emptyEquipmentHire()])
+        setHsIncidents([])
+        setRfis([])
+        setVariations([])
 
         const applyCover = async (storagePath) => {
-          if (!storagePath) return
-          const preview = await signedUrlForPath(supabase, storagePath)
-          if (!preview || cancelled) return
-          setCoverPhoto({ file: null, preview, storagePath })
+          if (!storagePath) {
+            loadedCoverPathRef.current = null
+            setCoverPhoto(null)
+            return
+          }
+          loadedCoverPathRef.current = storagePath
+          coverRemovedRef.current = false
+          const preview = await resolveCoverPhotoPreviewUrl(supabase, storagePath)
+          if (cancelled) return
+          // Always keep storagePath so edit/save cannot wipe the cover if preview fails.
+          setCoverPhoto(coverPhotoStateFromSaved(storagePath, preview))
         }
 
         const applySignature = async (storagePath) => {
@@ -600,18 +629,48 @@ export default function SiteDiaryPage() {
           const results = await Promise.all([
             supabase.from('report_labour').select('trade, company, count, hours, notes').eq('report_id', existing.id).order('sequence'),
             supabase.from('report_plant').select('item, ref, status, notes').eq('report_id', existing.id).order('sequence'),
-            supabase.from('report_photos').select('url, caption, sequence, layout, location, annotations, overlay_path').eq('report_id', existing.id).order('sequence'),
+            supabase.from('report_photos').select('url, caption, sequence, layout, location, annotations, overlay_path, rotation_degrees, assigned_to').eq('report_id', existing.id).order('sequence'),
           ])
           labour = results[0].data
           plant = results[1].error ? [] : results[1].data
           reportPhotos = results[2].data
-          if (results[2].error && /annotations|overlay_path/i.test(results[2].error.message || '')) {
+          if (results[2].error && /assigned_to/i.test(results[2].error.message || '')) {
             const fallback = await supabase
               .from('report_photos')
-              .select('url, caption, sequence, layout')
+              .select('url, caption, sequence, layout, location, annotations, overlay_path, rotation_degrees')
               .eq('report_id', existing.id)
               .order('sequence')
             reportPhotos = fallback.data
+            if (fallback.error && /rotation_degrees/i.test(fallback.error.message || '')) {
+              const basic = await supabase
+                .from('report_photos')
+                .select('url, caption, sequence, layout, location, annotations, overlay_path')
+                .eq('report_id', existing.id)
+                .order('sequence')
+              reportPhotos = basic.data
+            }
+          } else if (results[2].error && /rotation_degrees/i.test(results[2].error.message || '')) {
+            const fallback = await supabase
+              .from('report_photos')
+              .select('url, caption, sequence, layout, location, annotations, overlay_path, assigned_to')
+              .eq('report_id', existing.id)
+              .order('sequence')
+            reportPhotos = fallback.data
+          } else if (results[2].error && /annotations|overlay_path/i.test(results[2].error.message || '')) {
+            const fallback = await supabase
+              .from('report_photos')
+              .select('url, caption, sequence, layout, rotation_degrees, assigned_to')
+              .eq('report_id', existing.id)
+              .order('sequence')
+            reportPhotos = fallback.data
+            if (fallback.error) {
+              const basic = await supabase
+                .from('report_photos')
+                .select('url, caption, sequence, layout')
+                .eq('report_id', existing.id)
+                .order('sequence')
+              reportPhotos = basic.data
+            }
           }
         }
 
@@ -639,6 +698,9 @@ export default function SiteDiaryPage() {
           }
         }
         setEquipmentHireRows(equipmentHireFromDb(existing.equipment_hire))
+        setHsIncidents(hsIncidentsFromDb(existing.hs_incidents))
+        setRfis(rfisFromDb(existing.rfis))
+        setVariations(variationsFromDb(existing.variations))
         if (existing.branding_id || existing.brand_color || existing.brand_logo_url) {
           setBrandingSelection({
             brandingId: existing.branding_id || null,
@@ -647,6 +709,7 @@ export default function SiteDiaryPage() {
             companyName: '',
           })
         } else {
+          // Do not invent a wipe payload — null means omit branding keys on save.
           setBrandingSelection(null)
         }
         await applyCover(existing.cover_photo_url)
@@ -686,6 +749,8 @@ export default function SiteDiaryPage() {
               overlayPath: p.overlay_path || null,
               overlayPreview,
               overlayDirty: false,
+              rotationDegrees: p.rotation_degrees ?? 0,
+              assignedTo: p.assigned_to || '',
             }
           }))
           if (cancelled) return
@@ -729,12 +794,25 @@ export default function SiteDiaryPage() {
   }, [])
 
   const continueToSignature = useCallback(() => {
-    signatureSectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    const el = signatureSectionRef.current
+    if (!el) return
+    // After Location Walk closes its stage UI, scroll + focus Signature so progression is obvious.
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      window.setTimeout(() => {
+        try {
+          el.focus({ preventScroll: true })
+        } catch {
+          /* focus not supported */
+        }
+      }, 280)
+    })
   }, [])
 
   const onCoverDrop = useCallback((accepted) => {
     const file = accepted[0]
     if (!file) return
+    coverRemovedRef.current = false
     setCoverPhoto((prev) => {
       if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
       return {
@@ -1037,6 +1115,8 @@ export default function SiteDiaryPage() {
 
   const removeCoverPhoto = () => {
     if (coverPhoto?.file && coverPhoto.preview) URL.revokeObjectURL(coverPhoto.preview)
+    coverRemovedRef.current = true
+    loadedCoverPathRef.current = null
     setCoverPhoto(null)
   }
 
@@ -1267,18 +1347,6 @@ export default function SiteDiaryPage() {
         return
       }
 
-      const missingDescriptions = photosMissingDescription(locationWalk)
-      if (missingDescriptions.length > 0) {
-        const n = missingDescriptions.length
-        failSave(
-          n === 1
-            ? '1 photo still needs a description. Add it, then tap Save Site Diary.'
-            : `${n} photos still need descriptions. Add them, then tap Save Site Diary.`,
-        )
-        locationWalkRef.current?.openFirstIncompletePhoto?.()
-        return
-      }
-
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       diarySaveLog('auth check', {
         userId: user?.id || null,
@@ -1290,7 +1358,11 @@ export default function SiteDiaryPage() {
       }
 
       const pendingId = makeUuid()
-      let coverPhotoUrl = coverPhoto?.storagePath || null
+      let coverPhotoUrl = resolveCoverPhotoUrlForSave({
+        coverPhoto,
+        loadedCoverPath: loadedCoverPathRef.current,
+        coverRemoved: coverRemovedRef.current,
+      })
       let signatureUrl = signature?.storagePath || null
 
       if (coverPhoto?.file) {
@@ -1300,10 +1372,12 @@ export default function SiteDiaryPage() {
           .from('site-photos')
           .upload(coverPath, coverPhoto.file, { contentType: coverPhoto.file.type, upsert: false })
         if (coverUploadError) {
-          failSave('We couldn’t upload the cover photo. Check your connection and try Save Site Diary again.')
+          failSave('We couldn’t upload the cover photo. Check your connection and try Save / Share again.')
           return
         }
         coverPhotoUrl = coverPath
+        loadedCoverPathRef.current = coverPath
+        coverRemovedRef.current = false
       }
 
       if (signature?.file) {
@@ -1312,7 +1386,7 @@ export default function SiteDiaryPage() {
           .from('site-photos')
           .upload(signaturePath, signature.file, { contentType: signature.file.type, upsert: false })
         if (signatureUploadError) {
-          failSave('We couldn’t upload the signature. Check your connection and try Save Site Diary again.')
+          failSave('We couldn’t upload the signature. Check your connection and try Save / Share again.')
           return
         }
         signatureUrl = signaturePath
@@ -1333,6 +1407,9 @@ export default function SiteDiaryPage() {
         cover_photo_url: coverPhotoUrl,
         signature_url: signatureUrl,
         equipment_hire: equipmentHirePayload(equipmentHireRows),
+        hs_incidents: hsIncidentsPayload(hsIncidents),
+        rfis: rfisPayload(rfis),
+        variations: variationsPayload(variations),
         ...brandingPayload(brandingSelection),
       }
 
@@ -1382,7 +1459,7 @@ export default function SiteDiaryPage() {
               overlayPath = null
             }
           } catch (overlayErr) {
-            failSave('We couldn’t upload photo mark-ups. Check your connection and try Save Site Diary again.')
+            failSave('We couldn’t upload photo mark-ups. Check your connection and try Save / Share again.')
             return
           }
         }
@@ -1398,7 +1475,7 @@ export default function SiteDiaryPage() {
             .upload(storagePath, photo.file, { contentType: photo.file.type, upsert: false })
 
           if (uploadError) {
-            failSave('We couldn’t upload a photo. Check your connection and try Save Site Diary again.')
+            failSave('We couldn’t upload a photo. Check your connection and try Save / Share again.')
             return
           }
 
@@ -1411,6 +1488,8 @@ export default function SiteDiaryPage() {
             location: photo.location || photo.area || null,
             annotations: annotationPayload,
             overlay_path: overlayPath,
+            rotation_degrees: Number(photo.rotationDegrees) || 0,
+            assigned_to: (photo.assignedTo || photo.assigned_to || '').trim() || null,
           })
         } else if (photo.storagePath) {
           updateExistingPhotos.push({
@@ -1422,6 +1501,8 @@ export default function SiteDiaryPage() {
               location: photo.location || photo.area || null,
               annotations: annotationPayload,
               overlay_path: overlayPath,
+              rotation_degrees: Number(photo.rotationDegrees) || 0,
+              assigned_to: (photo.assignedTo || photo.assigned_to || '').trim() || null,
             },
           })
         }
@@ -1443,18 +1524,20 @@ export default function SiteDiaryPage() {
         return
       }
 
-      // Same diary ID → View mode with persistent Saved confirmation (no complete redirect).
+      // Persist first, then hand off to existing Report Complete / Share flow.
       setReportIsDraft(false)
       flushSync(() => {
         setSaving(false)
         setJustSaved(true)
         setShowSaveBanner(true)
       })
-      saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
       diarySaveLog('success', { reportId: saved.id })
 
-      const viewHref = postSaveDiaryHref(projectId, saved.id)
-      if (viewHref) router.replace(viewHref)
+      const shareHref = postSaveDiaryHref(projectId, saved.id)
+      if (shareHref) {
+        completingRef.current = true
+        router.replace(shareHref)
+      }
     } catch (err) {
       const message =
         err instanceof DiarySaveError
@@ -1676,29 +1759,28 @@ export default function SiteDiaryPage() {
             <>
               {isDiaryViewMode ? 'You’re viewing the saved Site Diary for ' : 'You’re editing the saved Site Diary for '}
               <strong style={{ fontWeight: 700, color: 'var(--text)' }}>{project.name}</strong>
-              {isDiaryViewMode ? '.' : '. Make your changes, then tap Save Site Diary when you’re ready.'}
+              {isDiaryViewMode ? '.' : '. Make your changes, then tap Save / Share when you’re ready.'}
             </>
           ) : (
             diaryModeBannerCopy.text
           )}
           {isDiaryViewMode ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-              <PrimaryCTA
+              <EqualChoiceButton
                 type="button"
-                accent={DIARY_ACCENT}
                 onClick={handleEnterEditMode}
                 style={{ flex: '1 1 160px', minHeight: 48 }}
               >
                 Edit This Diary
-              </PrimaryCTA>
-              <SecondaryButton
+              </EqualChoiceButton>
+              <EqualChoiceButton
                 type="button"
                 disabled={startBusy}
                 onClick={handleUseAsBasisForNewDiary}
                 style={{ flex: '1 1 160px', minHeight: 48 }}
               >
                 Use as Basis for New Diary
-              </SecondaryButton>
+              </EqualChoiceButton>
             </div>
           ) : isDiaryExplicitEditMode ? (
             <div style={{ marginTop: 12 }}>
@@ -1811,6 +1893,19 @@ export default function SiteDiaryPage() {
               />
               <button type="button" onClick={removeCoverPhoto} style={removeRowStyle}>Remove cover photo</button>
             </div>
+          ) : coverPhoto?.storagePath ? (
+            <div style={{ marginBottom: 0 }}>
+              <p style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-2)', lineHeight: 1.45 }}>
+                Cover photo is attached to this diary.
+              </p>
+              <button type="button" onClick={removeCoverPhoto} style={removeRowStyle}>Remove cover photo</button>
+              <div style={{ marginTop: 10 }}>
+                <ImageSourceButtons
+                  onFiles={onCoverDrop}
+                  hint="Replace cover image"
+                />
+              </div>
+            </div>
           ) : (
             <div style={{ marginBottom: 0 }}>
               <ImageSourceButtons
@@ -1830,6 +1925,17 @@ export default function SiteDiaryPage() {
             placeholder="e.g. Overcast, 12°C, light rain PM"
           />
         </GlassSection>
+
+        <DiaryDailyRecordSections
+          accent={DIARY_ACCENT}
+          disabled={isDiaryViewMode}
+          hsIncidents={hsIncidents}
+          rfis={rfis}
+          variations={variations}
+          onHsChange={setHsIncidents}
+          onRfisChange={setRfis}
+          onVariationsChange={setVariations}
+        />
 
         <GlassSection title="Site summary" accent={DIARY_ACCENT}>
           <label style={labelStyle}>Summary</label>
@@ -2210,8 +2316,13 @@ export default function SiteDiaryPage() {
           onContinue={continueToSignature}
         />
 
+        <div
+          ref={signatureSectionRef}
+          id="zlog-diary-signature"
+          tabIndex={-1}
+          style={{ outline: 'none', scrollMarginTop: 16 }}
+        >
         <GlassSection title="Signature" accent={DIARY_ACCENT}>
-          <div ref={signatureSectionRef}>
             <label style={labelStyle}>Signature</label>
             {(signatureMode === 'carried' || signatureMode === 'accepted') && signature?.preview ? (
               <div style={{ marginBottom: 0 }}>
@@ -2252,8 +2363,8 @@ export default function SiteDiaryPage() {
                 </SecondaryButton>
               </div>
             )}
-          </div>
         </GlassSection>
+        </div>
         </fieldset>
 
         {isDiaryEditMode ? (
@@ -2334,7 +2445,7 @@ export default function SiteDiaryPage() {
               ) : justSaved ? (
                 '✓ Site Diary Saved'
               ) : (
-                'Save Site Diary'
+                'Save / Share'
               )}
             </span>
           </PrimaryCTA>

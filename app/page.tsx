@@ -2,7 +2,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { Space_Grotesk, Barlow } from 'next/font/google'
 import { LandingFeatureStrip, LandingMicIcon } from './landing-feature-strip'
-import { PrimaryCTA } from '@/lib/premium-ui'
+import { PrimaryCTA, ZlogTextWordmarkLetters } from '@/lib/premium-ui'
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
@@ -79,7 +79,7 @@ export default function Home() {
 
         <h1
           style={{
-            margin: '0 0 10px',
+            margin: '0 0 8px',
             fontFamily: spaceGrotesk.style.fontFamily,
             fontSize: '104px',
             fontWeight: 700,
@@ -89,12 +89,27 @@ export default function Home() {
             transform: 'translateY(-2px)',
           }}
         >
-          Zlog
+          <ZlogTextWordmarkLetters />
         </h1>
 
         <p
           style={{
-            margin: '0 0 14px',
+            margin: '0 0 8px',
+            fontFamily: spaceGrotesk.style.fontFamily,
+            fontSize: '21px',
+            fontWeight: 600,
+            letterSpacing: '-0.02em',
+            color: 'var(--text)',
+            lineHeight: 1.3,
+            maxWidth: '340px',
+          }}
+        >
+          Construction reporting. Done properly.
+        </p>
+
+        <p
+          style={{
+            margin: '0 0 36px',
             fontFamily: barlow.style.fontFamily,
             fontSize: '17px',
             fontWeight: 600,
@@ -112,7 +127,7 @@ export default function Home() {
 
         <h2
           style={{
-            margin: '0 0 4px',
+            margin: '0 0 8px',
             fontFamily: spaceGrotesk.style.fontFamily,
             fontSize: '25px',
             fontWeight: 600,
@@ -126,30 +141,30 @@ export default function Home() {
 
         <p
           style={{
-            margin: '0 0 4px',
+            margin: '0 0 6px',
             fontFamily: barlow.style.fontFamily,
-            fontSize: '18px',
-            fontWeight: 600,
-            lineHeight: 1.25,
-            color: '#F2F2F2',
-            maxWidth: '380px',
+            fontSize: '17px',
+            fontWeight: 500,
+            lineHeight: 1.35,
+            color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
+            maxWidth: '340px',
           }}
         >
-          Professional, company-branded reports that reflect your standards.
+          Professional, company-branded reports.
         </p>
 
         <p
           style={{
-            margin: '0 0 10px',
+            margin: '0 0 22px',
             fontFamily: barlow.style.fontFamily,
-            fontSize: '16px',
+            fontSize: '15px',
             fontWeight: 400,
-            lineHeight: 1.35,
-            color: 'color-mix(in srgb, #ffffff 74%, transparent)',
+            lineHeight: 1.4,
+            color: 'var(--text-2)',
             maxWidth: '320px',
           }}
         >
-          Type or use your voice to create reports.
+          Type it or say it. Zlog does the rest.
         </p>
 
         <div

@@ -22,7 +22,10 @@
         "project_id",
         "report_date",
         "created_at",
-        "equipment_hire"
+        "equipment_hire",
+        "hs_incidents",
+        "rfis",
+        "variations"
       ],
       "columns": [
         {
@@ -213,6 +216,33 @@
           "nullable": false,
           "requiredInSchema": true,
           "default": null
+        },
+        {
+          "name": "hs_incidents",
+          "type": "jsonb",
+          "format": "jsonb",
+          "description": "Daily H&S incidents/observations array",
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "'[]'::jsonb"
+        },
+        {
+          "name": "rfis",
+          "type": "jsonb",
+          "format": "jsonb",
+          "description": "Daily RFIs array",
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "'[]'::jsonb"
+        },
+        {
+          "name": "variations",
+          "type": "jsonb",
+          "format": "jsonb",
+          "description": "Daily variations array",
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "'[]'::jsonb"
         }
       ],
       "columnNames": [
@@ -236,7 +266,10 @@
         "branding_id",
         "brand_color",
         "brand_logo_url",
-        "equipment_hire"
+        "equipment_hire",
+        "hs_incidents",
+        "rfis",
+        "variations"
       ]
     },
     "report_labour": {

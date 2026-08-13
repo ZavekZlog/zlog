@@ -207,14 +207,14 @@ export function CapturePhotoPreview({
         {onCaptionChange ? (
           <div>
             <div style={{ ...labelStyle, color: 'rgba(244,242,239,0.78)', marginBottom: 6 }}>
-              Photo description
+              Photo caption
             </div>
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onBlur={flush}
               rows={2}
-              placeholder="Describe what this photo shows…"
+              placeholder="Add caption (optional)"
               style={{
                 ...inputStyle,
                 marginBottom: 0,

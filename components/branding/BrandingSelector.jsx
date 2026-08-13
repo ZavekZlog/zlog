@@ -12,6 +12,9 @@ import {
 } from '@/lib/premium-ui'
 import { extractBrandColorFromFile } from '@/lib/extract-brand-color'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
+import { brandingPayload } from '@/lib/branding-payload'
+
+export { brandingPayload }
 
 const DEFAULT_BRAND_COLOR = '#FF5000'
 
@@ -337,20 +340,4 @@ export function BrandingSelector({
       {body}
     </GlassSection>
   )
-}
-
-/** Snapshot fields to persist on a report row */
-export function brandingPayload(selection) {
-  if (!selection?.brandingId) {
-    return {
-      branding_id: null,
-      brand_color: null,
-      brand_logo_url: null,
-    }
-  }
-  return {
-    branding_id: selection.brandingId,
-    brand_color: selection.brandColor || null,
-    brand_logo_url: selection.brandLogoUrl || null,
-  }
 }

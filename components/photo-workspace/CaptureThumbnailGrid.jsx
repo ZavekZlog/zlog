@@ -2,7 +2,7 @@
 
 /**
  * P2B Part 1 — capture thumbnail grid.
- * Preview + delete + rotate only. No annotation / AI / upload chrome.
+ * Preview + optional caption + delete + rotate. No annotation / AI / upload chrome.
  */
 
 import { RotateCw, Trash2 } from 'lucide-react'
@@ -26,6 +26,29 @@ const thumbBtn = {
   touchAction: 'manipulation',
 }
 
+const captionInputStyle = {
+  boxSizing: 'border-box',
+  width: '100%',
+  marginTop: 6,
+  marginBottom: 0,
+  padding: '6px 8px',
+  minHeight: 36,
+  borderRadius: 8,
+  border: '1px solid var(--edge)',
+  background: 'color-mix(in srgb, var(--ink) 55%, var(--plate))',
+  color: 'var(--text)',
+  fontFamily: 'inherit',
+  fontSize: 13,
+  lineHeight: 1.3,
+  resize: 'none',
+}
+
+const assignedInputStyle = {
+  ...captionInputStyle,
+  minHeight: 34,
+  fontSize: 12,
+}
+
 /**
  * @param {object} props
  * @param {object[]} props.photos
@@ -33,6 +56,8 @@ const thumbBtn = {
  * @param {(index: number) => void} props.onOpen
  * @param {(photoId: string) => void} props.onDelete
  * @param {(photoId: string) => void} props.onRotate
+ * @param {(photoId: string, text: string) => void} [props.onCaptionChange]
+ * @param {(photoId: string, text: string) => void} [props.onAssignedToChange]
  */
 export function CaptureThumbnailGrid({
   photos = [],
@@ -40,6 +65,8 @@ export function CaptureThumbnailGrid({
   onOpen,
   onDelete,
   onRotate,
+  onCaptionChange,
+  onAssignedToChange,
 }) {
   const list = Array.isArray(photos) ? photos : []
   if (!list.length) return null
@@ -50,7 +77,7 @@ export function CaptureThumbnailGrid({
       aria-label="Photos in this area"
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(148px, 1fr))',
         gap: 10,
         marginTop: 14,
       }}
@@ -59,6 +86,8 @@ export function CaptureThumbnailGrid({
         const photoNumber = numberOffset + index + 1
         const src = photo.preview || photo.imageUrl || ''
         const degrees = Number(photo.rotationDegrees) || 0
+        const caption = photo.acceptedDescription || photo.caption || ''
+        const assignedTo = photo.assignedTo || photo.assigned_to || ''
         return (
           <div
             key={photo.id}
@@ -130,6 +159,30 @@ export function CaptureThumbnailGrid({
             >
               Photo {photoNumber}
             </div>
+
+            {onCaptionChange ? (
+              <textarea
+                value={caption}
+                rows={2}
+                placeholder="Add caption (optional)"
+                aria-label={`Caption for Photo ${photoNumber} (optional)`}
+                onChange={(e) => onCaptionChange(photo.id, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                style={captionInputStyle}
+              />
+            ) : null}
+
+            {onAssignedToChange ? (
+              <input
+                type="text"
+                value={assignedTo}
+                placeholder="Assigned to"
+                aria-label={`Assigned to for Photo ${photoNumber} (optional)`}
+                onChange={(e) => onAssignedToChange(photo.id, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                style={assignedInputStyle}
+              />
+            ) : null}
 
             <div
               style={{
