@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "updated": "2026-08-11",
+  "version": "1.1.0",
+  "updated": "2026-08-14",
   "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage.",
   "behaviours": [
     {
@@ -182,6 +182,94 @@
       ],
       "manualQA": true,
       "manualQANote": "Authenticated browser open→view→edit journey is future E2E; mode helpers + UI chrome contracts are automated."
+    },
+    {
+      "id": "DIARY-014",
+      "description": "New Diary vs Edit Existing Diary are distinct journeys; existing opens with its own saved data",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-view-mode.test.js",
+        "lib/diary-edit-hydrate.test.js",
+        "lib/golden-journeys/journey-b-new-diary.test.js",
+        "lib/golden-journeys/journey-d-saved-diary.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Full authenticated reopen journey remains manual / future E2E."
+    },
+    {
+      "id": "DIARY-015",
+      "description": "Editing unrelated fields must not wipe saved sticky fields (anti-wipe)",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-cover-photo.test.js",
+        "lib/project-reference-persistence.test.js",
+        "lib/diary-edit-hydrate.test.js"
+      ],
+      "manualQA": false
+    },
+    {
+      "id": "DIARY-016",
+      "description": "Reporting Company name + logo persist as one identity",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-new-sticky-defaults.test.js",
+        "lib/diary-setup-continue.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Paired name/logo across real saves is manualQA; unit/journey helpers cover sticky defaults."
+    },
+    {
+      "id": "DIARY-017",
+      "description": "Cover photo persistence — omit wipe unless explicit set/remove",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-cover-photo.test.js",
+        "lib/diary-edit-hydrate.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Storage object presence after save remains manualQA."
+    },
+    {
+      "id": "DIARY-018",
+      "description": "Project Reference sticky on projects column; survives unrelated edits",
+      "area": "site-diary",
+      "tests": [
+        "lib/project-reference-persistence.test.js"
+      ],
+      "manualQA": false
+    },
+    {
+      "id": "DIARY-019",
+      "description": "Author name/role sticky where approved; PM must NOT auto-carry into a new diary",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-new-sticky-defaults.test.js",
+        "lib/diary-setup-author.test.js"
+      ],
+      "manualQA": false
+    },
+    {
+      "id": "DIARY-020",
+      "description": "Report Date: new = browser-local today (editable); existing = saved date; no leak into new diary",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-report-date.test.js",
+        "lib/diary-setup-blank.test.js",
+        "lib/diary-fetch-resilience.test.js"
+      ],
+      "manualQA": false
+    },
+    {
+      "id": "DIARY-021",
+      "description": "Save and Continue semantics on edit setup; report data survives reopen/edit contracts",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-setup-continue.test.js",
+        "lib/diary-edit-hydrate.test.js",
+        "lib/golden-journeys/journey-d-saved-diary.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Live Save and Continue click path is manualQA; CTA label + continue helpers are automated."
     }
   ]
 }

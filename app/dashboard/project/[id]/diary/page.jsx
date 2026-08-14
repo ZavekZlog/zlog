@@ -58,7 +58,9 @@ import {
 import {
   coverPhotoStateFromSaved,
   resolveCoverPhotoPreviewUrl,
-  resolveCoverPhotoUrlForSave,
+  planCoverPhotoPersistence,
+  coverPhotoStoragePath,
+  applyCoverPhotoPatch,
 } from '@/lib/diary-cover-photo'
 import { diaryHubHref, diaryEditHref, diaryComposeHref, existingDiaryHref } from '@/lib/diary-routing'
 import {
@@ -76,7 +78,12 @@ import {
   shouldShowBrandingSelector,
   shouldShowRecentDiariesOnReportPage,
 } from '@/lib/diary-form-hydrate'
-import { readReportSetupExtras } from '@/lib/report-setup'
+import { readReportSetupExtras, reportDateInputValue, todayIsoDate } from '@/lib/report-setup'
+import {
+  editReportDetailsHref,
+  fetchProjectRowForEditHydrate,
+  hydrateEditModeCoverAndReference,
+} from '@/lib/diary-edit-hydrate'
 import {
   diaryLinkedProjectSelectColumns,
   diaryProjectSelectorSelectColumns,
@@ -365,6 +372,10 @@ export default function SiteDiaryPage() {
 
     supabase.auth.getUser().then(({ data: { user } }) => {
       applyAuthUser(user)
+    }).catch(() => {
+      // Non-Auth network failures (TypeError: Failed to fetch) must not surface as
+      // unhandled rejections — treat as unknown session until a later auth event.
+      if (!cancelled) applyAuthUser(null)
     })
 
     const {
@@ -398,7 +409,7 @@ export default function SiteDiaryPage() {
   const [project, setProject] = useState(null)
   const [recentDiaries, setRecentDiaries] = useState([])
 
-  const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0])
+  const [reportDate, setReportDate] = useState(todayIsoDate())
   const [weather, setWeather] = useState('')
   const [shiftType, setShiftType] = useState('Day')
   const [siteSummary, setSiteSummary] = useState('')
@@ -533,15 +544,16 @@ export default function SiteDiaryPage() {
       setCarriedDelaysIssues(false)
 
       try {
-        const [{ data: proj }, { data: allProjects }] = await Promise.all([
-          supabase.from('projects').select(diaryLinkedProjectSelectColumns()).eq('id', projectId).single(),
-          supabase.from('projects').select(diaryProjectSelectorSelectColumns()).order('name'),
-        ])
+        const proj = await fetchProjectRowForEditHydrate(supabase, projectId)
+        const { data: allProjects } = await supabase
+          .from('projects')
+          .select(diaryProjectSelectorSelectColumns())
+          .order('name')
         if (cancelled) return
         setProject(proj)
         setProjects(allProjects || [])
 
-        const today = new Date().toISOString().slice(0, 10)
+        const today = todayIsoDate()
         setReportDate(today)
         setSiteSummary('')
         setActionsRequired('')
@@ -577,9 +589,10 @@ export default function SiteDiaryPage() {
           }
           loadedCoverPathRef.current = storagePath
           coverRemovedRef.current = false
+          // Set path immediately so Edit This Diary never shows empty upload while signing.
+          setCoverPhoto(coverPhotoStateFromSaved(storagePath, null))
           const preview = await resolveCoverPhotoPreviewUrl(supabase, storagePath)
           if (cancelled) return
-          // Always keep storagePath so edit/save cannot wipe the cover if preview fails.
           setCoverPhoto(coverPhotoStateFromSaved(storagePath, preview))
         }
 
@@ -619,8 +632,21 @@ export default function SiteDiaryPage() {
           id: existing.id,
           site_summary: existing.site_summary,
           report_date: existing.report_date,
+          cover_photo_url: existing.cover_photo_url || null,
         })
         setReportIsDraft(existing.is_draft === true)
+
+        // Canonical edit hydrate — Cover + Project Reference from saved rows.
+        const extras = readReportSetupExtras(existing.id)
+        const editHydration = hydrateEditModeCoverAndReference({
+          report: existing,
+          projectRow: proj,
+          reportExtras: extras,
+        })
+        setProjectReference(editHydration.projectReference)
+        // Apply cover before optional logo/photos awaits so edit mode always has path.
+        await applyCover(editHydration.coverStoragePath)
+        if (cancelled) return
 
         let labour
         let plant
@@ -676,7 +702,7 @@ export default function SiteDiaryPage() {
 
         if (cancelled) return
 
-        setReportDate(existing.report_date || today)
+        setReportDate(reportDateInputValue(existing.report_date) || today)
         setWeather(existing.weather || '')
         setShiftType(existing.shift || existing.shift_type || 'Day')
         setSiteSummary(existing.site_summary || '')
@@ -687,8 +713,6 @@ export default function SiteDiaryPage() {
         setCreatorName(hydrateAuthorName(existing))
         setCreatorRole(hydrateAuthorRole(existing))
         {
-          const extras = readReportSetupExtras(existing.id)
-          setProjectReference(extras?.projectReference || '')
           const logoPath = existing.brand_logo_url || null
           if (logoPath) {
             const preview = await signedUrlForPath(supabase, logoPath)
@@ -712,7 +736,6 @@ export default function SiteDiaryPage() {
           // Do not invent a wipe payload — null means omit branding keys on save.
           setBrandingSelection(null)
         }
-        await applyCover(existing.cover_photo_url)
         await applySignature(existing.signature_url)
         if (cancelled) return
 
@@ -1175,6 +1198,8 @@ export default function SiteDiaryPage() {
     setShowSaveBanner(false)
     const href = diaryEditHref(projectId, editingReportId)
     if (href) router.replace(href)
+    // Re-load canonical saved Cover Photo + Project Reference (not stale client blanks).
+    setFormReloadToken((n) => n + 1)
   }
 
   const handleCancelEditMode = () => {
@@ -1358,26 +1383,40 @@ export default function SiteDiaryPage() {
       }
 
       const pendingId = makeUuid()
-      let coverPhotoUrl = resolveCoverPhotoUrlForSave({
-        coverPhoto,
+      const liveCover = coverPhotoRef.current
+      let coverPlan = planCoverPhotoPersistence({
+        coverPhoto: liveCover,
         loadedCoverPath: loadedCoverPathRef.current,
         coverRemoved: coverRemovedRef.current,
       })
       let signatureUrl = signature?.storagePath || null
 
-      if (coverPhoto?.file) {
-        const ext = coverPhoto.file.name.split('.').pop()?.toLowerCase() || 'jpg'
-        const coverPath = `${user.id}/pending/${pendingId}/cover.${ext}`
+      if (coverPlan.needsUpload && coverPlan.file) {
+        const ext = coverPlan.file.name?.split('.').pop()?.toLowerCase() || 'jpg'
+        const coverPath = coverPhotoStoragePath(user.id, editingReportId, ext)
         const { error: coverUploadError } = await supabase.storage
           .from('site-photos')
-          .upload(coverPath, coverPhoto.file, { contentType: coverPhoto.file.type, upsert: false })
+          .upload(coverPath, coverPlan.file, {
+            contentType: coverPlan.file.type || 'image/jpeg',
+            upsert: true,
+          })
         if (coverUploadError) {
           failSave('We couldn’t upload the cover photo. Check your connection and try Save / Share again.')
           return
         }
-        coverPhotoUrl = coverPath
+        coverPlan = planCoverPhotoPersistence({
+          coverPhoto: liveCover,
+          loadedCoverPath: loadedCoverPathRef.current,
+          coverRemoved: false,
+          uploadedPath: coverPath,
+        })
         loadedCoverPathRef.current = coverPath
         coverRemovedRef.current = false
+        const keepPreview =
+          liveCover?.preview && String(liveCover.preview).startsWith('blob:')
+            ? liveCover.preview
+            : null
+        setCoverPhoto(coverPhotoStateFromSaved(coverPath, keepPreview))
       }
 
       if (signature?.file) {
@@ -1392,26 +1431,28 @@ export default function SiteDiaryPage() {
         signatureUrl = signaturePath
       }
 
-      const reportPayload = {
-        project_id: projectId,
-        report_date: reportDate,
-        weather: weather.trim() || null,
-        shift: shiftType || null,
-        site_summary: siteSummary.trim(),
-        visitors: visitors.trim() || null,
-        delays_issues: delaysIssues.trim() || null,
-        actions: actionsRequired.trim() || null,
-        company_reporting_for: companyReportingFor.trim() || null,
-        creator_name: creatorName.trim() || null,
-        creator_role: creatorRole.trim() || null,
-        cover_photo_url: coverPhotoUrl,
-        signature_url: signatureUrl,
-        equipment_hire: equipmentHirePayload(equipmentHireRows),
-        hs_incidents: hsIncidentsPayload(hsIncidents),
-        rfis: rfisPayload(rfis),
-        variations: variationsPayload(variations),
-        ...brandingPayload(brandingSelection),
-      }
+      const reportPayload = applyCoverPhotoPatch(
+        {
+          project_id: projectId,
+          report_date: reportDate,
+          weather: weather.trim() || null,
+          shift: shiftType || null,
+          site_summary: siteSummary.trim(),
+          visitors: visitors.trim() || null,
+          delays_issues: delaysIssues.trim() || null,
+          actions: actionsRequired.trim() || null,
+          company_reporting_for: companyReportingFor.trim() || null,
+          creator_name: creatorName.trim() || null,
+          creator_role: creatorRole.trim() || null,
+          signature_url: signatureUrl,
+          equipment_hire: equipmentHirePayload(equipmentHireRows),
+          hs_incidents: hsIncidentsPayload(hsIncidents),
+          rfis: rfisPayload(rfis),
+          variations: variationsPayload(variations),
+          ...brandingPayload(brandingSelection),
+        },
+        coverPlan,
+      )
 
       const labourPayload = labourRows
         .filter(labourHasData)
@@ -1847,7 +1888,7 @@ export default function SiteDiaryPage() {
           {isDiaryEditMode ? (
             <SecondaryButton
               type="button"
-              href={`/dashboard/diary/setup?report=${editingReportId}&project=${projectId}`}
+              href={editReportDetailsHref(projectId, editingReportId) || undefined}
               style={{ width: '100%', minHeight: 48, marginTop: 12 }}
             >
               Edit Report Details

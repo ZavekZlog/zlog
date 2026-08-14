@@ -27,15 +27,22 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const load = async () => {
-      // Quietly load latest project for non-diary modules only — never shown on dashboard.
-      const { data: proj } = await supabase
-        .from('projects')
-        .select('id, name, client_name, site_address')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      setProject(proj)
-      setLoading(false)
+      try {
+        // Quietly load latest project for non-diary modules only — never shown on dashboard.
+        const { data: proj, error } = await supabase
+          .from('projects')
+          .select('id, name, client_name, site_address')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (!error) setProject(proj)
+        else setProject(null)
+      } catch {
+        // Network failures (Failed to fetch) must not leave the dashboard stuck on Loading.
+        setProject(null)
+      } finally {
+        setLoading(false)
+      }
     }
     load()
   }, [])
