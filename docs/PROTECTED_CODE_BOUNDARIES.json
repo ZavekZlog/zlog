@@ -34,7 +34,7 @@
   ],
   "notes": [
     "Use PROTECTED_SCOPE_MANIFEST.json for feature→file mapping, task scopes, high-risk blast radius, and change budgets.",
-    "Sign out + Back share .zlog-secondary-cta in app/globals.css — diary work must not edit that class without global-shell scope + approval.",
+    "Sign out uses isolated .zlog-dashboard-signout; Back uses .zlog-secondary-cta — diary work must not re-couple Sign out to the Back plate without global-shell scope + approval.",
     "npm run test:release is the canonical gate."
   ]
 }

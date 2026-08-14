@@ -53,12 +53,12 @@ ZLOG_PROTECTED_SCOPE_REASON="user approved …"
 
 ## Why Sign out could move during Site Diary work (fixed gap)
 
-1. Diary Back styling shares `.zlog-secondary-cta` in **protected** `app/globals.css`.
+1. Diary Back styling historically shared `.zlog-secondary-cta` with Sign out in **protected** `app/globals.css` (Sign out is now isolated on `.zlog-dashboard-signout`).
 2. A blanket protected-scope **override** allowed any protected file in the dirty tree.
 3. There was **no declared task scope allowlist**, so unrelated dashboard/header files were not blocked relative to the stated task.
 4. Source contracts check CSS strings — they do **not** detect pixel/layout movement.
 
-The change-scope gate closes (1)–(3). Pixel/layout detection remains a **future screenshot baseline** task.
+The change-scope gate closes (1)–(3). Pixel/layout detection for Dashboard/Sign out remains a screenshot-baseline task after manual QA.
 
 ## Agent rule
 

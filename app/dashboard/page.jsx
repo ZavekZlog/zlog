@@ -11,13 +11,7 @@ import {
 } from '@/lib/premium-ui'
 import { REPORT_THEME_LIST } from '@/lib/report-theme'
 import { DashboardTopBar } from '@/components/dashboard/DashboardTopBar'
-
-/** Dashboard vertical rhythm (8px grid) — tight air under compact masthead before report cards */
-const SPACE = {
-  contentTop: 16,
-  contentX: 20,
-  contentBottom: 24,
-}
+import { DASHBOARD_CONTENT_GRID } from '@/lib/dashboard-content-grid'
 
 export default function DashboardPage() {
   const [project, setProject] = useState(null)
@@ -90,8 +84,8 @@ export default function DashboardPage() {
 
       <div
         style={{
-          padding: `${SPACE.contentTop}px ${SPACE.contentX}px ${SPACE.contentBottom}px`,
-          maxWidth: '600px',
+          padding: `${DASHBOARD_CONTENT_GRID.contentTop}px ${DASHBOARD_CONTENT_GRID.padX}px ${DASHBOARD_CONTENT_GRID.contentBottom}px`,
+          maxWidth: DASHBOARD_CONTENT_GRID.maxWidth,
           margin: '0 auto',
         }}
       >

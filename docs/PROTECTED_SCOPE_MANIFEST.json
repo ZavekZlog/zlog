@@ -53,7 +53,7 @@
         "lib/auth/",
         "app/globals.css"
       ],
-      "notes": "Sign out uses .zlog-secondary-cta in globals.css — editing that class moves Sign out AND Back."
+      "notes": "Sign out restored from 9b941f3 (framed utility below full ZlogBrandRegion). Right-aligned via DASHBOARD_CONTENT_GRID. Glow/pageBackground from locked premium-ui tokens — do not invent replacements."
     },
     "BACK_NAVIGATION": {
       "label": "Back navigation",
@@ -147,7 +147,7 @@
     },
     {
       "path": "app/globals.css",
-      "reason": "Global tokens + shared CTA plate (.zlog-secondary-cta) — Sign out and Back blast radius"
+      "reason": "Global tokens + Back plate (.zlog-secondary-cta) and isolated Sign out (.zlog-dashboard-signout)"
     },
     {
       "path": "lib/premium-ui.jsx",

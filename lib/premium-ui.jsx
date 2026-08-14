@@ -758,7 +758,8 @@ export function ZlogBrandRegion({ style = {} } = {}) {
 }
 
 /**
- * Canonical Zlog Back control — same .zlog-secondary-cta plate as dashboard Sign out.
+ * Canonical Zlog Back control — shared .zlog-secondary-cta plate (not Sign out).
+ * Dashboard Sign out is a framed utility below Zlog (.zlog-dashboard-signout), not this plate.
  */
 export function ZlogBackControl({
   href,
