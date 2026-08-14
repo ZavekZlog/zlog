@@ -37,6 +37,12 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Per-task scope declaration for anti-regression gates (never commit)
+.zlog-task-scope.json
+
+# Supabase CLI local temp
+supabase/.temp/
+
 # vercel
 .vercel
 

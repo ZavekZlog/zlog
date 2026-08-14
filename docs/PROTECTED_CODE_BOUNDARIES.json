@@ -1,17 +1,21 @@
 {
-  "version": "1.0.0",
-  "description": "Protected shared areas — narrow feature tasks must not modify these without explicit override.",
+  "version": "2.0.0",
+  "description": "Legacy entry point — protected paths are owned by docs/PROTECTED_SCOPE_MANIFEST.json. This file remains for documentation compatibility and lists the same always-protected surfaces.",
+  "canonicalManifest": "docs/PROTECTED_SCOPE_MANIFEST.json",
+  "canonicalReleaseCommand": "npm run test:release",
   "override": {
     "envFlag": "ZLOG_ALLOW_PROTECTED_SCOPE",
     "envReason": "ZLOG_PROTECTED_SCOPE_REASON",
     "cliFlag": "--allow-protected",
     "cliReason": "--reason",
-    "rule": "Both flag AND non-empty reason required. Override is deliberate and logged; never automatic."
+    "rule": "Both flag AND non-empty reason required. Override does NOT replace declared task scope (check-change-scope)."
   },
   "protectedPaths": [
     "app/(auth)/",
+    "app/page.tsx",
     "app/layout.tsx",
     "app/globals.css",
+    "app/dashboard/page.jsx",
     "lib/auth/",
     "lib/supabase/",
     "components/dashboard/DashboardTopBar.jsx",
@@ -20,7 +24,8 @@
     "middleware.js",
     "middleware.ts",
     "supabase/migrations/",
-    "docs/ZLOG_PRODUCT_CONSTITUTION.md"
+    "docs/ZLOG_PRODUCT_CONSTITUTION.md",
+    "DESIGN.md"
   ],
   "protectedGlobs": [
     "**/report*brand*",
@@ -28,10 +33,8 @@
     "lib/report-theme.*"
   ],
   "notes": [
-    "Authentication/login and Sign out/session handling live under app/(auth)/ and lib/auth/ plus DashboardTopBar.",
-    "PremiumShell/shared layout and brand chrome live primarily in lib/premium-ui.jsx.",
-    "Global responsive styles: app/globals.css.",
-    "Database migrations: supabase/migrations/.",
-    "Report/PDF branding pipeline: report-theme and related report branding modules."
+    "Use PROTECTED_SCOPE_MANIFEST.json for feature→file mapping, task scopes, high-risk blast radius, and change budgets.",
+    "Sign out + Back share .zlog-secondary-cta in app/globals.css — diary work must not edit that class without global-shell scope + approval.",
+    "npm run test:release is the canonical gate."
   ]
 }

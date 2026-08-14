@@ -1,10 +1,10 @@
 # Zlog Release Gate (Mandatory)
 
-**Version:** 1.0.3  
-**Date Updated:** 2026-08-11  
-**Reason Updated:** Wire executable `test:release-gate` + behaviour registry  
-**User Decision:** Build hard anti-regression gate (Phases 2–6)  
-**Previous Version:** 1.0.2  
+**Version:** 1.1.0  
+**Date Updated:** 2026-08-14  
+**Reason Updated:** Canonical `npm run test:release` + change-scope / copy gates; honesty on visual gaps  
+**User Decision:** Hard anti-regression enforcement pass  
+**Previous Version:** 1.0.3  
 
 Parent: `docs/ZLOG_PRODUCT_CONSTITUTION.md`  
 Global UI: `docs/contracts/GLOBAL_UI_TEXT_FIT_CONTRACT.md`
@@ -127,12 +127,27 @@ Completion reports must list gate results (pass / fail / N/A with reason). Any f
 
 ## Automated hard regression gate
 
-In addition to the checklist above, run:
+In addition to the checklist above, run the **canonical** command:
 
 ```bash
-npm run test:release-gate
+npm run test:release
 ```
 
-This executes auth behavioural tests, Site Diary contracts, golden-journey contract suites, protected-scope HARD FAIL check, behaviour-registry integrity, and Playwright UI-only auth E2E.
+(`npm run test:release-gate` is an alias of the same runner.)
 
-A green automated gate is **necessary but not sufficient**. Items marked `manualQA` in `docs/contracts/APPROVED_BEHAVIOUR_REGISTRY.json` (e.g. live Supabase login/sign-out, browser password Save/offer, device scroll feel) remain mandatory Release Gate manual QA.
+This executes:
+
+1. **change-scope** — declared task scope vs dirty tree, high-risk blast radius, change budget  
+2. **protected-scope** — always-protected shared paths  
+3. **approved-copy** — approved UI terminology (source-string; **not** visual)  
+4. **behaviour-registry** integrity  
+5. **visual-baseline inventory** — approved PNGs present; forbidden baselines absent  
+6. Auth + Site Diary + persistence + golden-journey **node** suites  
+7. Playwright behavioural E2E  
+8. Playwright **visual regression** for approved screens (HARD FAIL on mismatch; never auto-updates)
+
+**Screenshot coverage today:** landing + login only. Dashboard / Sign out / Site Diary shells are refused until manual confirmation (`docs/VISUAL_REGRESSION.md`).
+
+A green automated gate is **necessary but not sufficient**. Items marked `manualQA` in `docs/contracts/APPROVED_BEHAVIOUR_REGISTRY.json` remain mandatory Release Gate manual QA.
+
+Operating procedure: `docs/ANTI_REGRESSION_ENFORCEMENT.md` · Manifest: `docs/PROTECTED_SCOPE_MANIFEST.json` · Visual: `docs/VISUAL_REGRESSION.md`.

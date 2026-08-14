@@ -1,0 +1,82 @@
+{
+  "version": "1.0.0",
+  "updated": "2026-08-14",
+  "description": "Visual screenshot baseline registry. Only status=approved screens may have committed PNG baselines and HARD FAIL the release gate on mismatch. pending_manual_confirmation and known_regression must NOT be baselined until the user explicitly approves the live UI.",
+  "honesty": "These are genuine Playwright screenshot comparisons — not source-string contracts.",
+  "viewports": {
+    "mobile": { "width": 390, "height": 844, "deviceScaleFactor": 1, "label": "iPhone-ish mobile-first" },
+    "desktop": { "width": 1280, "height": 800, "deviceScaleFactor": 1, "label": "Desktop shell QA" }
+  },
+  "snapshotDir": "e2e/visual/__baselines__",
+  "updateRequires": {
+    "envFlag": "ZLOG_ALLOW_VISUAL_BASELINE_UPDATE",
+    "envReason": "ZLOG_VISUAL_BASELINE_REASON",
+    "command": "npm run test:visual:update"
+  },
+  "screens": [
+    {
+      "id": "landing",
+      "route": "/",
+      "title": "Landing page (LOCKED)",
+      "status": "approved",
+      "viewports": ["mobile", "desktop"],
+      "reasonApproved": "docs/ZLOG_FUNCTIONAL_SPEC_V1.md marks landing LOCKED; workspace rule forbids redesign unless explicitly asked.",
+      "covers": ["landing", "wordmark", "primary-cta"]
+    },
+    {
+      "id": "login",
+      "route": "/login",
+      "title": "Login / Sign in",
+      "status": "approved",
+      "viewports": ["mobile", "desktop"],
+      "reasonApproved": "Auth form chrome is contract-locked (AUTH-001 semantics + PrimaryCTA / brand wordmark). Not implicated in Sign out layout regression.",
+      "covers": ["login", "wordmark", "primary-cta", "auth-shell"]
+    },
+    {
+      "id": "dashboard",
+      "route": "/dashboard",
+      "title": "Dashboard (module cards + masthead)",
+      "status": "known_regression",
+      "viewports": ["mobile", "desktop"],
+      "refuseReason": "Sign Out control is known to have moved during unrelated Site Diary work. Current live dashboard must NOT be blessed as the approved baseline until manual QA confirms the restored approved layout.",
+      "covers": ["dashboard", "shell-header", "sign-out", "module-cards", "wordmark"]
+    },
+    {
+      "id": "dashboard-sign-out",
+      "route": "/dashboard",
+      "title": "Sign Out control (exact location)",
+      "status": "known_regression",
+      "viewports": ["mobile", "desktop"],
+      "clip": "sign-out",
+      "refuseReason": "Exact Sign Out location/relationship is the known regression under review. No baseline until user confirms approved position.",
+      "covers": ["sign-out"]
+    },
+    {
+      "id": "site-diary-entry",
+      "route": "/dashboard/diary",
+      "title": "Site Diary entry (two-choice)",
+      "status": "pending_manual_confirmation",
+      "viewports": ["mobile", "desktop"],
+      "refuseReason": "Requires authenticated session for a stable shell; recent diary workflow churn. Do not baseline until user confirms the live screen is the approved locked state.",
+      "covers": ["site-diary-entry", "back", "cta"]
+    },
+    {
+      "id": "site-diary-setup",
+      "route": "/dashboard/diary/setup",
+      "title": "Site Diary setup",
+      "status": "pending_manual_confirmation",
+      "viewports": ["mobile"],
+      "refuseReason": "Authenticated + form-heavy; recent persistence/date work. Confirm approved visual state before baselining.",
+      "covers": ["site-diary-setup", "cta", "back"]
+    },
+    {
+      "id": "site-diary-workbench-shell",
+      "route": "/dashboard/project/[id]/diary",
+      "title": "Site Diary workbench shell",
+      "status": "pending_manual_confirmation",
+      "viewports": ["mobile", "desktop"],
+      "refuseReason": "Requires project/report fixture + auth; large surface with recent edits. Confirm approved shell before baselining.",
+      "covers": ["site-diary-workbench", "back", "cta"]
+    }
+  ]
+}

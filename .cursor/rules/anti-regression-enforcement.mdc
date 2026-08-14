@@ -1,0 +1,50 @@
+---
+description: Hard anti-regression enforcement — declare scope, run test:release, no silent shared edits
+alwaysApply: true
+---
+
+# Zlog anti-regression enforcement (HARD)
+
+Read before any production edit: `docs/PROTECTED_SCOPE_MANIFEST.json` and `docs/ANTI_REGRESSION_ENFORCEMENT.md`.
+
+## Mandatory workflow
+
+1. **Declare intended scope** before editing (`ZLOG_TASK_SCOPE` or `.zlog-task-scope.json`).
+2. **Do not** modify files outside that scope — especially high-risk shared surfaces:
+   - `app/globals.css` (includes `.zlog-secondary-cta` — Sign out **and** Back)
+   - `lib/premium-ui.jsx` (PrimaryCTA, Back, wordmark, PremiumShell)
+   - `components/dashboard/DashboardTopBar.jsx` (Sign out)
+   - `app/layout.tsx`, landing/auth, migrations
+3. If the task truly needs a high-risk/shared file: **STOP** and ask the user. Do not silently edit it. Do not redesign around an unrelated regression.
+4. Before claiming complete: inspect `git status` / `git diff` for unexpected files.
+5. Run the **canonical** gate — not only tests you added:
+
+```bash
+npm run test:release
+```
+
+6. Never commit or push unless the user explicitly instructs it.
+7. Never claim “visual regression passed” from source-string contracts alone.
+8. Never regenerate screenshot baselines to make an unrelated feature pass.
+   Intentional updates only: `npm run test:visual:update` with
+   `ZLOG_ALLOW_VISUAL_BASELINE_UPDATE=1` + reason.
+9. Dashboard / Sign out / diary shells are **not** approved baselines until the user confirms.
+
+## Scope examples
+
+| Task | Scope id |
+|------|----------|
+| Report Date only | `site-diary-report-date` |
+| Cover / Project Reference / sticky hydrate | `site-diary-persistence` |
+| Broader Site Diary (not global shell) | `site-diary` |
+| Sign out / dashboard masthead | `dashboard-shell` (+ approval flags) |
+| globals.css / PrimaryCTA / Back plate | `global-shell` (+ approval flags) |
+| Migrations | `schema-migration` (+ approval flags) |
+| This guardrail system | `anti-regression-tooling` |
+
+## Completion statement must include
+
+- Declared scope
+- `npm run test:release` result
+- Unexpected protected/high-risk files touched (must be none, or user-approved)
+- Honest note if visual/screenshot protection is still absent

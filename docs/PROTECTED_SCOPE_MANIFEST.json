@@ -1,0 +1,386 @@
+{
+  "version": "1.0.0",
+  "updated": "2026-08-14",
+  "description": "Machine-readable protected-scope architecture. Future agents must declare ZLOG_TASK_SCOPE (or .zlog-task-scope.json) before release. Unrelated protected/high-risk edits HARD FAIL.",
+  "canonicalReleaseCommand": "npm run test:release",
+  "legacyReleaseCommand": "npm run test:release-gate",
+  "honesty": {
+    "visualRegression": "Installed for status=approved screens only (landing, login). Playwright screenshot baselines under e2e/visual/__baselines__. Dashboard/Sign out/diary shells are known_regression or pending_manual_confirmation — NOT baselined. See docs/VISUAL_REGRESSION.md.",
+    "sourceContracts": "String/structure assertions in *.contract.test.js prove wiring, not on-screen geometry.",
+    "playwrightE2E": "Behavioural UI E2E (auth wall / form semantics) — separate from screenshot visual regression."
+  },
+  "features": {
+    "LANDING_AUTH": {
+      "label": "Landing / Auth",
+      "paths": [
+        "app/page.tsx",
+        "app/(auth)/",
+        "lib/auth/",
+        "lib/supabase/",
+        "middleware.js",
+        "middleware.ts"
+      ]
+    },
+    "DASHBOARD": {
+      "label": "Dashboard",
+      "paths": [
+        "app/dashboard/page.jsx",
+        "components/dashboard/DashboardTopBar.jsx"
+      ]
+    },
+    "GLOBAL_APP_SHELL": {
+      "label": "Global app shell",
+      "paths": [
+        "app/layout.tsx",
+        "app/globals.css",
+        "lib/premium-ui.jsx",
+        "lib/premium-ui.js"
+      ],
+      "blastRadius": "high"
+    },
+    "ZLOG_HEADER_WORDMARK": {
+      "label": "Zlog header / wordmark",
+      "paths": [
+        "lib/premium-ui.jsx",
+        "components/dashboard/DashboardTopBar.jsx"
+      ],
+      "notes": "ZlogTextWordmarkLetters / ZlogWordmark / ZlogBrandWordmark live in premium-ui."
+    },
+    "SIGN_OUT_CONTROL": {
+      "label": "Sign out control",
+      "paths": [
+        "components/dashboard/DashboardTopBar.jsx",
+        "lib/auth/",
+        "app/globals.css"
+      ],
+      "notes": "Sign out uses .zlog-secondary-cta in globals.css — editing that class moves Sign out AND Back."
+    },
+    "BACK_NAVIGATION": {
+      "label": "Back navigation",
+      "paths": [
+        "lib/premium-ui.jsx",
+        "app/globals.css"
+      ],
+      "notes": "ZlogBackControl + .zlog-secondary-cta / .zlog-back-cta"
+    },
+    "GLOBAL_CTA_SYSTEM": {
+      "label": "Global CTA system",
+      "paths": [
+        "lib/premium-ui.jsx",
+        "app/globals.css",
+        "DESIGN.md"
+      ],
+      "notes": "PrimaryCTA, SecondaryButton, .zlog-secondary-cta — LOCKED enamel treatment."
+    },
+    "SITE_DIARY_WORKBENCH_SHELL": {
+      "label": "Site Diary workbench shell",
+      "paths": [
+        "app/dashboard/diary/",
+        "app/dashboard/project/[id]/diary/",
+        "docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md",
+        "docs/PROTECTED_SITE_DIARY_CONTRACT.md"
+      ]
+    },
+    "APPROVED_TYPOGRAPHY": {
+      "label": "Approved typography",
+      "paths": [
+        "app/globals.css",
+        "DESIGN.md",
+        "lib/premium-ui.jsx"
+      ],
+      "blastRadius": "high"
+    },
+    "GLOBAL_COLOUR_TOKENS": {
+      "label": "Global colour tokens",
+      "paths": [
+        "app/globals.css",
+        "DESIGN.md",
+        "lib/report-theme.js",
+        "lib/report-theme.ts"
+      ],
+      "blastRadius": "high"
+    },
+    "DATABASE_SCHEMA": {
+      "label": "Database / schema contracts",
+      "paths": [
+        "supabase/migrations/"
+      ],
+      "blastRadius": "high"
+    },
+    "REPORT_PDF_BRANDING": {
+      "label": "Report / PDF branding pipeline",
+      "paths": [],
+      "globs": [
+        "**/report*brand*",
+        "**/pdf/**",
+        "lib/report-theme.*"
+      ],
+      "blastRadius": "high"
+    }
+  },
+  "alwaysProtectedPaths": [
+    "app/(auth)/",
+    "app/page.tsx",
+    "app/layout.tsx",
+    "app/globals.css",
+    "app/dashboard/page.jsx",
+    "lib/auth/",
+    "lib/supabase/",
+    "components/dashboard/DashboardTopBar.jsx",
+    "lib/premium-ui.jsx",
+    "lib/premium-ui.js",
+    "middleware.js",
+    "middleware.ts",
+    "supabase/migrations/",
+    "docs/ZLOG_PRODUCT_CONSTITUTION.md",
+    "DESIGN.md"
+  ],
+  "alwaysProtectedGlobs": [
+    "**/report*brand*",
+    "**/pdf/**",
+    "lib/report-theme.*"
+  ],
+  "highRiskShared": [
+    {
+      "path": "app/layout.tsx",
+      "reason": "Root layout — every screen"
+    },
+    {
+      "path": "app/globals.css",
+      "reason": "Global tokens + shared CTA plate (.zlog-secondary-cta) — Sign out and Back blast radius"
+    },
+    {
+      "path": "lib/premium-ui.jsx",
+      "reason": "PrimaryCTA, Back, wordmark, PremiumShell — multi-screen blast radius"
+    },
+    {
+      "path": "lib/premium-ui.js",
+      "reason": "Legacy alias of premium-ui"
+    },
+    {
+      "path": "components/dashboard/DashboardTopBar.jsx",
+      "reason": "Dashboard masthead + Sign out"
+    },
+    {
+      "path": "middleware.js",
+      "reason": "Auth wall / routing"
+    },
+    {
+      "path": "middleware.ts",
+      "reason": "Auth wall / routing"
+    },
+    {
+      "path": "supabase/migrations/",
+      "reason": "Schema contracts"
+    }
+  ],
+  "scopes": {
+    "anti-regression-tooling": {
+      "description": "Guardrail infrastructure only (manifests, gate scripts, cursor rules, registry).",
+      "allowedPathPrefixes": [
+        "docs/PROTECTED_SCOPE_MANIFEST.json",
+        "docs/PROTECTED_CODE_BOUNDARIES.json",
+        "docs/PROTECTED_CODE_BOUNDARIES.md",
+        "docs/ANTI_REGRESSION_ENFORCEMENT.md",
+        "docs/VISUAL_REGRESSION.md",
+        "docs/ZLOG_RELEASE_GATE.md",
+        "docs/contracts/APPROVED_UI_COPY.json",
+        "docs/contracts/APPROVED_BEHAVIOUR_REGISTRY.json",
+        "scripts/",
+        "e2e/visual/",
+        "playwright.config.js",
+        "playwright.visual.config.mjs",
+        ".cursor/rules/",
+        "package.json",
+        ".gitignore"
+      ],
+      "allowedGlobs": [
+        "scripts/**",
+        "e2e/visual/**",
+        ".cursor/rules/**",
+        "lib/**/*contract*.test.js",
+        "lib/**/*resilience*.test.js"
+      ],
+      "maxProductFiles": 8,
+      "allowsHighRisk": false,
+      "requiresUserApproval": false
+    },
+    "site-diary-report-date": {
+      "description": "Report Date stickiness / local-today only.",
+      "allowedPathPrefixes": [
+        "lib/report-setup.js",
+        "lib/diary-draft.js",
+        "lib/diary-setup-blank.js",
+        "lib/diary-report-date.test.js",
+        "app/dashboard/diary/setup/page.jsx",
+        "app/dashboard/project/[id]/diary/page.jsx"
+      ],
+      "allowedGlobs": [
+        "lib/diary-report-date*",
+        "lib/diary-setup-blank*"
+      ],
+      "maxProductFiles": 10,
+      "allowsHighRisk": false,
+      "requiresUserApproval": false
+    },
+    "site-diary-persistence": {
+      "description": "Site Diary sticky/persistence fields (cover, project reference, branding, hydrate) without shell redesign.",
+      "allowedPathPrefixes": [
+        "lib/diary-",
+        "lib/project-",
+        "lib/report-setup.js",
+        "app/dashboard/diary/",
+        "app/dashboard/project/[id]/diary/"
+      ],
+      "allowedGlobs": [
+        "lib/diary-*.js",
+        "lib/project-*.js",
+        "lib/golden-journeys/**"
+      ],
+      "maxProductFiles": 18,
+      "allowsHighRisk": false,
+      "requiresUserApproval": false
+    },
+    "site-diary": {
+      "description": "Broader Site Diary feature work (still excludes global shell / Sign out / landing).",
+      "allowedPathPrefixes": [
+        "lib/diary-",
+        "lib/project-",
+        "lib/report-setup.js",
+        "lib/labour-from-register.js",
+        "app/dashboard/diary/",
+        "app/dashboard/project/[id]/diary/",
+        "docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md",
+        "docs/PROTECTED_SITE_DIARY_CONTRACT.md",
+        "docs/contracts/PHOTO_WORKSPACE_CONTRACT.md",
+        "components/photo-workspace/"
+      ],
+      "allowedGlobs": [
+        "lib/diary-*.js",
+        "lib/project-*.js",
+        "lib/golden-journeys/**",
+        "lib/photo-workspace/**"
+      ],
+      "maxProductFiles": 25,
+      "allowsHighRisk": false,
+      "requiresUserApproval": false
+    },
+    "dashboard-shell": {
+      "description": "Dashboard home + Sign out masthead only.",
+      "allowedPathPrefixes": [
+        "app/dashboard/page.jsx",
+        "components/dashboard/DashboardTopBar.jsx",
+        "lib/auth/sign-out.js",
+        "lib/auth/sign-out.jsx"
+      ],
+      "allowedGlobs": [],
+      "maxProductFiles": 8,
+      "allowsHighRisk": true,
+      "requiresUserApproval": true
+    },
+    "landing-auth": {
+      "description": "Landing page and authentication flows.",
+      "allowedPathPrefixes": [
+        "app/page.tsx",
+        "app/(auth)/",
+        "lib/auth/",
+        "lib/supabase/",
+        "middleware.js",
+        "middleware.ts"
+      ],
+      "allowedGlobs": [
+        "lib/auth/**",
+        "e2e/golden-a-auth*"
+      ],
+      "maxProductFiles": 15,
+      "allowsHighRisk": true,
+      "requiresUserApproval": true
+    },
+    "global-shell": {
+      "description": "HIGH RISK — globals.css, premium-ui, layout, shared CTA/Back/wordmark. Requires explicit user approval.",
+      "allowedPathPrefixes": [
+        "app/layout.tsx",
+        "app/globals.css",
+        "lib/premium-ui.jsx",
+        "lib/premium-ui.js",
+        "components/dashboard/DashboardTopBar.jsx",
+        "DESIGN.md"
+      ],
+      "allowedGlobs": [
+        "lib/premium-ui*",
+        "lib/cta-hierarchy*",
+        "lib/zlog-text-wordmark*"
+      ],
+      "maxProductFiles": 12,
+      "allowsHighRisk": true,
+      "requiresUserApproval": true
+    },
+    "schema-migration": {
+      "description": "Database migrations only — always requires user approval.",
+      "allowedPathPrefixes": [
+        "supabase/migrations/"
+      ],
+      "allowedGlobs": [],
+      "maxProductFiles": 5,
+      "allowsHighRisk": true,
+      "requiresUserApproval": true
+    },
+    "photo-workspace": {
+      "description": "Shared Photo Workspace (P2B+) without Site Diary save refactor.",
+      "allowedPathPrefixes": [
+        "components/photo-workspace/",
+        "lib/photo-workspace/",
+        "lib/photo-annotations/",
+        "lib/ai-annotation/",
+        "docs/SHARED_PHOTO_WORKSPACE_ARCHITECTURE.md",
+        "docs/contracts/PHOTO_WORKSPACE_CONTRACT.md"
+      ],
+      "allowedGlobs": [
+        "lib/photo-*/**",
+        "components/photo-workspace/**"
+      ],
+      "maxProductFiles": 20,
+      "allowsHighRisk": false,
+      "requiresUserApproval": false
+    },
+    "test-docs": {
+      "description": "Tests and documentation only (no product surface).",
+      "allowedPathPrefixes": [
+        "docs/",
+        "lib/",
+        "e2e/",
+        "scripts/"
+      ],
+      "allowedGlobs": [
+        "**/*.test.js",
+        "**/*.spec.js",
+        "docs/**"
+      ],
+      "maxProductFiles": 0,
+      "allowsHighRisk": false,
+      "requiresUserApproval": false
+    }
+  },
+  "criticalBehaviours": [
+    "DIARY-004",
+    "DIARY-013",
+    "DIARY-014",
+    "DIARY-015",
+    "DIARY-016",
+    "DIARY-017",
+    "DIARY-018",
+    "DIARY-019",
+    "DIARY-020",
+    "DIARY-021",
+    "AUTH-001",
+    "AUTH-004",
+    "UI-COPY-001"
+  ],
+  "override": {
+    "envFlag": "ZLOG_ALLOW_PROTECTED_SCOPE",
+    "envReason": "ZLOG_PROTECTED_SCOPE_REASON",
+    "largeDiffFlag": "ZLOG_ALLOW_LARGE_DIFF",
+    "largeDiffReason": "ZLOG_LARGE_DIFF_REASON",
+    "rule": "Overrides never expand task scope silently. Protected/high-risk files still require an allowlisting scope OR explicit extraFiles plus user approval flags."
+  }
+}

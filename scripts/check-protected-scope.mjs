@@ -3,20 +3,33 @@
  * Hard fail when the dirty git tree touches protected shared paths
  * unless an explicit intentional override is provided.
  *
+ * Protected path list is sourced from docs/PROTECTED_SCOPE_MANIFEST.json
+ * (alwaysProtectedPaths / alwaysProtectedGlobs), with fallback to
+ * docs/PROTECTED_CODE_BOUNDARIES.json for backwards compatibility.
+ *
  * Override (both required):
  *   ZLOG_ALLOW_PROTECTED_SCOPE=1
  *   ZLOG_PROTECTED_SCOPE_REASON="user-authorised reason"
  * or:
  *   --allow-protected --reason "user-authorised reason"
+ *
+ * NOTE: Override alone is not enough for unrelated work — also run
+ * check-change-scope with a declared task scope (npm run test:release).
  */
 
 import { readFileSync, existsSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
-import { dirname, join, relative, sep } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  normalizePath,
+  listDirtyFiles,
+  pathMatchesAny,
+  isGateExemptFile,
+  loadScopeManifest,
+} from './lib/scope-files.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const manifestPath = join(root, 'docs/PROTECTED_CODE_BOUNDARIES.json')
+const legacyPath = join(root, 'docs/PROTECTED_CODE_BOUNDARIES.json')
 
 function parseArgs(argv) {
   const out = { allow: false, reason: '', files: [] }
@@ -30,7 +43,7 @@ function parseArgs(argv) {
     if (a === '--files') {
       out.files = String(argv[i + 1] || '')
         .split(',')
-        .map((s) => s.trim())
+        .map((s) => normalizePath(s.trim()))
         .filter(Boolean)
       i++
     }
@@ -38,73 +51,36 @@ function parseArgs(argv) {
   return out
 }
 
-function normalizePath(p) {
-  return String(p || '')
-    .replace(/\\/g, '/')
-    .replace(/^\.\//, '')
-}
-
-function listDirtyFiles() {
-  const r = spawnSync('git', ['status', '--porcelain', '-uall'], {
-    cwd: root,
-    encoding: 'utf8',
-    shell: false,
-  })
-  if (r.error) {
-    console.error('check-protected-scope: git failed to start:', r.error.message)
-    process.exit(2)
+function loadProtectedLists() {
+  try {
+    const manifest = loadScopeManifest()
+    return {
+      protectedPaths: manifest.alwaysProtectedPaths || [],
+      protectedGlobs: manifest.alwaysProtectedGlobs || [],
+      source: 'PROTECTED_SCOPE_MANIFEST.json',
+    }
+  } catch {
+    const legacy = JSON.parse(readFileSync(legacyPath, 'utf8'))
+    return {
+      protectedPaths: legacy.protectedPaths || [],
+      protectedGlobs: legacy.protectedGlobs || [],
+      source: 'PROTECTED_CODE_BOUNDARIES.json',
+    }
   }
-  if (r.status !== 0) {
-    console.error('check-protected-scope: git status failed:', r.stderr || r.stdout)
-    process.exit(2)
-  }
-  const files = []
-  for (const line of (r.stdout || '').split(/\r?\n/)) {
-    if (!line.trim()) continue
-    // porcelain: XY PATH or XY ORIG -> PATH
-    const rest = line.slice(3)
-    const arrow = rest.indexOf(' -> ')
-    const pathPart = arrow >= 0 ? rest.slice(arrow + 4) : rest
-    files.push(normalizePath(pathPart.replace(/^"|"$/g, '')))
-  }
-  return [...new Set(files)]
 }
 
 function isProtected(file, protectedPaths, protectedGlobs) {
-  const f = normalizePath(file)
-  // Tests / E2E / gate scripts may lock protected behaviour without being product surface.
-  if (/\.(test|spec)\.(js|jsx|ts|tsx|mjs)$/.test(f)) return false
-  if (f.startsWith('e2e/')) return false
-  if (f.startsWith('scripts/')) return false
-  if (f === 'playwright.config.js' || f === 'playwright.config.ts') return false
-  if (f === 'docs/PROTECTED_CODE_BOUNDARIES.json') return false
-  if (f === 'docs/PROTECTED_CODE_BOUNDARIES.md') return false
-  if (f === 'docs/contracts/APPROVED_BEHAVIOUR_REGISTRY.json') return false
-
-  for (const prefix of protectedPaths) {
-    const p = normalizePath(prefix)
-    if (f === p || f.startsWith(p)) return true
-    if (!p.endsWith('/') && f.startsWith(`${p}/`)) return true
-  }
-  for (const glob of protectedGlobs) {
-    const re = new RegExp(
-      `^${normalizePath(glob)
-        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-        .replace(/\*\*/g, ':::DS:::')
-        .replace(/\*/g, '[^/]*')
-        .replace(/:::DS:::/g, '.*')}$`,
-    )
-    if (re.test(f)) return true
-  }
-  return false
+  if (isGateExemptFile(file)) return false
+  return pathMatchesAny(file, protectedPaths, protectedGlobs)
 }
 
 function main() {
-  if (!existsSync(manifestPath)) {
-    console.error('Missing docs/PROTECTED_CODE_BOUNDARIES.json')
+  if (!existsSync(legacyPath) && !existsSync(join(root, 'docs/PROTECTED_SCOPE_MANIFEST.json'))) {
+    console.error('Missing protected-scope manifest / boundaries')
     process.exit(2)
   }
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+
+  const lists = loadProtectedLists()
   const cli = parseArgs(process.argv.slice(2))
   const allow =
     cli.allow ||
@@ -113,12 +89,12 @@ function main() {
   const reason = (cli.reason || process.env.ZLOG_PROTECTED_SCOPE_REASON || '').trim()
 
   const dirty = cli.files.length > 0 ? cli.files : listDirtyFiles()
-  const hits = dirty.filter((f) =>
-    isProtected(f, manifest.protectedPaths || [], manifest.protectedGlobs || []),
-  )
+  const hits = dirty.filter((f) => isProtected(f, lists.protectedPaths, lists.protectedGlobs))
 
   if (hits.length === 0) {
-    console.log('check-protected-scope: PASS (no protected paths in dirty tree)')
+    console.log(
+      `check-protected-scope: PASS (no protected paths in dirty tree; source=${lists.source})`,
+    )
     process.exit(0)
   }
 
@@ -126,11 +102,14 @@ function main() {
   console.error('═══════════════════════════════════════════════════════════')
   console.error(' PROTECTED SCOPE VIOLATION — HARD FAIL')
   console.error('═══════════════════════════════════════════════════════════')
+  console.error(`Source: ${lists.source}`)
   console.error('Dirty tree touches protected shared areas:')
   for (const h of hits) console.error(`  - ${h}`)
   console.error('')
   console.error('A narrow feature task must NOT modify these silently.')
   console.error('STOP. Justify the wider scope and obtain explicit approval.')
+  console.error('Also declare ZLOG_TASK_SCOPE / .zlog-task-scope.json and run:')
+  console.error('  npm run check:change-scope')
   console.error('')
   console.error('Intentional override (only after user authorisation):')
   console.error(
@@ -144,6 +123,7 @@ function main() {
     console.warn('!!! PROTECTED SCOPE OVERRIDE IN USE !!!')
     console.warn(`Reason: ${reason}`)
     console.warn('This must be an explicit user-authorised exception.')
+    console.warn('Override does NOT replace change-scope allowlisting.')
     process.exit(0)
   }
 

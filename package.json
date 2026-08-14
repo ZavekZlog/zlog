@@ -12,9 +12,15 @@
     "test:auth": "node --test lib/auth/login-form.test.js lib/auth/sign-out.test.js lib/auth/return-path.test.js",
     "test:golden-journeys": "node --test lib/golden-journeys/journey-b-new-diary.test.js lib/golden-journeys/journey-c-previous-diary.test.js lib/golden-journeys/journey-d-saved-diary.test.js",
     "check:protected-scope": "node scripts/check-protected-scope.mjs",
+    "check:change-scope": "node scripts/check-change-scope.mjs",
+    "check:approved-copy": "node scripts/check-approved-copy.mjs",
     "check:behaviour-registry": "node scripts/check-behaviour-registry.mjs",
-    "test:e2e": "playwright test",
-    "test:release-gate": "node --test lib/auth/login-form.test.js lib/auth/sign-out.test.js lib/auth/return-path.test.js lib/diary-site-diary-contract.test.js lib/diary-setup-blank.test.js lib/diary-setup-author.test.js lib/diary-view-mode.test.js lib/diary-form-hydrate.test.js lib/diary-routing.test.js lib/diary-setup-continue.test.js lib/premium-ui-layout-contract.test.js lib/premium-ui-back-contract.test.js lib/golden-journeys/journey-b-new-diary.test.js lib/golden-journeys/journey-c-previous-diary.test.js lib/golden-journeys/journey-d-saved-diary.test.js scripts/check-protected-scope.test.js && node scripts/check-behaviour-registry.mjs && node scripts/check-protected-scope.mjs && playwright test"
+    "test:e2e": "playwright test -c playwright.config.js",
+    "test:visual": "node scripts/run-visual-tests.mjs",
+    "test:visual:update": "node scripts/update-visual-baselines.mjs",
+    "check:visual-baselines": "node scripts/check-visual-baselines.mjs",
+    "test:release": "node scripts/run-release-gate.mjs",
+    "test:release-gate": "node scripts/run-release-gate.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",

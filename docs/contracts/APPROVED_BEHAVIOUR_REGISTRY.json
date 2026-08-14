@@ -1,7 +1,7 @@
 {
   "version": "1.1.0",
   "updated": "2026-08-14",
-  "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage.",
+  "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage. Source contracts are NOT screenshot visual tests.",
   "behaviours": [
     {
       "id": "AUTH-001",
@@ -270,6 +270,36 @@
       ],
       "manualQA": true,
       "manualQANote": "Live Save and Continue click path is manualQA; CTA label + continue helpers are automated."
+    },
+    {
+      "id": "UI-COPY-001",
+      "description": "Approved UI terminology remains present (Site Diary, Sign out, Save and Continue, …)",
+      "area": "copy",
+      "tests": [
+        "scripts/check-approved-copy.test.js"
+      ],
+      "manualQA": false,
+      "manualQANote": "Source-string contract only — not visual layout protection."
+    },
+    {
+      "id": "SCOPE-001",
+      "description": "Declared task scope blocks unrelated protected/high-risk file edits",
+      "area": "anti-regression",
+      "tests": [
+        "scripts/check-change-scope.test.js",
+        "scripts/check-protected-scope.test.js"
+      ],
+      "manualQA": false
+    },
+    {
+      "id": "VISUAL-001",
+      "description": "Approved locked screens have screenshot baselines; known_regression screens (dashboard Sign out) are not baselined",
+      "area": "visual",
+      "tests": [
+        "scripts/check-visual-baselines.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Playwright compares committed PNGs for landing/login. Dashboard/Sign out/diary shells require manual confirmation before status flips to approved and baselines are created via test:visual:update."
     }
   ]
 }

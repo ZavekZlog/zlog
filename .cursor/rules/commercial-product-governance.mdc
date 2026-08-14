@@ -43,6 +43,10 @@ Visual QA · Mobile QA · Functional QA · Regression QA · UX QA · Commercial 
 
 Any fail → **NOT READY FOR RELEASE**. Never mark complete because code compiles.
 
+**Canonical automated command (authoritative):** `npm run test:release`  
+Passing only the tests you personally added is **not** sufficient.  
+Declare task scope first (`docs/PROTECTED_SCOPE_MANIFEST.json`, `docs/ANTI_REGRESSION_ENFORCEMENT.md`).
+
 ### Classify before implementing
 
 Bug Fix · New Feature · Enhancement · Refactor · Architectural Change · UI Polish

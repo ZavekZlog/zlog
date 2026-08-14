@@ -1,0 +1,67 @@
+{
+  "version": "1.0.0",
+  "updated": "2026-08-14",
+  "description": "Approved application UI terminology. Protects labels from accidental replacement. Does NOT freeze dynamic report content. This is a source-string contract — NOT a visual test.",
+  "terms": [
+    {
+      "id": "COPY-SITE-DIARY",
+      "label": "Site Diary",
+      "files": [
+        "app/dashboard/diary/page.jsx",
+        "app/dashboard/diary/setup/page.jsx",
+        "app/dashboard/project/[id]/diary/page.jsx"
+      ]
+    },
+    {
+      "id": "COPY-NEW-SITE-DIARY",
+      "label": "New Site Diary",
+      "files": ["app/dashboard/diary/setup/page.jsx"]
+    },
+    {
+      "id": "COPY-EDIT-REPORT-DETAILS",
+      "label": "Edit Report Details",
+      "files": ["app/dashboard/project/[id]/diary/page.jsx"]
+    },
+    {
+      "id": "COPY-EDIT-THIS-DIARY",
+      "label": "Edit This Diary",
+      "files": ["app/dashboard/project/[id]/diary/page.jsx"]
+    },
+    {
+      "id": "COPY-SAVE-AND-CONTINUE",
+      "label": "Save and Continue",
+      "files": ["app/dashboard/diary/setup/page.jsx"]
+    },
+    {
+      "id": "COPY-CONTINUE-TO-SITE-DIARY",
+      "label": "Continue to Site Diary",
+      "files": ["app/dashboard/diary/setup/page.jsx"]
+    },
+    {
+      "id": "COPY-SIGN-OUT",
+      "label": "Sign out",
+      "files": ["components/dashboard/DashboardTopBar.jsx"]
+    },
+    {
+      "id": "COPY-BACK",
+      "label": "Back",
+      "files": ["lib/premium-ui.jsx"],
+      "notes": "ZlogBackControl visible label — not every occurrence of the English word."
+    },
+    {
+      "id": "COPY-REPORTING-COMPANY",
+      "label": "Reporting Company",
+      "files": ["app/dashboard/diary/setup/page.jsx"]
+    },
+    {
+      "id": "COPY-PROJECT-REFERENCE",
+      "label": "Project Reference",
+      "files": ["app/dashboard/diary/setup/page.jsx"]
+    },
+    {
+      "id": "COPY-REPORT-DATE",
+      "label": "Report Date",
+      "files": ["app/dashboard/diary/setup/page.jsx"]
+    }
+  ]
+}

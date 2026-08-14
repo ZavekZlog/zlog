@@ -1,55 +1,75 @@
 # Protected Code Boundaries
 
-**Version:** 1.0.0  
-**Date Updated:** 2026-08-11  
-**Reason Updated:** Hard anti-regression scope gate for Agents  
-**User Decision:** Protected-path violations HARD FAIL; intentional override only  
-**Previous Version:** none  
+**Version:** 2.0.0  
+**Date Updated:** 2026-08-14  
+**Reason Updated:** Consolidate into enforceable protected-scope manifest + change-scope gate  
+**User Decision:** Hard anti-regression enforcement pass  
+**Previous Version:** 1.0.0  
 
-Machine-readable list: `docs/PROTECTED_CODE_BOUNDARIES.json`
+## Canonical sources
 
-## Purpose
+| Role | Path |
+|------|------|
+| **Protected-scope manifest (machine-readable)** | `docs/PROTECTED_SCOPE_MANIFEST.json` |
+| Legacy path list (compat) | `docs/PROTECTED_CODE_BOUNDARIES.json` |
+| Approved UI terminology | `docs/contracts/APPROVED_UI_COPY.json` |
+| Approved behaviours | `docs/contracts/APPROVED_BEHAVIOUR_REGISTRY.json` |
+| Operating procedure | `docs/ANTI_REGRESSION_ENFORCEMENT.md` |
 
-A task scoped to one feature/module must **not** silently modify approved shared behaviour.
-
-Protected areas include authentication/login, Sign out/session handling, dashboard shell / Sign out control, global navigation chrome, PremiumShell/shared layout, global responsive styles, shared report routing helpers under auth return-path, database migrations, and report/PDF branding pipeline entry points.
-
-## Gate
-
-```bash
-npm run check:protected-scope
-```
-
-- Compares the **current dirty git tree** (staged + unstaged + untracked) against protected paths.
-- **HARD FAIL** if any protected path is modified.
-- Runs locally and as part of `npm run test:release-gate`.
-- Excludes `*.test.js` / `*.spec.js`, `e2e/`, `scripts/`, and the boundary/registry docs themselves (tests may lock protected behaviour).
-
-## Intentional override (deliberate and visible)
-
-Only when the user has **explicitly authorised** touching protected files:
+## Canonical release command
 
 ```bash
-# Both required — never automatic
-ZLOG_ALLOW_PROTECTED_SCOPE=1 ZLOG_PROTECTED_SCOPE_REASON="user approved auth fix" npm run check:protected-scope
-
-# or
-npm run check:protected-scope -- --allow-protected --reason "user approved auth fix"
+npm run test:release
 ```
 
-The gate prints a loud override notice and exits 0 only when **both** the allow flag and a non-empty reason are present.
+(`npm run test:release-gate` remains as a legacy alias that also points at the same runner.)
+
+## Gates (HARD FAIL)
+
+```bash
+npm run check:change-scope      # declared task scope vs dirty tree + budget + high-risk
+npm run check:protected-scope   # always-protected paths
+npm run check:approved-copy     # approved UI labels still present (source-string, NOT visual)
+```
+
+### Declaring scope (required when product files are dirty)
+
+```bash
+# Option A — env
+ZLOG_TASK_SCOPE=site-diary-report-date
+ZLOG_TASK_SCOPE_REASON="Fix Report Date to browser-local today"
+
+# Option B — file (gitignored)
+# .zlog-task-scope.json
+# { "scope": "site-diary-report-date", "reason": "…", "extraFiles": [] }
+```
+
+High-risk scopes (`global-shell`, `dashboard-shell`, `landing-auth`, `schema-migration`) also require:
+
+```bash
+ZLOG_ALLOW_PROTECTED_SCOPE=1
+ZLOG_PROTECTED_SCOPE_REASON="user approved …"
+```
+
+## Why Sign out could move during Site Diary work (fixed gap)
+
+1. Diary Back styling shares `.zlog-secondary-cta` in **protected** `app/globals.css`.
+2. A blanket protected-scope **override** allowed any protected file in the dirty tree.
+3. There was **no declared task scope allowlist**, so unrelated dashboard/header files were not blocked relative to the stated task.
+4. Source contracts check CSS strings — they do **not** detect pixel/layout movement.
+
+The change-scope gate closes (1)–(3). Pixel/layout detection remains a **future screenshot baseline** task.
 
 ## Agent rule
 
-Before modifying production code, state:
+Before modifying production code:
 
 ```text
+INTENDED SCOPE: <scope-id from PROTECTED_SCOPE_MANIFEST.json>
 INTENDED FILES TO CHANGE:
 - file A — reason
-- file B — reason
-
-PROTECTED FILES TOUCHED:
-- none
+PROTECTED / HIGH-RISK TOUCHED:
+- none | list with explicit user approval
 ```
 
-If implementation later requires a protected/shared file: **STOP.** Do not modify it automatically. Explain why and obtain explicit approval. Then use the override only for that authorised work.
+If a shared/high-risk file is required: **STOP** and ask. Do not redesign around an unrelated regression.
