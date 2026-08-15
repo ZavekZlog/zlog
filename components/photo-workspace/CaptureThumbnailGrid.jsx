@@ -58,6 +58,8 @@ const assignedInputStyle = {
  * @param {(photoId: string) => void} props.onRotate
  * @param {(photoId: string, text: string) => void} [props.onCaptionChange]
  * @param {(photoId: string, text: string) => void} [props.onAssignedToChange]
+ * @param {boolean} [props.readOnly]
+ * @param {1|4|6} [props.perPage]
  */
 export function CaptureThumbnailGrid({
   photos = [],
@@ -67,9 +69,12 @@ export function CaptureThumbnailGrid({
   onRotate,
   onCaptionChange,
   onAssignedToChange,
+  readOnly = false,
+  perPage = 4,
 }) {
   const list = Array.isArray(photos) ? photos : []
   if (!list.length) return null
+  const reviewColumns = Number(perPage) === 1 ? 1 : Number(perPage) === 6 ? 3 : 2
 
   return (
     <div
@@ -77,7 +82,9 @@ export function CaptureThumbnailGrid({
       aria-label="Photos in this area"
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(148px, 1fr))',
+        gridTemplateColumns: readOnly
+          ? `repeat(${reviewColumns}, minmax(0, 1fr))`
+          : 'repeat(auto-fill, minmax(148px, 1fr))',
         gap: 10,
         marginTop: 14,
       }}
@@ -160,7 +167,7 @@ export function CaptureThumbnailGrid({
               Photo {photoNumber}
             </div>
 
-            {onCaptionChange ? (
+            {!readOnly && onCaptionChange ? (
               <textarea
                 value={caption}
                 rows={2}
@@ -172,7 +179,35 @@ export function CaptureThumbnailGrid({
               />
             ) : null}
 
-            {onAssignedToChange ? (
+            {readOnly && caption ? (
+              <p
+                style={{
+                  margin: '7px 2px 2px',
+                  color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
+                  fontSize: 12,
+                  lineHeight: 1.35,
+                  overflowWrap: 'anywhere',
+                }}
+              >
+                {caption}
+              </p>
+            ) : null}
+
+            {readOnly && assignedTo ? (
+              <p
+                style={{
+                  margin: '5px 2px 2px',
+                  color: 'var(--text-2)',
+                  fontSize: 11,
+                  lineHeight: 1.35,
+                  overflowWrap: 'anywhere',
+                }}
+              >
+                Assigned to: {assignedTo}
+              </p>
+            ) : null}
+
+            {!readOnly && onAssignedToChange ? (
               <input
                 type="text"
                 value={assignedTo}
@@ -184,41 +219,43 @@ export function CaptureThumbnailGrid({
               />
             ) : null}
 
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'center',
-                gap: 8,
-                marginTop: 6,
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => onRotate?.(photo.id)}
-                aria-label={`Rotate Photo ${photoNumber}`}
-                title="Rotate"
-                style={thumbBtn}
-              >
-                <RotateCw size={18} strokeWidth={2} aria-hidden />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (typeof window === 'undefined' || window.confirm(`Delete Photo ${photoNumber}?`)) {
-                    onDelete?.(photo.id)
-                  }
-                }}
-                aria-label={`Delete Photo ${photoNumber}`}
-                title="Delete"
+            {!readOnly ? (
+              <div
                 style={{
-                  ...thumbBtn,
-                  color: '#ff6b6b',
-                  borderColor: 'rgba(220,50,50,0.35)',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  gap: 8,
+                  marginTop: 6,
                 }}
               >
-                <Trash2 size={18} strokeWidth={2} aria-hidden />
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => onRotate?.(photo.id)}
+                  aria-label={`Rotate Photo ${photoNumber}`}
+                  title="Rotate"
+                  style={thumbBtn}
+                >
+                  <RotateCw size={18} strokeWidth={2} aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window === 'undefined' || window.confirm(`Delete Photo ${photoNumber}?`)) {
+                      onDelete?.(photo.id)
+                    }
+                  }}
+                  aria-label={`Delete Photo ${photoNumber}`}
+                  title="Delete"
+                  style={{
+                    ...thumbBtn,
+                    color: '#ff6b6b',
+                    borderColor: 'rgba(220,50,50,0.35)',
+                  }}
+                >
+                  <Trash2 size={18} strokeWidth={2} aria-hidden />
+                </button>
+              </div>
+            ) : null}
           </div>
         )
       })}

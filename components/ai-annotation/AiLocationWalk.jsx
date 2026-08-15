@@ -3,7 +3,7 @@
 /**
  * Location Walk = Photo Evidence workflow (named areas).
  * Active create → Save Area confirmation → Add Another / Continue to Signature.
- * Saved areas stay visible as expandable cards.
+ * Saved areas show their photographic record immediately; Edit opens the existing area.
  */
 import {
   forwardRef,
@@ -18,7 +18,6 @@ import { ImageSourceButtons } from '@/components/ImageSourceButtons'
 import { CapturePhotoPreview } from '@/components/photo-workspace/CapturePhotoPreview'
 import { CaptureThumbnailGrid } from '@/components/photo-workspace/CaptureThumbnailGrid'
 import { PhotosPerPagePicker } from '@/components/ai-annotation/AreaPhotoViewer'
-import { useSpeechDictation } from '@/components/ai-annotation/useSpeechDictation'
 import {
   GlassSection,
   PrimaryCTA,
@@ -36,8 +35,6 @@ import {
   layoutToPerPage,
   moveItem,
   perPageToLayout,
-  readRecentAreas,
-  rememberRecentArea,
 } from '@/lib/ai-annotation/area-groups'
 import { normalizeRotationDegrees } from '@/lib/diary-pdf-layout'
 
@@ -57,28 +54,10 @@ const primaryTap = {
 
 function SavedAreaCard({
   group,
-  expanded,
-  onToggle,
   onEdit,
-  onDelete,
-  onMoveUp,
-  onMoveDown,
   onOpenPhoto,
-  onRename,
-  onLayoutChange,
-  onAddPhotos,
-  onRemovePhoto,
-  onRotatePhoto,
-  onCaptionChange,
-  onAssignedToChange,
   globalOffset,
-  isFirst,
-  isLast,
-  accent,
-  capturing,
 }) {
-  const [renaming, setRenaming] = useState(false)
-  const [nameDraft, setNameDraft] = useState(group.areaName)
   const perPage = layoutToPerPage(group.layout)
 
   return (
@@ -99,19 +78,12 @@ function SavedAreaCard({
           padding: '12px 14px',
         }}
       >
-        <button
-          type="button"
-          onClick={onToggle}
+        <div
           style={{
             flex: 1,
             textAlign: 'left',
-            border: 'none',
-            background: 'transparent',
             padding: '4px 0',
-            minHeight: 48,
-            cursor: 'pointer',
             color: 'inherit',
-            fontFamily: 'inherit',
           }}
         >
           <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)' }}>
@@ -120,83 +92,42 @@ function SavedAreaCard({
           <div style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 3 }}>
             {group.photos.length} photo{group.photos.length === 1 ? '' : 's'} · {perPage} per page
           </div>
-        </button>
+        </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           <SecondaryButton type="button" onClick={onEdit}>Edit</SecondaryButton>
-          <SecondaryButton type="button" onClick={onToggle}>
-            {expanded ? 'Collapse' : 'Expand'}
-          </SecondaryButton>
         </div>
       </div>
 
-      {expanded && (
-        <div style={{ padding: '0 14px 14px', borderTop: '1px solid var(--edge)' }}>
-          {renaming ? (
-            <div style={{ marginTop: 12 }}>
-              <input
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                style={{ ...inputStyle, marginBottom: 8, minHeight: 48 }}
-              />
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <PrimaryCTA
-                  type="button"
-                  accent={accent}
-                  onClick={() => {
-                    onRename(nameDraft.trim())
-                    setRenaming(false)
-                  }}
-                >
-                  Save name
-                </PrimaryCTA>
-                <SecondaryButton type="button" onClick={() => { setNameDraft(group.areaName); setRenaming(false) }}>
-                  Cancel
-                </SecondaryButton>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-              <SecondaryButton type="button" onClick={() => setRenaming(true)}>Rename</SecondaryButton>
-              <SecondaryButton type="button" disabled={isFirst} onClick={onMoveUp}>Move area up</SecondaryButton>
-              <SecondaryButton type="button" disabled={isLast} onClick={onMoveDown}>Move area down</SecondaryButton>
-              <SecondaryButton type="button" onClick={onDelete}>Delete area</SecondaryButton>
-            </div>
-          )}
-
-          <div style={{ marginTop: 14 }}>
-            <div style={{ ...labelStyle, marginBottom: 8 }}>Photos per page</div>
-            <PhotosPerPagePicker layout={group.layout} onChange={onLayoutChange} />
-          </div>
-
-          <div style={{ marginTop: 14 }}>
-            <ImageSourceButtons
-              onFiles={onAddPhotos}
-              multiple
-              disabled={capturing}
-              stacked
-              cameraLabel="Take Photo"
-              galleryLabel="Upload 1 or More Photos"
-            />
-          </div>
+      <div style={{ padding: '0 14px 14px', borderTop: '1px solid var(--edge)' }}>
+          {group.description ? (
+            <p
+              style={{
+                margin: '12px 0 0',
+                color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
+                fontSize: 13,
+                lineHeight: 1.45,
+                overflowWrap: 'anywhere',
+              }}
+            >
+              {group.description}
+            </p>
+          ) : null}
 
           <CaptureThumbnailGrid
             photos={group.photos}
             numberOffset={globalOffset}
             onOpen={onOpenPhoto}
-            onDelete={onRemovePhoto}
-            onRotate={onRotatePhoto}
-            onCaptionChange={onCaptionChange}
-            onAssignedToChange={onAssignedToChange}
+            readOnly
+            perPage={perPage}
           />
-        </div>
-      )}
+
+      </div>
     </div>
   )
 }
 
 export const AiLocationWalk = forwardRef(function AiLocationWalk({
   accent,
-  projectId,
   value = [],
   onChange,
   title = 'Photo Evidence',
@@ -217,7 +148,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     areaSavedTitle: '✓ Area saved.',
     areaSavedHint: 'Add another area or continue your report.',
     addAnother: 'Add Another Area',
-    continueReport: 'No More Areas — Continue',
+    continueReport: 'Continue',
     enterNameError: 'Enter a work area name',
     cancelGroup: 'Cancel',
     ...(labels || {}),
@@ -240,21 +171,23 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   const [photoError, setPhotoError] = useState('')
   const [capturing, setCapturing] = useState(false)
   const [lastSaved, setLastSaved] = useState(null)
-  const [expandedIds, setExpandedIds] = useState(() => new Set())
   const [viewer, setViewer] = useState(null)
   const [walkError, setWalkError] = useState('')
   const sectionRef = useRef(null)
-  const [storedRecent, setStoredRecent] = useState(() => (
-    projectId ? readRecentAreas(projectId) : []
-  ))
 
+  // Suggestions come from this diary's own saved areas only. A previous diary must
+  // never seed the Work Area Name field or its shortcuts.
   const recentAreas = useMemo(
-    () => collectRecentAreaNames(locationWalk, storedRecent),
-    [locationWalk, storedRecent],
+    () => collectRecentAreaNames(locationWalk),
+    [locationWalk],
   )
 
   const editingGroup = useMemo(
     () => locationWalk.find((g) => g.id === editingGroupId) || null,
+    [locationWalk, editingGroupId],
+  )
+  const editingGroupIndex = useMemo(
+    () => locationWalk.findIndex((g) => g.id === editingGroupId),
     [locationWalk, editingGroupId],
   )
 
@@ -267,20 +200,6 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     walkRef.current = next
     onChange(next)
   }, [onChange])
-
-  const rememberArea = useCallback((name) => {
-    if (!projectId || !name) return
-    rememberRecentArea(projectId, name)
-    setStoredRecent(readRecentAreas(projectId))
-  }, [projectId])
-
-  const applyDictation = useCallback((text) => {
-    if (text) {
-      setNameDraft(text)
-      setNameError('')
-    }
-  }, [])
-  const { start: startDictation, listening, supported: dictationSupported } = useSpeechDictation(applyDictation)
 
   const clearFieldErrors = () => {
     setNameError('')
@@ -391,13 +310,11 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
 
     if (!saved) return
 
-    rememberArea(name)
     setLastSaved({
       name: saved.areaName,
       count: (saved.photos || []).length,
       perPage: layoutToPerPage(saved.layout),
     })
-    setExpandedIds((prev) => new Set([...prev, saved.id]))
     setEditingGroupId(null)
     setDescriptionDraft('')
     clearFieldErrors()
@@ -447,7 +364,6 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   const openFirstIncompletePhoto = useCallback(() => {
     const target = firstIncompletePhoto(walkRef.current)
     if (!target) return false
-    setExpandedIds((prev) => new Set([...prev, target.groupId]))
     openViewer(target.groupId, target.index)
     requestAnimationFrame(() => {
       sectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
@@ -461,11 +377,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
 
   const closeViewer = () => {
     const scrollY = viewer?.scrollY || 0
-    const groupId = viewer?.groupId
     setViewer(null)
-    if (groupId && groupId !== '__draft__') {
-      setExpandedIds((prev) => new Set([...prev, groupId]))
-    }
     requestAnimationFrame(() => {
       if (typeof window !== 'undefined') window.scrollTo(0, scrollY)
     })
@@ -566,7 +478,6 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     if (!locationWalk.length) return
     setWalkError('')
     // Close the Location Walk action stage — do not require another Save Area.
-    setExpandedIds(new Set())
     setPhase('handed_off')
     onContinueToSignature?.()
   }
@@ -625,53 +536,13 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
       {/* Saved areas always visible — never hide stored data behind confirmation */}
       {locationWalk.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-          {locationWalk.map((group, gi) => (
+          {locationWalk.map((group) => (
             <SavedAreaCard
               key={group.id}
               group={group}
-              expanded={expandedIds.has(group.id)}
-              accent={accent}
-              capturing={capturing}
               globalOffset={areaOffset(group.id)}
-              isFirst={gi === 0}
-              isLast={gi === locationWalk.length - 1}
-              onToggle={() => setExpandedIds((prev) => {
-                const next = new Set(prev)
-                if (next.has(group.id)) next.delete(group.id)
-                else next.add(group.id)
-                return next
-              })}
               onEdit={() => editGroup(group.id)}
-              onDelete={() => {
-                updateWalk((prev) => prev.filter((g) => g.id !== group.id))
-                setExpandedIds((prev) => {
-                  const next = new Set(prev)
-                  next.delete(group.id)
-                  return next
-                })
-              }}
-              onMoveUp={() => updateWalk((prev) => moveItem(prev, gi, gi - 1))}
-              onMoveDown={() => updateWalk((prev) => moveItem(prev, gi, gi + 1))}
               onOpenPhoto={(pi) => openViewer(group.id, pi)}
-              onRename={(name) => {
-                if (!name) return
-                updateWalk((prev) => prev.map((g) => (g.id === group.id ? { ...g, areaName: name } : g)))
-                rememberArea(name)
-              }}
-              onLayoutChange={(n) => {
-                updateWalk((prev) => prev.map((g) => (
-                  g.id === group.id ? { ...g, layout: perPageToLayout(n) } : g
-                )))
-              }}
-              onAddPhotos={(files) => handleFiles(files, group.id)}
-              onRemovePhoto={(photoId) => removePhoto(group.id, photoId)}
-              onRotatePhoto={(photoId) => rotatePhoto(group.id, photoId)}
-              onCaptionChange={(photoId, text) =>
-                patchPhoto(group.id, photoId, { acceptedDescription: text })
-              }
-              onAssignedToChange={(photoId, text) =>
-                patchPhoto(group.id, photoId, { assignedTo: text })
-              }
             />
           ))}
         </div>
@@ -693,6 +564,16 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
           />
           {nameError ? <p style={{ ...fieldErrorStyle, marginBottom: 12 }}>{nameError}</p> : null}
 
+          {recentAreas.length > 0 ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+              {recentAreas.map((name) => (
+                <SecondaryButton key={name} type="button" onClick={() => { setNameDraft(name); setNameError('') }}>
+                  {name}
+                </SecondaryButton>
+              ))}
+            </div>
+          ) : null}
+
           <div style={{ ...labelStyle, marginBottom: 8 }}>{copy.groupDescriptionLabel}</div>
           <textarea
             value={descriptionDraft}
@@ -701,21 +582,6 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
             rows={3}
             style={{ ...inputStyle, marginBottom: 14, minHeight: 72, resize: 'vertical' }}
           />
-
-          {dictationSupported || recentAreas.length > 0 ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-              {dictationSupported && (
-                <SecondaryButton type="button" onClick={() => (listening ? null : startDictation())}>
-                  {listening ? 'Listening…' : 'Dictate'}
-                </SecondaryButton>
-              )}
-              {recentAreas.map((name) => (
-                <SecondaryButton key={name} type="button" onClick={() => { setNameDraft(name); setNameError('') }}>
-                  {name}
-                </SecondaryButton>
-              ))}
-            </div>
-          ) : null}
 
           <div style={{ ...labelStyle, marginBottom: 8 }}>Photos per page</div>
           <PhotosPerPagePicker
@@ -759,6 +625,39 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
             />
           ) : null}
           {photoError ? <p style={fieldErrorStyle}>{photoError}</p> : null}
+
+          {isEditing ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+              <SecondaryButton
+                type="button"
+                disabled={editingGroupIndex <= 0}
+                onClick={() => updateWalk((prev) => moveItem(prev, editingGroupIndex, editingGroupIndex - 1))}
+              >
+                Move area up
+              </SecondaryButton>
+              <SecondaryButton
+                type="button"
+                disabled={editingGroupIndex < 0 || editingGroupIndex >= locationWalk.length - 1}
+                onClick={() => updateWalk((prev) => moveItem(prev, editingGroupIndex, editingGroupIndex + 1))}
+              >
+                Move area down
+              </SecondaryButton>
+              <SecondaryButton
+                type="button"
+                onClick={() => {
+                  updateWalk((prev) => prev.filter((g) => g.id !== editingGroupId))
+                  setEditingGroupId(null)
+                  setNameDraft('')
+                  setDescriptionDraft('')
+                  setDraftPhotos([])
+                  clearFieldErrors()
+                  setPhase('review')
+                }}
+              >
+                Delete area
+              </SecondaryButton>
+            </div>
+          ) : null}
 
           <div style={{ marginTop: 18 }}>
             <PrimaryCTA
@@ -815,19 +714,9 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
           <div style={{ fontSize: 14, color: 'var(--text-2)', marginBottom: 18 }}>
             {lastSaved.perPage} per page
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <EqualChoiceButton type="button" onClick={beginCreate} style={primaryTap}>
-              {copy.addAnother}
-            </EqualChoiceButton>
-            <EqualChoiceButton
-              type="button"
-              disabled={!locationWalk.length}
-              onClick={continueToSignature}
-              style={{ ...primaryTap, opacity: locationWalk.length ? 1 : 0.45 }}
-            >
-              {copy.continueReport}
-            </EqualChoiceButton>
-          </div>
+          <EqualChoiceButton type="button" onClick={beginCreate} style={primaryTap}>
+            {copy.addAnother}
+          </EqualChoiceButton>
         </div>
       )}
 
@@ -838,12 +727,9 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
               {copy.createGroup}
             </PrimaryCTA>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+            <div style={{ marginTop: 4 }}>
               <EqualChoiceButton type="button" onClick={beginCreate} style={primaryTap}>
                 {copy.addAnother}
-              </EqualChoiceButton>
-              <EqualChoiceButton type="button" onClick={continueToSignature} style={primaryTap}>
-                {copy.continueReport}
               </EqualChoiceButton>
             </div>
           )}

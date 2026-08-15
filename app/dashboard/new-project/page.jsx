@@ -15,6 +15,7 @@ import { ProjectDatesFields } from '@/components/project/ProjectDatesFields'
 import { ProjectStickyFields } from '@/components/project/ProjectStickyFields'
 import { toDateColumnValue, validateProjectDates } from '@/lib/project-day'
 import {
+  DEFAULT_NEW_PROJECT_WORKING_DAYS,
   stickyWritePayload,
   validateStickyProjectFields,
 } from '@/lib/project-sticky-fields'
@@ -25,8 +26,9 @@ export default function NewProject() {
   const [status, setStatus] = useState('active')
   const [projectAddress, setProjectAddress] = useState('')
   const [projectManager, setProjectManager] = useState('')
-  const [workingDaysPerWeek, setWorkingDaysPerWeek] = useState('')
-  const [currentPhase, setCurrentPhase] = useState('')
+  const [workingDaysPerWeek, setWorkingDaysPerWeek] = useState(
+    DEFAULT_NEW_PROJECT_WORKING_DAYS,
+  )
   const [stickyError, setStickyError] = useState('')
   const [startDate, setStartDate] = useState('')
   const [plannedCompletionDate, setPlannedCompletionDate] = useState('')
@@ -40,7 +42,6 @@ export default function NewProject() {
     setProjectAddress(next.projectAddress)
     setProjectManager(next.projectManager)
     setWorkingDaysPerWeek(next.workingDaysPerWeek)
-    setCurrentPhase(next.currentPhase)
     const v = validateStickyProjectFields(next)
     setStickyError(v.ok ? '' : v.message)
   }
@@ -72,7 +73,6 @@ export default function NewProject() {
       projectAddress,
       projectManager,
       workingDaysPerWeek,
-      currentPhase,
     })
     const start_date = toDateColumnValue(startDate)
     const planned_completion_date = toDateColumnValue(plannedCompletionDate)
@@ -86,7 +86,7 @@ export default function NewProject() {
         planned_completion_date,
         status,
       })
-      .select('id, start_date, planned_completion_date, site_address, client_pm, working_days_per_week, current_phase')
+      .select('id, start_date, planned_completion_date, site_address, client_pm, working_days_per_week')
       .single()
     if (insertError) {
       setError(insertError.message)
@@ -154,7 +154,6 @@ export default function NewProject() {
           projectAddress={projectAddress}
           projectManager={projectManager}
           workingDaysPerWeek={workingDaysPerWeek}
-          currentPhase={currentPhase}
           onChange={handleStickyChange}
           error={stickyError}
         />

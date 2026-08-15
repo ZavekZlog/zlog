@@ -1,11 +1,11 @@
 # Photo Workspace Contract (implemented freeze)
 
 **Layer:** C — Feature  
-**Version:** 1.0.0  
-**Date Updated:** 2026-08-07  
-**Reason Updated:** Initial freeze contract for implemented photo / location evidence  
-**User Decision:** Governance hardening — photo workspace feature contract  
-**Previous Version:** none  
+**Version:** 1.1.0  
+**Date Updated:** 2026-08-15  
+**Reason Updated:** Saved Site Diary photo areas are immediately visible for review  
+**User Decision:** Site Diary Review UX Batch — existing photo visibility  
+**Previous Version:** 1.0.0  
 
 **Status:** Binding freeze for currently implemented photo / location evidence  
 
@@ -28,6 +28,10 @@ This feature contract covers **already implemented** Site Diary photo, annotatio
 3. Do not break Site Diary save (`finalizeSiteDiarySave`) as part of photo work.
 4. Do not introduce Shared Report Workspace shell work under photo tasks.
 5. Progress Report programme / Gantt is **out of scope** for Photo Workspace.
+6. On an existing Site Diary, saved evidence groups display their photos and captions by default; review does not require Expand.
+7. The saved area’s 1 / 4 / 6 photos-per-page value controls its review density and remains unchanged.
+8. Default visibility is presentation only: it does not enter area edit mode, change persistence, or expose a blank new-area editor as saved content.
+9. **Edit** continues to edit the same saved area. A genuinely new diary still starts with no saved groups, notes, or photos.
 
 ---
 

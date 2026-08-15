@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "updated": "2026-08-14",
+  "version": "1.3.0",
+  "updated": "2026-08-15",
   "description": "Approved application UI terminology. Protects labels from accidental replacement. Does NOT freeze dynamic report content. This is a source-string contract — NOT a visual test.",
   "terms": [
     {
@@ -18,9 +18,24 @@
       "files": ["app/dashboard/diary/setup/page.jsx"]
     },
     {
-      "id": "COPY-EDIT-REPORT-DETAILS",
-      "label": "Edit Report Details",
-      "files": ["app/dashboard/project/[id]/diary/page.jsx"]
+      "id": "COPY-PROJECT-REPORT-DETAILS",
+      "label": "Project & Report Details",
+      "files": [
+        "app/dashboard/diary/setup/page.jsx",
+        "app/dashboard/project/[id]/diary/page.jsx"
+      ]
+    },
+    {
+      "id": "COPY-REVIEW-EDIT-PROJECT-REPORT-DETAILS",
+      "label": "Review / Edit Project & Report Details",
+      "files": ["app/dashboard/project/[id]/diary/page.jsx"],
+      "notes": "Workbench action back to the pre-flight screen — says the details already exist and may be amended."
+    },
+    {
+      "id": "COPY-TODAYS-SITE-DIARY",
+      "label": "Today’s Site Diary",
+      "files": ["app/dashboard/project/[id]/diary/page.jsx"],
+      "notes": "Section divider marking where persistent project/report details end and today's diary content begins. Rendered uppercase."
     },
     {
       "id": "COPY-EDIT-THIS-DIARY",
@@ -28,14 +43,20 @@
       "files": ["app/dashboard/project/[id]/diary/page.jsx"]
     },
     {
-      "id": "COPY-SAVE-AND-CONTINUE",
-      "label": "Save and Continue",
+      "id": "COPY-CONTINUE-TODAYS-DIARY",
+      "label": "Continue to Today's Diary",
       "files": ["app/dashboard/diary/setup/page.jsx"]
     },
     {
       "id": "COPY-CONTINUE-TO-SITE-DIARY",
       "label": "Continue to Site Diary",
       "files": ["app/dashboard/diary/setup/page.jsx"]
+    },
+    {
+      "id": "COPY-VIEW-SAVED-DIARIES",
+      "label": "View Saved Diaries",
+      "files": ["app/dashboard/diary/page.jsx"],
+      "notes": "Second of exactly two equal Site Diary hub cards, beside Start a New Diary."
     },
     {
       "id": "COPY-SIGN-OUT",

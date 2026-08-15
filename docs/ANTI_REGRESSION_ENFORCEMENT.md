@@ -29,7 +29,7 @@ This document is the operating procedure for the machine-checked guardrails in `
 3. **Protected-scope gate** — `npm run check:protected-scope`  
    Always-protected paths (expanded; sourced from the manifest).
 4. **Approved copy** — `npm run check:approved-copy`  
-   Source-string terminology lock (Site Diary, Sign out, Save and Continue, …).
+   Source-string terminology lock (Site Diary, Sign out, Project & Report Details, …).
 5. **Behaviour registry** — linked executable tests for diary/auth persistence rules.
 6. **Visual regression** — `npm run test:visual` (compare) / `npm run test:visual:update` (intentional only).
 7. **Canonical release** — `npm run test:release`  

@@ -1,11 +1,11 @@
 # Site Diary — Screen Contract
 
 **Layer:** B — Screen  
-**Version:** 1.2.0  
-**Date Updated:** 2026-08-10  
-**Reason Updated:** Restore approved entry hub + locked setup hierarchy (Reporting Company first); ban implementation terminology in UI  
-**User Decision:** SITE DIARY WORKFLOW REGRESSION FIX  
-**Previous Version:** 1.1.1  
+**Version:** 1.9.0
+**Date Updated:** 2026-08-15
+**Reason Updated:** Lock the Save PDF export interaction — Save As dialog where supported, download only as fallback
+**User Decision:** MANUAL QA REGRESSION — PDF SAVE NO LONGER PROMPTS FOR FILENAME / LOCATION
+**Previous Version:** 1.8.0
 
 **Status:** Binding production contract  
 **Routes:**
@@ -13,6 +13,7 @@
 - Hub: `/dashboard/diary` (Today’s Report: Start a new diary / Use a previous diary)
 - Setup: `/dashboard/diary/setup`
 - Diary form: `/dashboard/project/[id]/diary`
+- Saved diary viewer (read-only): `/dashboard/project/[id]/diary/view?report=…`
 
 **Supersedes (UI order / Shift):** Informal notes and `docs/ZLOG_FUNCTIONAL_SPEC_V1.md` passages that still list shift as Day / Night / Weekend / Half day. **Authoritative shift options are Day / Back / Night.**
 
@@ -37,11 +38,37 @@ Refactoring, cleanup, simplification, deduplication, modernisation, “better UX
 
 ---
 
+## 1A. Module accent identity
+
+The Site Diary module uses the canonical diary accent from `REPORT_THEMES.diary.accent`
+(`139,92,246` / `#8B5CF6`). That identity remains consistent across the hub, creation,
+setup, editing, saved-list, read-only review, completion, Photo Evidence, Signature and
+other Site Diary sub-page states.
+
+**Module accent colour follows module identity and remains consistent across that module’s
+creation, editing, review, saved-record and sub-page states. Interaction mode must not
+redefine the module accent.**
+
+Review/read-only state is communicated through wording, available controls and interaction
+state—not by assigning a different module colour. Orange remains a brand/primary-action
+colour; blue remains the Site Survey module accent. Neither replaces the Site Diary accent.
+
+---
+
 ## 2. Setup screen — approved control sequence
 
 Route: `/dashboard/diary/setup`  
-Title: **New Site Diary**  
+New-diary title: **New Site Diary**
 Navigation: visible **Back** control (to Site Diary hub).
+
+For an existing diary opened on its saved Report Date of today:
+
+- Title: **Project & Report Details**
+- Load all saved report-specific values and linked project/reusable values before display.
+- The user may scan and continue without re-entering or reconfirming unchanged values.
+- Primary CTA: **Continue to Today's Diary**
+- Continue updates and opens the **same report ID** in the editable workbench (`?compose=1`).
+- Opening this screen must not create a report or reset any diary content.
 
 ### REPORTING COMPANY
 
@@ -50,7 +77,7 @@ Navigation: visible **Back** control (to Site Diary hub).
 
 ### REPORTING ON BEHALF OF
 
-3. **Reporting On Behalf Of** — client / main contractor / organisation
+3. **Reporting On Behalf Of** — client / main contractor / organisation; on a genuinely new diary, prefill the signed-in user’s most recently used value and keep it fully editable
 
 ### AUTHOR
 
@@ -65,7 +92,7 @@ Navigation: visible **Back** control (to Site Diary hub).
 7. **Project Address**
 8. **Project Manager** — must remain inside Project Details (never above Reporting Company)
 9. **Working Days per Week**
-10. **Current Phase**
+10. **Current Phase** — diary/report-specific; starts blank for a genuinely new diary and never hydrates from the project
 11. **Project Description** — once implemented (not in live schema yet)
 12. **Project Start Date**
 13. **Planned Completion Date**
@@ -73,7 +100,7 @@ Navigation: visible **Back** control (to Site Diary hub).
 15. **Report Date**
 16. **Project Reference** where currently approved on this screen
 
-Primary CTA: **Continue to Site Diary**
+New-diary primary CTA: **Continue to Site Diary**
 
 ### UI language (mandatory)
 
@@ -89,10 +116,10 @@ Do not show helper lines that explain persistence (for example “Programme date
 
 | Flow | Contract |
 |------|----------|
-| **A. Start a new diary** | Hub → setup; blank project + diary setup; Author Name prefills from profile; Report Date may be today; approved default branding / company name may load; all other project/report fields blank |
+| **A. Start a new diary** | Hub → setup; preselect the signed-in user’s last-used project when it still exists, while keeping Project Name editable/selectable; Author Name prefills from profile; Reporting On Behalf Of prefills from the signed-in user’s most recently used value and remains editable; Report Date may be today; approved default branding / company name may load |
 | **B. Select existing project** | Via **Project Name** matching an existing project; load remembered project fields from `public.projects`; keep `project_id`; do **not** copy diary content |
-| **C. Use a previous diary** | Hub list → **Use for today** creates a **new** diary ID from the selected diary (appropriate reusable fields only); Author from profile, not source; **Open to review** opens the exact existing report in View |
-| **D. View saved diary** | Read-only; no DB write on open; neutral wording; **Edit This Diary**; **Use as Basis for New Diary** |
+| **C. Use a previous diary** | **Not a hub choice.** Reuse lives on each saved-diary entry as **Use for Today**, beside **Open to review**. It creates a **new** diary ID from the selected diary (appropriate reusable fields only), then opens that new diary’s populated **Project & Report Details** for review before the workbench — never straight into compose; Author from profile, not source; the source diary is never modified |
+| **D. View saved diary** | **Open to review** opens the read-only saved-diary viewer (§4A): the whole record on one continuous page, no compose/edit controls, no write. **Edit This Diary** from the viewer keeps the same diary ID — today’s diary through its Project & Report Details pre-flight, a historical diary in explicit Edit |
 | **E. Edit saved diary** | Same diary ID; rehydrate saved values; no duplicate; save → View |
 
 State from one flow must not leak into another.
@@ -106,7 +133,8 @@ Modes: View (`?report=`) · Edit (`?edit=1` or draft)
 
 Protected interactions:
 
-- Open → View (no write)
+- Open today’s existing diary → populated Project & Report Details (no write on open) → same-ID editable workbench
+- Open historical diary → View (no write)
 - **Edit This Diary** → same ID
 - **Use as Basis for New Diary** → new ID
 - Save → same diary in View; no Recent Diaries list on open report page
@@ -115,6 +143,60 @@ Protected interactions:
 - Plant / daily content isolated by report ID
 - Project association retained; Project Day visible when dates exist
 - Shift reloads from `daily_reports.shift`
+- Saved work areas show their saved photos and captions by default, using the area’s saved 1 / 4 / 6 review density.
+- Saved work areas remain in review presentation until **Edit** is chosen; the blank Add Work Area editor is not presented as part of a saved area.
+- **Expand / Collapse** is absent because the saved photographic record is already visible.
+
+---
+
+## 4A. Saved diary viewer (read-only artifact)
+
+Route: `/dashboard/project/[id]/diary/view?report=…`  
+Reached from **Open to review**. This is a finished historical record, not an editor.
+
+**Must:**
+
+- Present the diary as **one complete, continuous document on a single vertically scrolling page**.
+- Render, in this order: Project & Report Details (project · reporting · this report, including **Current Phase**) → Cover Photo → Weather → H&S Incidents / Observations → RFIs → Variations → Site Summary → Labour on Site → Plant → Equipment on Hire → Visitors → Delays & Issues → Actions Required → Photo Evidence → Signature.
+- Show every saved photograph with its caption by default, at the area’s saved 1 / 4 / 6 review density, numbered continuously across the document.
+- Read **Current Phase** from `daily_reports.current_phase` for that diary. `projects.current_phase` is never read.
+- Show `Not recorded` where the diary genuinely holds no value, so blank never reads as broken.
+- Perform **no writes** and create no rows.
+
+**Must not:**
+
+- Reuse the compose/edit workflow, or present any data-entry field, Take Photo, Upload, Add Another Area, Save Area, Continue, or Save control.
+- Hide any part of the diary behind a button that leaves the page. Project & Report Details is simply the first section of the same artifact.
+- Offer Expand / Collapse.
+
+**Onward action:** exactly one — **Edit This Diary** — which returns to the composition workflow on the same diary ID.
+
+Permits and deliveries are named in hub copy but are **not** saved diary fields today; the viewer does not invent them.
+
+---
+
+## 4B. PDF export — Save PDF interaction
+
+Save PDF on the completion screen must give the user control of the saved file. It is the only
+action permitted to write a file to the device.
+
+**Must:**
+
+- Offer the platform **Save As** dialog (`window.showSaveFilePicker`) wherever the browser supports
+  it, so the user picks the destination folder, accepts or edits the filename, and explicitly
+  confirms the save.
+- Supply `Zlog-Site-Diary-<report-date>.pdf` as the **editable** suggested name, never as a forced name.
+- Treat dialog cancellation as a cancellation: no file written, no error, no success message.
+- Fall back to the browser's own download only where the picker is unavailable or refuses
+  (no secure context, expired user gesture, enterprise policy).
+
+**Must not:**
+
+- Replace the Save As dialog with an automatic download as the default path.
+- Auto-download on page load, on save, or from Share / Email / WhatsApp.
+
+Any change that routes Save PDF straight to the browser download path is a **regression**, not a
+simplification. Gate: `lib/diary-share-workflow.test.js`.
 
 ---
 
@@ -122,14 +204,27 @@ Protected interactions:
 
 **Dashboard → Site Diary** opens **`/dashboard/diary`** (Today’s Report hub).
 
-Hub choices (clear site language):
+The hub contains **exactly two equal cards**, side by side on desktop and stacked on mobile
+(`repeat(auto-fit, minmax(240px, 1fr))`). Neither is visually preferred, and neither is demoted
+to a secondary action:
+
+| Position | Card | Supporting text |
+|----------|------|-----------------|
+| Left | **Start a New Diary** | Enter everything from scratch. |
+| Right | **View Saved Diaries** | Review a saved diary — or reuse one for today… |
+
+The two cards are peers and **render at equal height** (`docs/contracts/GLOBAL_UI_TEXT_FIT_CONTRACT.md` §2.1).
+The longer supporting sentence sets the row height; it is never clipped or shortened to match its neighbour.
 
 - **Start a New Diary** → `/dashboard/diary/setup` (clears setup session draft; blank init for today)
-  - Supporting text: Start with a blank diary for today.
-- **Use a Previous Diary** → list prior diaries:
-  - Supporting text: Start today's diary using details from an earlier diary.
-  - **Use for today** → creates a **new** diary ID (source diary unchanged)
-  - **Open to review** → exact existing report in View (`?report=`)
+- **View Saved Diaries** → the saved-diary list. Opening the list creates, copies and updates nothing.
+  Each entry keeps its identifying information and offers two actions, in this order:
+  - **Open to review** → the exact selected report in the read-only saved-diary viewer (§4A). Edit is reached from there.
+  - **Use for Today** → creates a **new** diary from that one and lands on its Project & Report Details (§3 flow C). The selected diary stays saved and unchanged.
+
+**Use a Previous Diary is not a hub card.** Review and reuse both live on the saved-diary entry, so a
+third hub-level entry is redundant. Removing the card must not remove or break the reuse
+implementation.
 
 ---
 

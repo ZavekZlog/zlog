@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, LogOut } from 'lucide-react'
 import { REPORT_THEMES } from '@/lib/report-theme'
 
 export const DIARY_ACCENT = REPORT_THEMES.diary.accent
@@ -655,6 +655,27 @@ export const BRAND_HEADER_SPACE = {
 }
 
 /**
+ * Compact brand-region spacing — dashboard masthead only (Sign out sits immediately below).
+ * Workbench pages keep BRAND_HEADER_SPACE (calmer). Do not retune glow tokens here.
+ */
+export const AUTHENTICATED_SHELL_BRAND_COMPACT_STYLE = {
+  minHeight: 64,
+  paddingTop: 30,
+  paddingBottom: 8,
+}
+
+/**
+ * Shared authenticated shell header chrome — full-bleed wordmark glow, no vertical clip.
+ * Do not copy onto the landing page. Do not change glow colour / opacity / blur.
+ */
+export const AUTHENTICATED_SHELL_HEADER_STYLE = {
+  position: 'relative',
+  overflowX: 'hidden',
+  overflowY: 'visible',
+  background: 'transparent',
+}
+
+/**
  * Atmospheric brand glow geometry — sized to the wordmark box, never 100vw.
  * 100vw includes the scrollbar gutter and forces horizontal overflow past the
  * layout viewport (fails the Global Mobile UI no-horizontal-scroll rule).
@@ -758,8 +779,35 @@ export function ZlogBrandRegion({ style = {} } = {}) {
 }
 
 /**
+ * Canonical framed Sign out — the only authenticated-app Sign Out treatment.
+ * Visual plate: .zlog-dashboard-signout (isolated from Back’s .zlog-secondary-cta).
+ * Do not invent per-page Sign Out styles. Do not add this control to pages that have none.
+ */
+export function ZlogSignOutControl({
+  onClick,
+  disabled = false,
+  signingOut = false,
+}) {
+  const busy = disabled || signingOut
+  return (
+    <button
+      type="button"
+      className="zlog-dashboard-signout"
+      disabled={busy}
+      onClick={onClick}
+      aria-label={signingOut ? 'Signing out' : 'Sign out'}
+    >
+      <LogOut size={16} strokeWidth={2.25} aria-hidden className="zlog-dashboard-signout__icon" />
+      <span className="zlog-dashboard-signout__label">
+        {signingOut ? 'Signing out…' : 'Sign out'}
+      </span>
+    </button>
+  )
+}
+
+/**
  * Canonical Zlog Back control — shared .zlog-secondary-cta plate (not Sign out).
- * Dashboard Sign out is a framed utility below Zlog (.zlog-dashboard-signout), not this plate.
+ * Dashboard Sign out is a framed utility below Zlog (ZlogSignOutControl / .zlog-dashboard-signout), not this plate.
  */
 export function ZlogBackControl({
   href,
@@ -974,36 +1022,50 @@ export function ZlogInternalHeader({
   trailing = null,
   hideModuleNav = false,
   brandRegionStyle,
+  contentMaxWidth = 448,
 }) {
   const showNavRow = !hideModuleNav && Boolean(backHref || onBack || title || trailing)
 
   return (
-    <header
-      className="premium-shell-header zlog-internal-header"
-      style={{
-        position: 'relative',
-        zIndex: 50,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        width: '100%',
-        background: 'transparent',
-        borderBottom: 'none',
-        padding: `0 ${BRAND_HEADER_SPACE.headerPadX}px 0`,
-        pointerEvents: 'auto',
-      }}
-    >
-      <ZlogBrandRegion style={brandRegionStyle} />
+    <>
+      <header
+        className="premium-shell-header zlog-internal-header"
+        style={{
+          ...AUTHENTICATED_SHELL_HEADER_STYLE,
+          zIndex: 50,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          width: '100%',
+          borderBottom: 'none',
+          padding: 0,
+          pointerEvents: 'auto',
+        }}
+      >
+        <ZlogBrandRegion style={brandRegionStyle} />
+      </header>
 
       {showNavRow ? (
-        <ReportModuleNav
-          title={title}
-          onBack={onBack}
-          backHref={backHref}
-          trailing={trailing}
-        />
+        <div className="w-full px-4" style={{ boxSizing: 'border-box' }}>
+          <div
+            style={{
+              boxSizing: 'border-box',
+              width: '100%',
+              maxWidth: contentMaxWidth,
+              margin: '0 auto',
+              padding: `0 ${BRAND_HEADER_SPACE.headerPadX}px`,
+            }}
+          >
+            <ReportModuleNav
+              title={title}
+              onBack={onBack}
+              backHref={backHref}
+              trailing={trailing}
+            />
+          </div>
+        </div>
       ) : null}
-    </header>
+    </>
   )
 }
 
@@ -1031,27 +1093,25 @@ export function SubPageLayout({
   const contentMaxWidth = maxWidth ?? 448
 
   return (
-    <div className="min-h-screen bg-[#0d0f12] text-[#f3f4f6] flex flex-col px-4 pb-6 pt-0 selection:bg-[#ff5500]/30">
+    <div className="min-h-screen bg-[#0d0f12] text-[#f3f4f6] flex flex-col pb-6 pt-0 selection:bg-[#ff5500]/30">
       <style>{premiumScopedCss}</style>
 
-      <div
-        className="w-full mx-auto flex flex-col items-center"
-        style={{ maxWidth: contentMaxWidth }}
-      >
-        <SubPageHeader
-          title={hideModuleNav ? undefined : title}
-          onBack={hideModuleNav ? undefined : onBack}
-          backHref={hideModuleNav ? undefined : backHref}
-          accent={accent}
-          trailing={hideModuleNav ? null : trailing}
-          hideModuleNav={hideModuleNav}
-          brandRegionStyle={brandRegionStyle}
-        />
-      </div>
+      <SubPageHeader
+        title={hideModuleNav ? undefined : title}
+        onBack={hideModuleNav ? undefined : onBack}
+        backHref={hideModuleNav ? undefined : backHref}
+        accent={accent}
+        trailing={hideModuleNav ? null : trailing}
+        hideModuleNav={hideModuleNav}
+        brandRegionStyle={brandRegionStyle}
+        contentMaxWidth={contentMaxWidth}
+      />
 
-      <main className="w-full mx-auto flex-1" style={{ maxWidth: contentMaxWidth }}>
-        {children}
-      </main>
+      <div className="px-4">
+        <main className="w-full mx-auto flex-1" style={{ maxWidth: contentMaxWidth }}>
+          {children}
+        </main>
+      </div>
     </div>
   )
 }

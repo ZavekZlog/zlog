@@ -17,6 +17,8 @@
         "app/(auth)/",
         "lib/auth/",
         "lib/supabase/",
+        "proxy.js",
+        "proxy.ts",
         "middleware.js",
         "middleware.ts"
       ]
@@ -129,6 +131,8 @@
     "components/dashboard/DashboardTopBar.jsx",
     "lib/premium-ui.jsx",
     "lib/premium-ui.js",
+    "proxy.js",
+    "proxy.ts",
     "middleware.js",
     "middleware.ts",
     "supabase/migrations/",
@@ -160,6 +164,10 @@
     {
       "path": "components/dashboard/DashboardTopBar.jsx",
       "reason": "Dashboard masthead + Sign out"
+    },
+    {
+      "path": "proxy.js",
+      "reason": "Auth wall / session refresh (Next 16 root proxy)"
     },
     {
       "path": "middleware.js",
@@ -285,12 +293,15 @@
         "app/(auth)/",
         "lib/auth/",
         "lib/supabase/",
+        "proxy.js",
+        "proxy.ts",
         "middleware.js",
         "middleware.ts"
       ],
       "allowedGlobs": [
         "lib/auth/**",
-        "e2e/golden-a-auth*"
+        "e2e/golden-a-auth*",
+        "e2e/golden-unauth-boundary*"
       ],
       "maxProductFiles": 15,
       "allowsHighRisk": true,
@@ -372,6 +383,7 @@
     "DIARY-019",
     "DIARY-020",
     "DIARY-021",
+    "DIARY-026",
     "AUTH-001",
     "AUTH-004",
     "UI-COPY-001"

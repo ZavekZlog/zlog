@@ -5,7 +5,7 @@
  * Used by diary setup, New Project, and project hub. Not diary daily fields.
  */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { labelStyle, inputStyle, PrimaryCTA } from '@/lib/premium-ui'
 import {
   hydrateStickyFromRow,
@@ -18,12 +18,10 @@ import {
  * @param {string} [props.projectAddress]
  * @param {string} [props.projectManager]
  * @param {string} [props.workingDaysPerWeek]
- * @param {string} [props.currentPhase]
  * @param {(next: {
  *   projectAddress: string,
  *   projectManager: string,
  *   workingDaysPerWeek: string,
- *   currentPhase: string,
  * }) => void} props.onChange
  * @param {string} [props.error]
  */
@@ -31,7 +29,6 @@ export function ProjectStickyFields({
   projectAddress = '',
   projectManager = '',
   workingDaysPerWeek = '',
-  currentPhase = '',
   onChange,
   error = '',
 }) {
@@ -40,7 +37,6 @@ export function ProjectStickyFields({
       projectAddress,
       projectManager,
       workingDaysPerWeek,
-      currentPhase,
       ...patch,
     })
   }
@@ -85,14 +81,6 @@ export function ProjectStickyFields({
         </p>
       ) : null}
 
-      <label style={labelStyle}>Current Phase</label>
-      <input
-        type="text"
-        value={currentPhase || ''}
-        onChange={(e) => emit({ currentPhase: e.target.value })}
-        placeholder="e.g. Groundworks"
-        style={inputStyle}
-      />
     </>
   )
 }
@@ -105,7 +93,6 @@ export function ProjectStickyEditor({
   initialProjectAddress = '',
   initialProjectManager = '',
   initialWorkingDaysPerWeek = '',
-  initialCurrentPhase = '',
   accent,
   supabase,
   onSaved,
@@ -114,28 +101,10 @@ export function ProjectStickyEditor({
     projectAddress: initialProjectAddress || '',
     projectManager: initialProjectManager || '',
     workingDaysPerWeek: initialWorkingDaysPerWeek || '',
-    currentPhase: initialCurrentPhase || '',
   }))
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-
-  useEffect(() => {
-    setFields({
-      projectAddress: initialProjectAddress || '',
-      projectManager: initialProjectManager || '',
-      workingDaysPerWeek: initialWorkingDaysPerWeek || '',
-      currentPhase: initialCurrentPhase || '',
-    })
-    setError('')
-    setSaved(false)
-  }, [
-    projectId,
-    initialProjectAddress,
-    initialProjectManager,
-    initialWorkingDaysPerWeek,
-    initialCurrentPhase,
-  ])
 
   const handleChange = (next) => {
     setFields(next)
@@ -157,7 +126,7 @@ export function ProjectStickyEditor({
       .from('projects')
       .update(payload)
       .eq('id', projectId)
-      .select('id, site_address, client_pm, working_days_per_week, current_phase')
+      .select('id, site_address, client_pm, working_days_per_week')
       .single()
 
     setSaving(false)
@@ -169,7 +138,12 @@ export function ProjectStickyEditor({
       setError('We couldn’t save the project details. Check your connection and try again.')
       return
     }
-    const next = hydrateStickyFromRow(data)
+    const hydrated = hydrateStickyFromRow(data)
+    const next = {
+      projectAddress: hydrated.projectAddress,
+      projectManager: hydrated.projectManager,
+      workingDaysPerWeek: hydrated.workingDaysPerWeek,
+    }
     setFields(next)
     setSaved(true)
     onSaved?.(next)
@@ -181,7 +155,6 @@ export function ProjectStickyEditor({
         projectAddress={fields.projectAddress}
         projectManager={fields.projectManager}
         workingDaysPerWeek={fields.workingDaysPerWeek}
-        currentPhase={fields.currentPhase}
         onChange={handleChange}
         error={error}
       />

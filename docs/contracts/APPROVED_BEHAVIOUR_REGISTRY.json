@@ -1,6 +1,6 @@
 {
-  "version": "1.1.0",
-  "updated": "2026-08-14",
+  "version": "1.1.5",
+  "updated": "2026-08-15",
   "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage. Source contracts are NOT screenshot visual tests.",
   "behaviours": [
     {
@@ -43,6 +43,17 @@
       ],
       "manualQA": true,
       "manualQANote": "Full Login→Dashboard→Sign out→Login with a real Supabase session is MANUAL QA / future authenticated E2E. Unit + wiring tests cover orchestration without credentials."
+    },
+    {
+      "id": "AUTH-005",
+      "description": "Authenticated sessions persist across refresh and reopen via the Supabase cookie mechanism, mounted by the root proxy; protected routes redirect to login without a session",
+      "area": "auth",
+      "tests": [
+        "lib/auth/session-persistence.test.js",
+        "e2e/golden-unauth-boundary.spec.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Signed-in survival across a real browser close/reopen needs a live Supabase session and cannot run without credentials. Automated coverage proves the proxy is mounted, cookies refresh on every route, persistence is not disabled, and unauthenticated protected routes redirect."
     },
     {
       "id": "DIARY-001",
@@ -240,7 +251,7 @@
     },
     {
       "id": "DIARY-019",
-      "description": "Author name/role sticky where approved; PM must NOT auto-carry into a new diary",
+      "description": "Author name/role sticky from the signed-in profile; selected existing project hydrates its saved Project Manager",
       "area": "site-diary",
       "tests": [
         "lib/diary-new-sticky-defaults.test.js",
@@ -261,19 +272,92 @@
     },
     {
       "id": "DIARY-021",
-      "description": "Save and Continue semantics on edit setup; report data survives reopen/edit contracts",
+      "description": "Today's diary opens through populated Project & Report Details — including Use a Previous Diary / Use for Today — and Continue opens the same report in compose without duplicating or resetting report content",
       "area": "site-diary",
       "tests": [
         "lib/diary-setup-continue.test.js",
         "lib/diary-edit-hydrate.test.js",
+        "lib/diary-routing.test.js",
+        "lib/golden-journeys/journey-c-previous-diary.test.js",
         "lib/golden-journeys/journey-d-saved-diary.test.js"
       ],
       "manualQA": true,
-      "manualQANote": "Live Save and Continue click path is manualQA; CTA label + continue helpers are automated."
+      "manualQANote": "Authenticated setup-first navigation, populated values, and same-report content preservation require live manual QA; route, CTA, update-vs-create, and report-ID contracts are automated."
+    },
+    {
+      "id": "DIARY-022",
+      "description": "Reporting On Behalf Of prefills from the signed-in user's most recently used value on a genuinely new diary and remains editable",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-reporting-company.test.js",
+        "lib/diary-setup-blank.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Live latest-value selection and editable setup behavior require authenticated manual QA; helper and wiring regressions are automated."
+    },
+    {
+      "id": "DIARY-023",
+      "description": "New diary preselects the user's last-used existing project; Address and Manager remain project-specific; new-project Working Days defaults to 5",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-reporting-company.test.js",
+        "lib/diary-setup-blank.test.js",
+        "lib/diary-setup-project-dates.test.js",
+        "lib/project-sticky-fields.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Authenticated last-used-project selection and editable project switching require manual QA; helper and persistence-plan regressions are automated."
+    },
+    {
+      "id": "DIARY-024",
+      "description": "Project Start Date and Planned Completion Date are project-level and hydrate together; a new project starts with both blank; a blank setup date field never erases the saved project date",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-setup-project-dates.test.js",
+        "lib/diary-setup-continue.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Live hydrate-on-reopen for both dates requires authenticated manual QA; persistence-plan and hydrate helpers are automated."
+    },
+    {
+      "id": "DIARY-025",
+      "description": "Blank diary fields cannot erase project-owned Name, Address, Manager, Working Days, programme dates, or Reference; Current Phase is stored per diary and never inherited from the project",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-setup-project-dates.test.js",
+        "lib/project-sticky-fields.test.js",
+        "lib/diary-current-phase.test.js",
+        "lib/diary-setup-continue.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Authenticated save/reopen and the applied daily_reports.current_phase migration require live manual QA; ownership and payload rules are automated."
+    },
+    {
+      "id": "DIARY-026",
+      "description": "View Saved Diaries is one of exactly two equal Site Diary hub cards and performs same-report retrieval; saved Site Diary photo areas show their photos and captions by default without leaking content into a new diary",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-site-diary-contract.test.js",
+        "lib/ai-annotation/area-groups.test.js",
+        "lib/photo-workspace/photo-workspace.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Authenticated saved-report selection and mobile visual review of 1 / 4 / 6 photo densities require manual QA; same-report routing, visible review wiring, caption association, Edit identity, and new-diary isolation are automated."
+    },
+    {
+      "id": "DIARY-027",
+      "description": "Opening a saved diary from View Saved Diaries renders one continuous read-only document (project & report details, Current Phase, cover, all saved sections, photo evidence with captions, signature) with no compose/edit controls and no write",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-saved-view.test.js",
+        "lib/diary-routing.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Authenticated open of a real saved diary and mobile visual review of the continuous document require manual QA; document order, Current Phase source, read-only surface, photo/caption visibility and no-write behaviour are automated."
     },
     {
       "id": "UI-COPY-001",
-      "description": "Approved UI terminology remains present (Site Diary, Sign out, Save and Continue, …)",
+      "description": "Approved UI terminology remains present (Site Diary, Sign out, Project & Report Details, Continue to Today's Diary, …)",
       "area": "copy",
       "tests": [
         "scripts/check-approved-copy.test.js"

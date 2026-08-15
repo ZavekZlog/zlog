@@ -20,6 +20,7 @@ const NODE_TESTS = [
   'lib/auth/login-form.test.js',
   'lib/auth/sign-out.test.js',
   'lib/auth/return-path.test.js',
+  'lib/auth/session-persistence.test.js',
   'lib/diary-site-diary-contract.test.js',
   'lib/diary-setup-blank.test.js',
   'lib/diary-setup-author.test.js',

@@ -40,6 +40,10 @@ export const PhotoWorkspace = forwardRef(function PhotoWorkspace({
   return (
     <div data-photo-workspace={reportType} data-report-id={reportId || undefined}>
       <AiLocationWalk
+        // Photo Evidence belongs to one report. Switching report swaps the query
+        // string on the same route, so without this the composer keeps the previous
+        // diary's work area name, notes and unsaved photos.
+        key={reportId || 'new-report'}
         ref={ref}
         accent={accent}
         projectId={projectId}

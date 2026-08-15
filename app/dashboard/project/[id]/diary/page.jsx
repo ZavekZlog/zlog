@@ -62,7 +62,15 @@ import {
   coverPhotoStoragePath,
   applyCoverPhotoPatch,
 } from '@/lib/diary-cover-photo'
-import { diaryHubHref, diaryEditHref, diaryComposeHref, existingDiaryHref } from '@/lib/diary-routing'
+import {
+  diaryHubHref,
+  diaryEditHref,
+  diaryComposeHref,
+  existingDiaryHref,
+  isTodaysDiary,
+  openExistingDiaryHref,
+  projectAndReportDetailsHref,
+} from '@/lib/diary-routing'
 import {
   diaryModeBanner,
   resolveDiaryInteractionMode,
@@ -80,7 +88,6 @@ import {
 } from '@/lib/diary-form-hydrate'
 import { readReportSetupExtras, reportDateInputValue, todayIsoDate } from '@/lib/report-setup'
 import {
-  editReportDetailsHref,
   fetchProjectRowForEditHydrate,
   hydrateEditModeCoverAndReference,
 } from '@/lib/diary-edit-hydrate'
@@ -187,6 +194,30 @@ const addRowButtonStyle = {
   letterSpacing: '0.04em',
   textTransform: 'uppercase',
   boxShadow: 'inset 0 1px 0 var(--edge-highlight)',
+}
+
+// Compact divider between the persistent Project & Report Details above
+// and today's variable diary content below. Presentation only.
+const todaysDiaryDividerStyle = {
+  borderTop: '1px solid var(--edge)',
+  paddingTop: 14,
+  margin: '0 0 14px',
+}
+
+const todaysDiaryDividerTitleStyle = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: 'var(--text)',
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase',
+  lineHeight: 1.3,
+}
+
+const todaysDiaryDividerNoteStyle = {
+  margin: '6px 0 0',
+  fontSize: 13,
+  color: 'var(--text-2)',
+  lineHeight: 1.45,
 }
 
 const removeRowStyle = {
@@ -451,13 +482,17 @@ export default function SiteDiaryPage() {
   const [projectReference, setProjectReference] = useState('')
   const [setupLogoPreview, setSetupLogoPreview] = useState(null)
 
-  const openReportForm = useCallback((reportId, { mode = 'view' } = {}) => {
+  const openReportForm = useCallback((reportId, { mode = 'view', reportDate: entryDate = null } = {}) => {
     const href =
       mode === 'edit'
         ? diaryEditHref(projectId, reportId)
         : mode === 'compose'
           ? diaryComposeHref(projectId, reportId)
-          : existingDiaryHref(projectId, reportId)
+          : openExistingDiaryHref({
+              projectId,
+              reportId,
+              reportDate: entryDate,
+            })
     if (!href) return
     router.replace(href)
   }, [router, projectId])
@@ -655,7 +690,7 @@ export default function SiteDiaryPage() {
           const results = await Promise.all([
             supabase.from('report_labour').select('trade, company, count, hours, notes').eq('report_id', existing.id).order('sequence'),
             supabase.from('report_plant').select('item, ref, status, notes').eq('report_id', existing.id).order('sequence'),
-            supabase.from('report_photos').select('url, caption, sequence, layout, location, annotations, overlay_path, rotation_degrees, assigned_to').eq('report_id', existing.id).order('sequence'),
+            supabase.from('report_photos').select('url, caption, sequence, layout, location, category, annotations, overlay_path, rotation_degrees, assigned_to').eq('report_id', existing.id).order('sequence'),
           ])
           labour = results[0].data
           plant = results[1].error ? [] : results[1].data
@@ -663,14 +698,14 @@ export default function SiteDiaryPage() {
           if (results[2].error && /assigned_to/i.test(results[2].error.message || '')) {
             const fallback = await supabase
               .from('report_photos')
-              .select('url, caption, sequence, layout, location, annotations, overlay_path, rotation_degrees')
+              .select('url, caption, sequence, layout, location, category, annotations, overlay_path, rotation_degrees')
               .eq('report_id', existing.id)
               .order('sequence')
             reportPhotos = fallback.data
             if (fallback.error && /rotation_degrees/i.test(fallback.error.message || '')) {
               const basic = await supabase
                 .from('report_photos')
-                .select('url, caption, sequence, layout, location, annotations, overlay_path')
+                .select('url, caption, sequence, layout, location, category, annotations, overlay_path')
                 .eq('report_id', existing.id)
                 .order('sequence')
               reportPhotos = basic.data
@@ -678,21 +713,21 @@ export default function SiteDiaryPage() {
           } else if (results[2].error && /rotation_degrees/i.test(results[2].error.message || '')) {
             const fallback = await supabase
               .from('report_photos')
-              .select('url, caption, sequence, layout, location, annotations, overlay_path, assigned_to')
+              .select('url, caption, sequence, layout, location, category, annotations, overlay_path, assigned_to')
               .eq('report_id', existing.id)
               .order('sequence')
             reportPhotos = fallback.data
           } else if (results[2].error && /annotations|overlay_path/i.test(results[2].error.message || '')) {
             const fallback = await supabase
               .from('report_photos')
-              .select('url, caption, sequence, layout, rotation_degrees, assigned_to')
+              .select('url, caption, sequence, layout, location, category, rotation_degrees, assigned_to')
               .eq('report_id', existing.id)
               .order('sequence')
             reportPhotos = fallback.data
             if (fallback.error) {
               const basic = await supabase
                 .from('report_photos')
-                .select('url, caption, sequence, layout')
+                .select('url, caption, sequence, layout, location, category')
                 .eq('report_id', existing.id)
                 .order('sequence')
               reportPhotos = basic.data
@@ -768,6 +803,7 @@ export default function SiteDiaryPage() {
               sequence_number: p.sequence ?? index + 1,
               layout: p.layout || 'grid4',
               location: p.location || '',
+              category: p.category || null,
               annotations: p.annotations || null,
               overlayPath: p.overlay_path || null,
               overlayPreview,
@@ -1150,7 +1186,7 @@ export default function SiteDiaryPage() {
 
   const handleContinueDraft = async () => {
     if (!openDraft?.id || startBusy) return
-    openReportForm(openDraft.id, { mode: 'compose' })
+    openReportForm(openDraft.id, { reportDate: openDraft.report_date })
   }
 
   const handleCreateTodaysDiary = async () => {
@@ -1196,7 +1232,9 @@ export default function SiteDiaryPage() {
     if (!editingReportId) return
     setJustSaved(false)
     setShowSaveBanner(false)
-    const href = diaryEditHref(projectId, editingReportId)
+    const href = isTodaysDiary(reportDate)
+      ? projectAndReportDetailsHref(projectId, editingReportId)
+      : diaryEditHref(projectId, editingReportId)
     if (href) router.replace(href)
     // Re-load canonical saved Cover Photo + Project Reference (not stale client blanks).
     setFormReloadToken((n) => n + 1)
@@ -1527,6 +1565,7 @@ export default function SiteDiaryPage() {
             sequence: photo.sequence_number,
             layout: photo.layout || 'grid4',
             location: photo.location || photo.area || null,
+            category: photo.category || null,
             annotations: annotationPayload,
             overlay_path: overlayPath,
             rotation_degrees: Number(photo.rotationDegrees) || 0,
@@ -1540,6 +1579,7 @@ export default function SiteDiaryPage() {
               sequence: photo.sequence_number,
               layout: photo.layout || 'grid4',
               location: photo.location || photo.area || null,
+              category: photo.category || null,
               annotations: annotationPayload,
               overlay_path: overlayPath,
               rotation_degrees: Number(photo.rotationDegrees) || 0,
@@ -1701,7 +1741,7 @@ export default function SiteDiaryPage() {
               <div style={recentEntryActionsStyle}>
                 <SecondaryButton
                   type="button"
-                  onClick={() => openReportForm(d.id)}
+                  onClick={() => openReportForm(d.id, { reportDate: d.report_date })}
                   style={recentEntryActionButtonStyle}
                 >
                   View
@@ -1888,10 +1928,10 @@ export default function SiteDiaryPage() {
           {isDiaryEditMode ? (
             <SecondaryButton
               type="button"
-              href={editReportDetailsHref(projectId, editingReportId) || undefined}
+              href={projectAndReportDetailsHref(projectId, editingReportId) || undefined}
               style={{ width: '100%', minHeight: 48, marginTop: 12 }}
             >
-              Edit Report Details
+              {'Review / Edit Project & Report Details'}
             </SecondaryButton>
           ) : null}
         </div>
@@ -1923,8 +1963,14 @@ export default function SiteDiaryPage() {
           />
         ) : null}
 
+        <div style={todaysDiaryDividerStyle}>
+          <div style={todaysDiaryDividerTitleStyle}>{'Today’s Site Diary'}</div>
+          <p style={todaysDiaryDividerNoteStyle}>
+            {'Record today’s site activity, attendance, permits, deliveries and photo evidence.'}
+          </p>
+        </div>
+
         <GlassSection title="Cover photo" accent={DIARY_ACCENT}>
-          <label style={labelStyle}>Cover photo</label>
           {coverPhoto?.preview ? (
             <div style={{ marginBottom: 0 }}>
               <img
@@ -2542,7 +2588,11 @@ export default function SiteDiaryPage() {
               <SecondaryButton
                 type="button"
                 onClick={() => {
-                  const href = existingDiaryHref(projectId, d.id)
+                  const href = openExistingDiaryHref({
+                    projectId,
+                    reportId: d.id,
+                    reportDate: d.report_date,
+                  })
                   if (href) router.push(href)
                 }}
                 style={recentEntryActionButtonStyle}

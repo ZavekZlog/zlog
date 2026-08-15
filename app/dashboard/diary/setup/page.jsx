@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -21,12 +21,12 @@ import { validateProjectDates } from '@/lib/project-day'
 import {
   NEW_PROJECT_SENTINEL,
   fetchProjectsForSetup,
+  findExistingProjectByName,
   hydrateProjectDatesFromRow,
   mergeProjectIntoSetupState,
   showProjectDatesOnSetup,
 } from '@/lib/diary-setup-project-dates'
 import {
-  brandingDefaultsFromCompanyProfile,
   clearToNewProjectSelection,
   initialiseNewDiarySetupState,
   shouldRestoreSetupFormDraft,
@@ -44,6 +44,7 @@ import {
 import {
   persistSetupProject,
   runDiarySetupContinue,
+  validateDiarySetupContinue,
 } from '@/lib/diary-setup-continue'
 import {
   hydrateStickyFromRow,
@@ -55,16 +56,7 @@ import {
   fetchDefaultCompanyProfile,
   updateDiarySetupFields,
 } from '@/lib/diary-draft'
-import {
-  coverPhotoStateFromSaved,
-  resolveCoverPhotoPreviewUrl,
-  planCoverPhotoPersistence,
-  coverPhotoStoragePath,
-} from '@/lib/diary-cover-photo'
-import {
-  coverFormStateFromReport,
-  loadEditDiarySetupSources,
-} from '@/lib/diary-edit-hydrate'
+import { loadEditDiarySetupSources } from '@/lib/diary-edit-hydrate'
 import {
   resolveSignedInAuthorProfile,
   persistSignedInAuthorProfile,
@@ -108,6 +100,7 @@ function SiteDiarySetupPage() {
   const editingReportId = searchParams.get('report') || null
   const editingProjectId = searchParams.get('project') || null
   const supabase = createClient()
+  const setupTitle = editingReportId ? 'Project & Report Details' : 'New Site Diary'
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -138,11 +131,6 @@ function SiteDiarySetupPage() {
   const [logoObjectUrl, setLogoObjectUrl] = useState(null)
   const [brandingId, setBrandingId] = useState(null)
   const [brandColor, setBrandColor] = useState(null)
-
-  /** Edit-existing only — cover lives on diary compose for new diaries. */
-  const [coverPhoto, setCoverPhoto] = useState(null)
-  const loadedCoverPathRef = useRef(null)
-  const coverRemovedRef = useRef(false)
 
   const existingProjects = useMemo(
     () => (projects || []).filter((p) => p?.id && p?.name),
@@ -206,7 +194,7 @@ function SiteDiarySetupPage() {
         const signedInUser = authorProfile.user
         if (cancelled) return
 
-        // Editing an existing diary's setup details (Edit Report Details).
+        // Existing diary pre-flight (Project & Report Details).
         // Hydrate from canonical DB rows — never session draft / blank defaults.
         if (editingReportId) {
           const loaded = await loadEditDiarySetupSources(supabase, {
@@ -234,22 +222,10 @@ function SiteDiarySetupPage() {
           setProjectAddress(sticky.projectAddress)
           setProjectManager(sticky.projectManager)
           setWorkingDaysPerWeek(sticky.workingDaysPerWeek)
-          setCurrentPhase(sticky.currentPhase)
+          setCurrentPhase(String(report?.current_phase || '').trim())
 
           // Project Reference — project column first (extras only as legacy fallback).
           setProjectReference(loaded.hydration.projectReference)
-
-          // Cover Photo — apply storage path immediately so edit UI is never blank upload.
-          const coverPath = loaded.hydration.coverStoragePath
-          if (coverPath) {
-            loadedCoverPathRef.current = coverPath
-            coverRemovedRef.current = false
-            setCoverPhoto(coverFormStateFromReport(report, null))
-          } else {
-            loadedCoverPathRef.current = null
-            coverRemovedRef.current = false
-            setCoverPhoto(null)
-          }
 
           // Edit/View setup: saved diary values win; never keep account-derived aliases.
           const savedAuthor = String(report?.creator_name || '').trim()
@@ -280,36 +256,30 @@ function SiteDiarySetupPage() {
             setLogoPreview(null)
           }
 
-          // Resolve cover preview after canonical path is already in form state.
-          if (coverPath) {
-            const coverPreview = await resolveCoverPhotoPreviewUrl(supabase, coverPath)
-            if (!cancelled) {
-              setCoverPhoto(coverFormStateFromReport(report, coverPreview))
-            }
-          }
           setLoading(false)
           return
         }
 
-        // Brand-new diary setup — never restore a prior session draft / last diary.
-        // (Edit Report Details uses editingReportId above; Use as Basis is a separate route.)
+        // Brand-new diary setup — never restore a prior session draft or diary content.
+        // The last-used project is an approved editable setup default.
+        // (Project & Report Details uses editingReportId above; Use as Basis is separate.)
         // Scratch author: signed-in profile only — not prior diary, project, or draft.
         if (!shouldRestoreSetupFormDraft({ editingReportId })) {
           clearSetupFormDraft()
         }
 
-        const existingProject =
-          !editingReportId && editingProjectId
-            ? (projectRows || []).find((p) => p.id === editingProjectId) || null
-            : null
-
         // Sticky Reporting Company = latest saved identity (name+logo paired), not a stale default name.
         const stickyCompany = await fetchStickyReportingCompany(supabase)
         if (cancelled) return
+        const preferredProjectId = editingProjectId || stickyCompany.latestProjectId
+        const existingProject = preferredProjectId
+          ? (projectRows || []).find((p) => p.id === preferredProjectId) || null
+          : null
 
         const fresh = initialiseNewDiarySetupState({
           authorName: profileName,
           authorRole: profileRole,
+          reportingOnBehalfOf: stickyCompany.reportingOnBehalfOf,
           reportDate: todayIsoDate(),
           companyProfile: stickyCompany.brandingId
             ? {
@@ -418,11 +388,10 @@ function SiteDiarySetupPage() {
     setProjectAddress(merged.projectAddress || '')
     setProjectManager(merged.projectManager || '')
     setWorkingDaysPerWeek(merged.workingDaysPerWeek || '')
-    setCurrentPhase(merged.currentPhase || '')
     setProjectReference(merged.projectReference || '')
   }
 
-  const handleSelectExisting = async (projectId) => {
+  const handleSelectExisting = (projectId, { keepProjectName = null } = {}) => {
     setError('')
     if (!projectId || projectId === NEW_PROJECT_VALUE) {
       const cleared = clearToNewProjectSelection({
@@ -431,33 +400,8 @@ function SiteDiarySetupPage() {
       })
       applyStickyFormState(cleared)
       setProjectReference('')
-      setReportingOnBehalfOf('')
       setProjectDatesError('')
       setStickyFieldsError('')
-      // Branding may use company-profile default only — not the previously selected diary.
-      try {
-        const profile = await fetchDefaultCompanyProfile(supabase)
-        const branding = brandingDefaultsFromCompanyProfile(profile)
-        setBrandingId(branding.brandingId)
-        setBrandColor(branding.brandColor)
-        setLogoFile(null)
-        if (logoObjectUrl) {
-          URL.revokeObjectURL(logoObjectUrl)
-          setLogoObjectUrl(null)
-        }
-        setLogoStoragePath(branding.logoStoragePath)
-        if (branding.logoStoragePath) {
-          const preview = await signedLogoUrl(supabase, branding.logoStoragePath)
-          setLogoPreview(preview)
-        } else {
-          setLogoPreview(null)
-        }
-      } catch {
-        setBrandingId(null)
-        setBrandColor(null)
-        setLogoStoragePath(null)
-        setLogoPreview(null)
-      }
       return
     }
 
@@ -466,7 +410,9 @@ function SiteDiarySetupPage() {
 
     // Project fields only — do not copy diary content from latest report.
     const merged = mergeProjectIntoSetupState({}, project)
-    applyStickyFormState(merged)
+    applyStickyFormState(
+      keepProjectName == null ? merged : { ...merged, projectName: keepProjectName },
+    )
     setProjectDatesError('')
     setStickyFieldsError('')
   }
@@ -476,14 +422,12 @@ function SiteDiarySetupPage() {
     setProjectName(nextName)
     setError('')
 
-    const trimmed = nextName.trim()
-    const match = trimmed
-      ? existingProjects.find((p) => String(p.name || '').trim() === trimmed)
-      : null
+    const match = findExistingProjectByName(existingProjects, nextName)
 
     if (match) {
       if (selectedProjectId !== match.id) {
-        void handleSelectExisting(match.id)
+        // Keep the name exactly as typed; project-level fields come from the project row.
+        handleSelectExisting(match.id, { keepProjectName: nextName })
       }
       return
     }
@@ -496,7 +440,6 @@ function SiteDiarySetupPage() {
       applyStickyFormState(cleared)
       setProjectName(nextName)
       setProjectReference('')
-      setReportingOnBehalfOf('')
       setProjectDatesError('')
       setStickyFieldsError('')
     }
@@ -522,30 +465,6 @@ function SiteDiarySetupPage() {
     setLogoStoragePath(null)
   }
 
-  const handleCoverFiles = (files) => {
-    const file = files?.[0]
-    if (!file) return
-    setError('')
-    coverRemovedRef.current = false
-    setCoverPhoto((prev) => {
-      if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
-      return {
-        file,
-        preview: URL.createObjectURL(file),
-        storagePath: null,
-      }
-    })
-  }
-
-  const removeCoverPhoto = () => {
-    setCoverPhoto((prev) => {
-      if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
-      return null
-    })
-    coverRemovedRef.current = true
-    loadedCoverPathRef.current = null
-  }
-
   const handleProjectDatesChange = ({ startDate, plannedCompletionDate }) => {
     setProjectStartDate(startDate)
     setProjectPlannedCompletionDate(plannedCompletionDate)
@@ -557,7 +476,6 @@ function SiteDiarySetupPage() {
     setProjectAddress(next.projectAddress)
     setProjectManager(next.projectManager)
     setWorkingDaysPerWeek(next.workingDaysPerWeek)
-    setCurrentPhase(next.currentPhase)
     const v = validateStickyProjectFields(next)
     setStickyFieldsError(v.ok ? '' : v.message)
   }
@@ -573,36 +491,6 @@ function SiteDiarySetupPage() {
     return path
   }
 
-  const uploadCoverIfNeeded = async (userId, reportId) => {
-    const plan = planCoverPhotoPersistence({
-      coverPhoto,
-      loadedCoverPath: loadedCoverPathRef.current,
-      coverRemoved: coverRemovedRef.current,
-    })
-    if (!plan.needsUpload || !plan.file) {
-      return plan
-    }
-    const ext = plan.file.name?.split('.').pop()?.toLowerCase() || 'jpg'
-    const path = coverPhotoStoragePath(userId, reportId || 'pending', ext)
-    const { error: upErr } = await supabase.storage
-      .from('site-photos')
-      .upload(path, plan.file, { contentType: plan.file.type || 'image/jpeg', upsert: true })
-    if (upErr) throw new Error('We couldn’t upload the cover photo. Check your connection and try again.')
-    loadedCoverPathRef.current = path
-    coverRemovedRef.current = false
-    const keepPreview =
-      coverPhoto?.preview && String(coverPhoto.preview).startsWith('blob:')
-        ? coverPhoto.preview
-        : null
-    setCoverPhoto(coverPhotoStateFromSaved(path, keepPreview))
-    return planCoverPhotoPersistence({
-      coverPhoto,
-      loadedCoverPath: path,
-      coverRemoved: false,
-      uploadedPath: path,
-    })
-  }
-
   const handleContinue = async () => {
     if (saving) return
 
@@ -612,6 +500,25 @@ function SiteDiarySetupPage() {
     setStickyFieldsError('')
 
     try {
+      // Validate before uploading or persisting company branding. Invalid setup
+      // must not mutate the saved profile or create storage objects.
+      const formValidation = validateDiarySetupContinue({
+        projectName,
+        author,
+        reportingOnBehalfOf,
+        reportDate,
+        startDate: projectStartDate,
+        plannedCompletionDate: projectPlannedCompletionDate,
+        workingDaysPerWeek,
+      })
+      if (!formValidation.ok) {
+        if (formValidation.field === 'dates') setProjectDatesError(formValidation.message)
+        if (formValidation.field === 'workingDays') setStickyFieldsError(formValidation.message)
+        setError(formValidation.message || 'Could not continue to Site Diary')
+        setSaving(false)
+        return
+      }
+
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('You must be signed in')
 
@@ -636,12 +543,6 @@ function SiteDiarySetupPage() {
       setBrandColor(nextBrandColor)
       setLogoStoragePath(nextLogoUrl)
 
-      let coverPatch = null
-      if (editingReportId) {
-        const coverPlan = await uploadCoverIfNeeded(user.id, editingReportId)
-        coverPatch = coverPlan?.patch || null
-      }
-
       const result = await runDiarySetupContinue({
         alreadySaving: false,
         form: {
@@ -662,10 +563,6 @@ function SiteDiarySetupPage() {
           brandingId: nextBrandingId,
           brandColor: nextBrandColor,
           reportingCompany: companySnapshot.companyName || reportingCompany,
-          // Only send cover when we have an explicit set/clear — never invent null wipe.
-          ...(editingReportId && coverPatch
-            ? { coverPhotoUrl: coverPatch.cover_photo_url }
-            : {}),
         },
         existingProjects,
         selectedProjectId,
@@ -719,7 +616,7 @@ function SiteDiarySetupPage() {
 
   if (loading) {
     return (
-      <PremiumShell title="New Site Diary" backHref="/dashboard/diary" accent={DIARY_ACCENT} maxWidth={520}>
+      <PremiumShell title={setupTitle} backHref="/dashboard/diary" accent={DIARY_ACCENT} maxWidth={520}>
         <p style={{ color: 'var(--text-2)', fontSize: 16 }}>Loading…</p>
       </PremiumShell>
     )
@@ -727,7 +624,7 @@ function SiteDiarySetupPage() {
 
   return (
     <PremiumShell
-      title="New Site Diary"
+      title={setupTitle}
       onBack={handleBack}
       backHref="/dashboard/diary"
       accent={DIARY_ACCENT}
@@ -742,7 +639,9 @@ function SiteDiarySetupPage() {
           color: 'color-mix(in srgb, var(--text) 90%, var(--text-2))',
         }}
       >
-        Confirm the details for today’s Site Diary, then continue.
+        {editingReportId
+          ? 'Review the saved project and report details. Change only what’s different, then continue.'
+          : 'Confirm the details for today’s Site Diary, then continue.'}
       </p>
 
       {error && (
@@ -781,7 +680,7 @@ function SiteDiarySetupPage() {
             maxWidth: '36em',
           }}
         >
-          Your logo helps Zlog create your report's corporate branding, including colours and report styling.
+          Your logo helps Zlog create your report’s corporate branding, including colours and report styling.
         </p>
         {logoPreview ? (
           <div style={{ marginBottom: 20 }}>
@@ -839,115 +738,6 @@ function SiteDiarySetupPage() {
           </div>
         )}
       </GlassSection>
-
-      {editingReportId ? (
-        <GlassSection title="Cover photo" accent={DIARY_ACCENT}>
-          <label style={setupLabelStyle}>Cover photo</label>
-          {coverPhoto?.preview ? (
-            <div style={{ marginBottom: 0 }}>
-              <img
-                src={coverPhoto.preview}
-                alt="Cover photo"
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  maxHeight: 200,
-                  objectFit: 'cover',
-                  borderRadius: 12,
-                  border: '1px solid var(--edge)',
-                  marginBottom: 12,
-                }}
-              />
-              <p
-                style={{
-                  margin: '0 0 12px',
-                  fontSize: 14,
-                  color: 'color-mix(in srgb, var(--text) 82%, var(--text-2))',
-                  lineHeight: 1.45,
-                }}
-              >
-                Cover photo is attached to this diary.
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div style={{ position: 'relative' }}>
-                  <SecondaryButton type="button" style={{ width: '100%', minHeight: 48 }}>
-                    Replace
-                  </SecondaryButton>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    aria-label="Replace cover photo"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      e.target.value = ''
-                      if (file) handleCoverFiles([file])
-                    }}
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      opacity: 0,
-                      cursor: 'pointer',
-                      fontSize: 16,
-                    }}
-                  />
-                </div>
-                <SecondaryButton type="button" onClick={removeCoverPhoto} style={{ width: '100%', minHeight: 48 }}>
-                  Remove
-                </SecondaryButton>
-              </div>
-            </div>
-          ) : coverPhoto?.storagePath ? (
-            <div style={{ marginBottom: 0 }}>
-              <p
-                style={{
-                  margin: '0 0 12px',
-                  fontSize: 14,
-                  color: 'color-mix(in srgb, var(--text) 82%, var(--text-2))',
-                  lineHeight: 1.45,
-                }}
-              >
-                Cover photo is attached to this diary.
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                <div style={{ position: 'relative' }}>
-                  <SecondaryButton type="button" style={{ width: '100%', minHeight: 48 }}>
-                    Replace
-                  </SecondaryButton>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    aria-label="Replace cover photo"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      e.target.value = ''
-                      if (file) handleCoverFiles([file])
-                    }}
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      opacity: 0,
-                      cursor: 'pointer',
-                      fontSize: 16,
-                    }}
-                  />
-                </div>
-                <SecondaryButton type="button" onClick={removeCoverPhoto} style={{ width: '100%', minHeight: 48 }}>
-                  Remove
-                </SecondaryButton>
-              </div>
-            </div>
-          ) : (
-            <div style={{ marginBottom: 0 }}>
-              <ImageSourceButtons
-                onFiles={handleCoverFiles}
-                cameraLabel="Take Photo"
-                galleryLabel="Upload Photo"
-                stacked
-              />
-            </div>
-          )}
-        </GlassSection>
-      ) : null}
 
       <GlassSection title="Reporting On Behalf Of" accent={DIARY_ACCENT}>
         <label style={setupLabelStyle}>Reporting On Behalf Of *</label>
@@ -1007,9 +797,17 @@ function SiteDiarySetupPage() {
           projectAddress={projectAddress}
           projectManager={projectManager}
           workingDaysPerWeek={workingDaysPerWeek}
-          currentPhase={currentPhase}
           onChange={handleStickyFieldsChange}
           error={stickyFieldsError}
+        />
+
+        <label style={setupLabelStyle}>Current Phase</label>
+        <input
+          type="text"
+          value={currentPhase}
+          onChange={(e) => setCurrentPhase(e.target.value)}
+          placeholder="e.g. Groundworks"
+          style={setupInputStyle}
         />
 
         {showProjectDatesOnSetup() ? (
@@ -1064,11 +862,9 @@ function SiteDiarySetupPage() {
         style={{ minHeight: 52, fontSize: 16, marginBottom: 12 }}
       >
         {saving
-          ? editingReportId
-            ? 'Saving…'
-            : 'Continuing…'
+          ? 'Continuing…'
           : editingReportId
-            ? 'Save and Continue'
+            ? "Continue to Today's Diary"
             : 'Continue to Site Diary'}
       </PrimaryCTA>
 
@@ -1104,7 +900,7 @@ export default function SiteDiarySetupRoute() {
   return (
     <Suspense
       fallback={
-        <PremiumShell title="New Site Diary" backHref="/dashboard/diary" accent={DIARY_ACCENT}>
+        <PremiumShell title="Site Diary" backHref="/dashboard/diary" accent={DIARY_ACCENT}>
           <p style={{ color: 'var(--text-2)' }}>Loading…</p>
         </PremiumShell>
       }

@@ -2,9 +2,13 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { LogOut } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { ZlogBrandRegion } from '@/lib/premium-ui'
+import {
+  AUTHENTICATED_SHELL_BRAND_COMPACT_STYLE,
+  AUTHENTICATED_SHELL_HEADER_STYLE,
+  ZlogBrandRegion,
+  ZlogSignOutControl,
+} from '@/lib/premium-ui'
 import { SIGN_OUT_LOGIN_HREF, performDashboardSignOut } from '@/lib/auth/sign-out'
 import { DASHBOARD_CONTENT_GRID } from '@/lib/dashboard-content-grid'
 
@@ -12,6 +16,9 @@ import { DASHBOARD_CONTENT_GRID } from '@/lib/dashboard-content-grid'
  * Compact dashboard masthead matching the accepted screenshot:
  * centred Zlog + established glow, then framed Sign out BELOW, right-aligned
  * to the dashboard card grid. Header is transparent so the page surface is continuous.
+ *
+ * Sign Out plate and header overflow/glow chrome come from shared authenticated-shell
+ * tokens — do not restyle here. Landing page branding is separate and must stay untouched.
  */
 export function DashboardTopBar() {
   const router = useRouter()
@@ -44,22 +51,13 @@ export function DashboardTopBar() {
     <header
       className="premium-shell-header zlog-dashboard-topbar"
       style={{
-        position: 'relative',
+        ...AUTHENTICATED_SHELL_HEADER_STYLE,
         zIndex: 60,
-        overflowX: 'hidden',
-        overflowY: 'visible',
-        background: 'transparent',
         borderBottom: '1px solid var(--edge-highlight)',
         padding: '0 0 8px',
       }}
     >
-      <ZlogBrandRegion
-        style={{
-          minHeight: 64,
-          paddingTop: 30,
-          paddingBottom: 8,
-        }}
-      />
+      <ZlogBrandRegion style={AUTHENTICATED_SHELL_BRAND_COMPACT_STYLE} />
 
       <div
         className="zlog-header-utility-row"
@@ -75,18 +73,7 @@ export function DashboardTopBar() {
           padding: `0 ${DASHBOARD_CONTENT_GRID.padX}px`,
         }}
       >
-        <button
-          type="button"
-          className="zlog-dashboard-signout"
-          disabled={signingOut}
-          onClick={handleSignOut}
-          aria-label={signingOut ? 'Signing out' : 'Sign out'}
-        >
-          <LogOut size={16} strokeWidth={2.25} aria-hidden className="zlog-dashboard-signout__icon" />
-          <span className="zlog-dashboard-signout__label">
-            {signingOut ? 'Signing out…' : 'Sign out'}
-          </span>
-        </button>
+        <ZlogSignOutControl signingOut={signingOut} onClick={handleSignOut} />
       </div>
     </header>
   )

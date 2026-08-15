@@ -19,7 +19,7 @@ import {
   recentEntryActionButtonStyle,
 } from '@/lib/premium-ui'
 import { REPORT_THEMES } from '@/lib/report-theme'
-import { existingDiaryHref } from '@/lib/diary-routing'
+import { openExistingDiaryHref } from '@/lib/diary-routing'
 import { ProjectDatesEditor } from '@/components/project/ProjectDatesFields'
 import { ProjectStickyEditor } from '@/components/project/ProjectStickyFields'
 import { toDateInputValue } from '@/lib/project-day'
@@ -41,7 +41,7 @@ export default function ProjectPage() {
       const { data: proj } = await supabase
         .from('projects')
         .select(
-          'id, name, client_name, site_address, client_pm, working_days_per_week, current_phase, status, start_date, planned_completion_date, created_at',
+          'id, name, client_name, site_address, client_pm, working_days_per_week, status, start_date, planned_completion_date, created_at',
         )
         .eq('id', id)
         .single()
@@ -175,7 +175,6 @@ export default function ProjectPage() {
           initialProjectAddress={sticky.projectAddress}
           initialProjectManager={sticky.projectManager}
           initialWorkingDaysPerWeek={sticky.workingDaysPerWeek}
-          initialCurrentPhase={sticky.currentPhase}
           accent={REPORT_THEMES.diary.accent}
           supabase={supabase}
           onSaved={(nextSticky) => {
@@ -186,7 +185,6 @@ export default function ProjectPage() {
               working_days_per_week: nextSticky.workingDaysPerWeek
                 ? Number(nextSticky.workingDaysPerWeek)
                 : null,
-              current_phase: nextSticky.currentPhase || null,
             } : prev)
           }}
         />
@@ -275,7 +273,11 @@ export default function ProjectPage() {
               <SecondaryButton
                 type="button"
                 onClick={() => {
-                  const href = existingDiaryHref(id, d.id)
+                  const href = openExistingDiaryHref({
+                    projectId: id,
+                    reportId: d.id,
+                    reportDate: d.report_date,
+                  })
                   if (href) router.push(href)
                 }}
                 style={recentEntryActionButtonStyle}

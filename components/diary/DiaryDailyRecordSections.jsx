@@ -301,7 +301,7 @@ export function DiaryDailyRecordSections({
                 value={row.description}
                 disabled={disabled}
                 onChange={(e) => patchVariation(row.key, 'description', e.target.value)}
-                placeholder="What changed"
+                placeholder="Brief description of the variation"
                 rows={2}
               />
             </div>

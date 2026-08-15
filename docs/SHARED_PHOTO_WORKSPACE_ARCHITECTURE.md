@@ -69,7 +69,7 @@ Areas + photos preserved when the report is revisited
 
 ```text
 PhotoWorkspace                         ← section host inside a report editor
-├── EvidenceGroupList                  ← saved areas / items (expandable cards)
+├── EvidenceGroupList                  ← saved areas / items (photos + captions visible by default)
 ├── EvidenceGroupEditor                ← create / edit one group
 │   ├── GroupIdentityFields            ← title + description (labels from context)
 │   ├── PhotoCaptureBar                ← Take Photo · Add Photos (wrap ImageSourceButtons)
@@ -512,3 +512,10 @@ Report-level default template can exist later as a **default for new areas**, no
 - Section title (all report types): **Photo Evidence**
 - Area/item notes label: **Notes for this area** (snag: **Notes for this item**); placeholders adapt per report type
 - Do not reopen P2A scope; start P2B only after explicit approval.
+
+### Approved Site Diary review amendment (2026-08-15)
+
+- Existing Site Diary evidence groups show their saved photos and captions without an Expand step.
+- The saved 1 / 4 / 6 photos-per-page value controls review density.
+- Review presentation is static until **Edit** is chosen; Edit retains the same group ID.
+- This amendment changes presentation only. Report ownership, storage, save adapters, captions, PDF consumption, and new-diary blank state remain frozen.

@@ -152,7 +152,7 @@ export default function SiteDiaryReportCompletePage() {
         showStatus(prepared.message || 'We couldn’t prepare the PDF.')
         return
       }
-      const result = downloadSiteDiaryPdf({
+      const result = await downloadSiteDiaryPdf({
         blob: prepared.blob,
         fileName: prepared.fileName,
       })
@@ -160,6 +160,7 @@ export default function SiteDiaryReportCompletePage() {
         showStatus(result.message || 'Could not save the PDF.')
         return
       }
+      if (result.cancelled) return
       showStatus(result.message || 'PDF saved.')
     })
 
