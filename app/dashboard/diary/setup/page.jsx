@@ -11,7 +11,7 @@ import {
   ZlogBackControl,
   labelStyle,
   inputStyle,
-  BRAND_ACCENT,
+  DIARY_ACCENT,
   typeTokens,
 } from '@/lib/premium-ui'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
@@ -719,7 +719,7 @@ function SiteDiarySetupPage() {
 
   if (loading) {
     return (
-      <PremiumShell title="New Site Diary" backHref="/dashboard/diary" accent={BRAND_ACCENT} maxWidth={520}>
+      <PremiumShell title="New Site Diary" backHref="/dashboard/diary" accent={DIARY_ACCENT} maxWidth={520}>
         <p style={{ color: 'var(--text-2)', fontSize: 16 }}>Loading…</p>
       </PremiumShell>
     )
@@ -730,7 +730,7 @@ function SiteDiarySetupPage() {
       title="New Site Diary"
       onBack={handleBack}
       backHref="/dashboard/diary"
-      accent={BRAND_ACCENT}
+      accent={DIARY_ACCENT}
       maxWidth={520}
     >
       <p
@@ -762,7 +762,7 @@ function SiteDiarySetupPage() {
         </div>
       )}
 
-      <GlassSection title="Reporting Company" accent={BRAND_ACCENT}>
+      <GlassSection title="Reporting Company" accent={DIARY_ACCENT}>
         <label style={setupLabelStyle}>Reporting Company Name</label>
         <input
           value={reportingCompany}
@@ -841,7 +841,7 @@ function SiteDiarySetupPage() {
       </GlassSection>
 
       {editingReportId ? (
-        <GlassSection title="Cover photo" accent={BRAND_ACCENT}>
+        <GlassSection title="Cover photo" accent={DIARY_ACCENT}>
           <label style={setupLabelStyle}>Cover photo</label>
           {coverPhoto?.preview ? (
             <div style={{ marginBottom: 0 }}>
@@ -949,7 +949,7 @@ function SiteDiarySetupPage() {
         </GlassSection>
       ) : null}
 
-      <GlassSection title="Reporting On Behalf Of" accent={BRAND_ACCENT}>
+      <GlassSection title="Reporting On Behalf Of" accent={DIARY_ACCENT}>
         <label style={setupLabelStyle}>Reporting On Behalf Of *</label>
         <input
           value={reportingOnBehalfOf}
@@ -961,7 +961,7 @@ function SiteDiarySetupPage() {
         />
       </GlassSection>
 
-      <GlassSection title="Author" accent={BRAND_ACCENT}>
+      <GlassSection title="Author" accent={DIARY_ACCENT}>
         <label style={setupLabelStyle}>Author Name *</label>
         <input
           value={author}
@@ -983,7 +983,7 @@ function SiteDiarySetupPage() {
         />
       </GlassSection>
 
-      <GlassSection title="Project Details" accent={BRAND_ACCENT}>
+      <GlassSection title="Project Details" accent={DIARY_ACCENT}>
         <label style={setupLabelStyle}>Project Name *</label>
         <input
           value={projectName}
@@ -1104,7 +1104,7 @@ export default function SiteDiarySetupRoute() {
   return (
     <Suspense
       fallback={
-        <PremiumShell title="New Site Diary" backHref="/dashboard/diary" accent={BRAND_ACCENT}>
+        <PremiumShell title="New Site Diary" backHref="/dashboard/diary" accent={DIARY_ACCENT}>
           <p style={{ color: 'var(--text-2)' }}>Loading…</p>
         </PremiumShell>
       }

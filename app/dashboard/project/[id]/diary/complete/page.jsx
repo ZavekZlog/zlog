@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { PremiumShell, BRAND_ACCENT } from '@/lib/premium-ui'
+import { PremiumShell, DIARY_ACCENT } from '@/lib/premium-ui'
 import { ReportCompleteSharePanel } from '@/components/reports/ReportCompleteSharePanel'
 import {
   buildDiaryEmailMailto,
@@ -167,7 +167,7 @@ export default function SiteDiaryReportCompletePage() {
     <PremiumShell
       title="Report Complete"
       backHref="/dashboard"
-      accent={BRAND_ACCENT}
+      accent={DIARY_ACCENT}
       maxWidth={480}
     >
       <ReportCompleteSharePanel
