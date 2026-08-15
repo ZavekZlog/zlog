@@ -1,9 +1,11 @@
 'use client'
 
 /**
- * Site Diary entry hub — today’s Site Diary choice.
+ * Site Diary entry hub — two equal choices.
  * A) Start a New Diary → setup
- * B) Use a Previous Diary → pick one to start today from it (new diary), or open to review
+ * B) View Saved Diaries → saved list; each entry offers Open to review
+ *    (read-only viewer for that same report) and Use for Today
+ *    (creates a NEW diary from it; the source is never changed).
  */
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
@@ -23,12 +25,33 @@ import {
   dashboardCardInteractionCss,
 } from '@/lib/premium-ui'
 import { REPORT_THEMES } from '@/lib/report-theme'
-import { DIARY_MISSING_MESSAGE, existingDiaryHref } from '@/lib/diary-routing'
+import {
+  DIARY_MISSING_MESSAGE,
+  projectAndReportDetailsHref,
+  savedDiaryViewerHref,
+} from '@/lib/diary-routing'
 import { createTodaysDiaryDraft } from '@/lib/diary-draft'
-import { diaryFormHref } from '@/lib/diary-setup-continue'
 import { clearSetupFormDraft } from '@/lib/report-setup'
 
 const DIARY_ACCENT = REPORT_THEMES.diary.accent
+
+/**
+ * Peer cards in one group share a height — the tallest copy sets the row, so
+ * neither card has to lose useful words to stay level with its neighbour.
+ * Mirrors the dashboard grid rules without reaching into the shared shell.
+ */
+const entryChoiceCardsCss = `
+  .zlog-diary-entry-choices > .premium-dash-card-wrap {
+    display: flex;
+    height: 100%;
+    min-width: 0;
+  }
+  .zlog-diary-entry-choices > .premium-dash-card-wrap > .premium-dash-card {
+    flex: 1 1 auto;
+    height: 100%;
+    box-sizing: border-box;
+  }
+`
 
 const IconNewDiary = (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -43,24 +66,7 @@ const IconNewDiary = (
   </svg>
 )
 
-const IconPreviousDiary = (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path
-      d="M8 4h7l4 4v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinejoin="round"
-    />
-    <path d="M15 4v4h4" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
-    <path
-      d="M5 9H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-1"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinejoin="round"
-      opacity="0.85"
-    />
-  </svg>
-)
+const IconSavedDiaries = <Eye size={22} strokeWidth={1.75} aria-hidden="true" />
 
 function formatReportDate(iso) {
   if (!iso) return 'No date'
@@ -78,7 +84,7 @@ function SiteDiaryEntryPage() {
   const missingReport = searchParams.get('missing') === '1'
   const supabase = createClient()
 
-  const [mode, setMode] = useState(null) // null | 'previous'
+  const [mode, setMode] = useState(null) // null | 'previous' | 'saved'
   const [loading, setLoading] = useState(false)
   const [busyId, setBusyId] = useState(null)
   const [confirmRow, setConfirmRow] = useState(null)
@@ -87,6 +93,7 @@ function SiteDiaryEntryPage() {
 
   const title = useMemo(() => {
     if (mode === 'previous') return 'Use a Previous Diary'
+    if (mode === 'saved') return 'View Saved Diaries'
     return 'Site Diary'
   }, [mode])
 
@@ -95,7 +102,7 @@ function SiteDiaryEntryPage() {
   }, [missingReport])
 
   useEffect(() => {
-    if (mode !== 'previous') return
+    if (mode !== 'previous' && mode !== 'saved') return
     let cancelled = false
     const load = async () => {
       setLoading(true)
@@ -130,12 +137,13 @@ function SiteDiaryEntryPage() {
   }, [mode, filterProjectId, supabase])
 
   const openExistingReport = (row) => {
-    const href = existingDiaryHref(row?.project_id, row?.id)
+    const href = savedDiaryViewerHref(row?.project_id, row?.id)
     if (!href) {
       setError('That diary can’t be opened. Try another one, or start a new diary.')
       return
     }
-    // Exact existing report — View first; never create a new row here.
+    // Read-only viewer for the exact saved report — one continuous document.
+    // Never opens the compose workbench and never creates a row.
     router.push(href)
   }
 
@@ -157,7 +165,8 @@ function SiteDiaryEntryPage() {
     setError('')
     try {
       const id = await createTodaysDiaryDraft(supabase, row.project_id, row.id)
-      const href = diaryFormHref(row.project_id, id)
+      // Review the carried-forward details for today's new diary before the workbench.
+      const href = projectAndReportDetailsHref(row.project_id, id)
       if (!href) throw new Error('Missing diary link')
       setConfirmRow(null)
       router.push(href)
@@ -182,6 +191,7 @@ function SiteDiaryEntryPage() {
       brandRegionStyle={{ paddingBottom: 30 }}
     >
       <style>{dashboardCardInteractionCss}</style>
+      <style>{entryChoiceCardsCss}</style>
 
       <ZlogModulePageHeader
         title={title}
@@ -213,7 +223,7 @@ function SiteDiaryEntryPage() {
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
             gap: 12,
-            alignItems: 'start',
+            alignItems: 'stretch',
           }}
         >
           <div className="premium-dash-card-wrap" style={{ animationDelay: '0ms' }}>
@@ -223,29 +233,29 @@ function SiteDiaryEntryPage() {
               icon={IconNewDiary}
               accent={DIARY_ACCENT}
               onClick={startNewReport}
-              style={{ minHeight: 0, height: 'auto', padding: '8px 12px 8px' }}
+              style={{ minHeight: 0, height: '100%', padding: '8px 12px 8px' }}
             />
           </div>
           <div className="premium-dash-card-wrap" style={{ animationDelay: '70ms' }}>
             <ModuleHomeCard
-              title="Use a Previous Diary"
-              description="Carry over recurring details."
-              icon={IconPreviousDiary}
+              title="View Saved Diaries"
+              description="Review a saved diary — or reuse one for today…"
+              icon={IconSavedDiaries}
               accent={DIARY_ACCENT}
-              onClick={() => setMode('previous')}
-              style={{ minHeight: 0, height: 'auto', padding: '8px 12px 8px' }}
+              onClick={() => setMode('saved')}
+              style={{ minHeight: 0, height: '100%', padding: '8px 12px 8px' }}
             />
           </div>
         </div>
       )}
 
-      {mode === 'previous' && (
+      {(mode === 'previous' || mode === 'saved') && (
         <>
           {loading && <p style={{ color: 'var(--text-2)' }}>Loading your diaries…</p>}
 
           {!loading && reports.length === 0 && (
             <div style={{ padding: '8px 0 24px', color: 'var(--text-2)', fontSize: 14, lineHeight: 1.5 }}>
-              No Site Diaries yet{filterProjectId ? ' for this project' : ''}.
+              No saved Site Diaries yet{filterProjectId ? ' for this project' : ''}.
               <div style={{ marginTop: 14 }}>
                 <SecondaryButton type="button" onClick={startNewReport}>
                   Start a New Diary
@@ -306,23 +316,6 @@ function SiteDiaryEntryPage() {
                   >
                     <button
                       type="button"
-                      className="zlog-secondary-cta zlog-diary-peer-action zlog-diary-peer-action--use"
-                      disabled={Boolean(busyId)}
-                      onClick={() => requestUsePreviousForToday(row)}
-                      style={{ ...recentEntryActionButtonStyle, flex: '1 1 160px' }}
-                    >
-                      <CalendarPlus
-                        size={16}
-                        strokeWidth={2.5}
-                        aria-hidden
-                        className="zlog-secondary-cta__icon"
-                      />
-                      <span className="zlog-secondary-cta__label">
-                        {busy ? 'Starting…' : 'Edit for today'}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
                       className="zlog-secondary-cta zlog-diary-peer-action zlog-diary-peer-action--review"
                       disabled={Boolean(busyId)}
                       onClick={() => openExistingReport(row)}
@@ -335,6 +328,23 @@ function SiteDiaryEntryPage() {
                         className="zlog-secondary-cta__icon"
                       />
                       <span className="zlog-secondary-cta__label">Open to review</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="zlog-secondary-cta zlog-diary-peer-action zlog-diary-peer-action--use"
+                      disabled={Boolean(busyId)}
+                      onClick={() => requestUsePreviousForToday(row)}
+                      style={{ ...recentEntryActionButtonStyle, flex: '1 1 140px' }}
+                    >
+                      <CalendarPlus
+                        size={16}
+                        strokeWidth={2.5}
+                        aria-hidden
+                        className="zlog-secondary-cta__icon"
+                      />
+                      <span className="zlog-secondary-cta__label">
+                        {busy ? 'Starting…' : 'Use for Today'}
+                      </span>
                     </button>
                   </div>
                 </RecentEntryCard>
@@ -382,7 +392,7 @@ function SiteDiaryEntryPage() {
                 color: 'var(--text)',
               }}
             >
-              Edit this diary for today?
+              Use this diary for today?
             </h2>
             <p
               id="zlog-use-previous-confirm-message"
@@ -420,7 +430,7 @@ function SiteDiaryEntryPage() {
                 style={{ ...recentEntryActionButtonStyle, flex: '1 1 140px', width: 'auto' }}
               >
                 <span className="zlog-secondary-cta__label">
-                  {busyId === confirmRow.id ? 'Starting…' : 'Edit for today'}
+                  {busyId === confirmRow.id ? 'Starting…' : 'Use for Today'}
                 </span>
               </button>
             </div>
