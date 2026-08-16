@@ -1,6 +1,6 @@
 {
-  "version": "1.3.0",
-  "updated": "2026-08-15",
+  "version": "1.4.0",
+  "updated": "2026-08-16",
   "description": "Approved application UI terminology. Protects labels from accidental replacement. Does NOT freeze dynamic report content. This is a source-string contract — NOT a visual test.",
   "terms": [
     {
@@ -83,6 +83,29 @@
       "id": "COPY-REPORT-DATE",
       "label": "Report Date",
       "files": ["app/dashboard/diary/setup/page.jsx"]
+    },
+    {
+      "id": "COPY-TEMPORARY-WORKS",
+      "label": "Temporary Works & Scaffolding Checks",
+      "files": [
+        "components/diary/DiaryTemporaryWorksSection.jsx",
+        "app/dashboard/project/[id]/diary/view/page.jsx"
+      ]
+    },
+    {
+      "id": "COPY-TEMPORARY-WORKS-APPLY",
+      "label": "Temporary works apply today",
+      "files": ["components/diary/DiaryTemporaryWorksSection.jsx"]
+    },
+    {
+      "id": "COPY-TEMPORARY-WORKS-NA",
+      "label": "Not applicable today",
+      "files": ["components/diary/DiaryTemporaryWorksSection.jsx"]
+    },
+    {
+      "id": "COPY-SCAFFOLD-CHECK-STATUS",
+      "label": "Scaffold check / inspection status",
+      "files": ["components/diary/DiaryTemporaryWorksSection.jsx"]
     }
   ]
 }

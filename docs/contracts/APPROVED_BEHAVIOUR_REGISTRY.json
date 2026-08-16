@@ -356,6 +356,19 @@
       "manualQANote": "Authenticated open of a real saved diary and mobile visual review of the continuous document require manual QA; document order, Current Phase source, read-only surface, photo/caption visibility and no-write behaviour are automated."
     },
     {
+      "id": "DIARY-028",
+      "description": "Temporary Works & Scaffolding Checks sits after Equipment on hire and before Visitors; supports Temporary works apply today / Not applicable today; structured multi-item records with scaffold-only check/inspection status options; persists on the diary and maps into saved review / PDF",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-daily-records.test.js",
+        "lib/diary-saved-view.test.js",
+        "lib/diary-share-workflow.test.js",
+        "lib/diary-save.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Authenticated save/reopen of Temporary Works records and mobile visual review of the section require manual QA; section position, applicability labels, scaffold options, payload/hydrate and PDF handoff are automated."
+    },
+    {
       "id": "UI-COPY-001",
       "description": "Approved UI terminology remains present (Site Diary, Sign out, Project & Report Details, Continue to Today's Diary, …)",
       "area": "copy",

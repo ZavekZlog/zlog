@@ -1,10 +1,10 @@
 # Protected Site Diary Contract
 
-**Version:** 1.5.0
-**Date Updated:** 2026-08-15
-**Reason Updated:** Route today’s existing diary through populated Project & Report Details before its workbench
-**User Decision:** TODAY’S EXISTING DIARY SETUP-FIRST WORKFLOW
-**Previous Version:** 1.4.0
+**Version:** 1.7.0
+**Date Updated:** 2026-08-16
+**Reason Updated:** Lock Temporary Works & Scaffolding Checks as protected Site Diary behaviour after manual approval
+**User Decision:** LOCK, COMMIT AND PUSH — ALL APPROVED WORK FROM THIS SESSION
+**Previous Version:** 1.6.1
 
 **Status:** Binding behavioural summary for Site Diary  
 **Authority:** Production product contract. Detail and control order live in **`docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md`**. Do not remove, rename, relocate, disable, or silently change protected behaviours unless the user explicitly requests that exact change.
@@ -83,6 +83,7 @@ Stored on the diary/report (`daily_reports`), **not** on `public.projects`:
 - Shift (`shift`)
 - Branding / profile association (`branding_id`, `brand_color`, `brand_logo_url`)
 - Cover Photo (`cover_photo_url`)
+- Temporary Works applicable / N/A choice and check records (`temporary_works_applicable`, `temporary_works`)
 - All daily diary content (summary, labour, plant, visitors, deliveries, permits, photos, etc.)
 
 ---
@@ -120,7 +121,7 @@ Do not invent Author Role when none was saved.
 | Requirement | Contract |
 |-------------|----------|
 | Open to review (hub) | Read-only saved-diary viewer — the whole record on one scrolling page (`/dashboard/project/[id]/diary/view?report=…`); no compose/edit controls; no write |
-| Viewer content | Project & Report Details incl. **Current Phase** from `daily_reports.current_phase`, cover, weather, H&S / RFIs / variations, summary, labour, plant, equipment, visitors, delays, actions, photo evidence with captions visible, signature |
+| Viewer content | Project & Report Details incl. **Current Phase** from `daily_reports.current_phase`, cover, weather, H&S / RFIs / variations, summary, labour, plant, equipment, Temporary Works & Scaffolding Checks, visitors, delays, actions, photo evidence with captions visible, signature |
 | Open today’s diary for editing | Project & Report Details first; no write on open; Continue uses the same report ID |
 | Open historical diary for editing | Workbench View / Edit mode (`lib/diary-view-mode.js`) |
 | Wording | Must not imply editing while reviewing |
@@ -129,13 +130,26 @@ Do not invent Author Role when none was saved.
 | Open write | Opening performs **no** database write |
 | After save | Return to that diary in View mode |
 | Recent lists | Only on diary-selection / hub screens — not on the open report page |
-| Content isolation | Plant/equipment and all daily content isolated by diary ID |
+| Content isolation | Plant/equipment/temporary works and all daily content isolated by diary ID |
 
 Project & Report Details is a pre-flight, not a create flow. It hydrates the
 existing report’s saved Report Date, Shift, Current Phase, identity and linked
 project values. Continuing may update changed details only; it must not insert a
 replacement report or reset cover photo, photo evidence, area notes, attendance,
 visitors, permits, delivery notes, or any other report-owned content.
+
+### Temporary Works & Scaffolding Checks (protected)
+
+| Requirement | Contract |
+|-------------|----------|
+| Position | After Equipment on hire; before Visitors |
+| Applicability | **Temporary works apply today** / **Not applicable today** |
+| Records | Add / edit / delete multiple items when applicable |
+| Fields | Type · Location / Description · Status · optional TWC/TWS/Reference · Check Result · Notes / Action |
+| Scaffold-only | Scaffold check / inspection status + optional Scaffold tag / inspection reference — only when Type = Scaffold |
+| Scaffold statuses | Checked today — satisfactory · Formal inspection current · Issue identified · Not checked today |
+| Persistence | `temporary_works_applicable` + `temporary_works` on the same diary ID |
+| Review / PDF | Saved viewer and existing Temporary Works PDF schedule; N/A omits empty schedule |
 
 ---
 

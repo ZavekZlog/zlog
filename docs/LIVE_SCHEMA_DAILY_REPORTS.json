@@ -1,5 +1,6 @@
 {
   "introspectedAt": "2026-08-05T20:33:50.151Z",
+  "pendingRefreshAfterMigration": "20260816090000_diary_temporary_works.sql",
   "host": "epvkxavaxmzyskteecsv.supabase.co",
   "source": "GET /rest/v1/ Accept: application/openapi+json",
   "definitionKeysSample": [
@@ -25,7 +26,8 @@
         "equipment_hire",
         "hs_incidents",
         "rfis",
-        "variations"
+        "variations",
+        "temporary_works"
       ],
       "columns": [
         {
@@ -243,6 +245,24 @@
           "nullable": false,
           "requiredInSchema": true,
           "default": "'[]'::jsonb"
+        },
+        {
+          "name": "temporary_works_applicable",
+          "type": "boolean",
+          "format": "boolean",
+          "description": "True when applicable, false when explicitly N/A, null when not answered",
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
+          "name": "temporary_works",
+          "type": "jsonb",
+          "format": "jsonb",
+          "description": "Daily temporary works and scaffolding checks array",
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "'[]'::jsonb"
         }
       ],
       "columnNames": [
@@ -269,7 +289,9 @@
         "equipment_hire",
         "hs_incidents",
         "rfis",
-        "variations"
+        "variations",
+        "temporary_works_applicable",
+        "temporary_works"
       ]
     },
     "report_labour": {

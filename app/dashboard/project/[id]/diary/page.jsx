@@ -35,6 +35,7 @@ import { BrandingSelector, brandingPayload } from '@/components/branding/Brandin
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
 import { SignInOperativeReview } from '@/components/diary/SignInOperativeReview'
 import { DiaryDailyRecordSections } from '@/components/diary/DiaryDailyRecordSections'
+import { DiaryTemporaryWorksSection } from '@/components/diary/DiaryTemporaryWorksSection'
 import { PhotoWorkspace } from '@/components/photo-workspace'
 import {
   flattenAreaGroups,
@@ -52,6 +53,9 @@ import {
   hsIncidentsPayload,
   rfisFromDb,
   rfisPayload,
+  temporaryWorksApplicableFromDb,
+  temporaryWorksFromDb,
+  temporaryWorksPayload,
   variationsFromDb,
   variationsPayload,
 } from '@/lib/diary-daily-records'
@@ -459,6 +463,8 @@ export default function SiteDiaryPage() {
   const [hsIncidents, setHsIncidents] = useState([])
   const [rfis, setRfis] = useState([])
   const [variations, setVariations] = useState([])
+  const [temporaryWorksApplicable, setTemporaryWorksApplicable] = useState(null)
+  const [temporaryWorks, setTemporaryWorks] = useState([])
   const [visitors, setVisitors] = useState('')
   const [delaysIssues, setDelaysIssues] = useState('')
   const [actionsRequired, setActionsRequired] = useState('')
@@ -615,6 +621,8 @@ export default function SiteDiaryPage() {
         setHsIncidents([])
         setRfis([])
         setVariations([])
+        setTemporaryWorksApplicable(null)
+        setTemporaryWorks([])
 
         const applyCover = async (storagePath) => {
           if (!storagePath) {
@@ -760,6 +768,13 @@ export default function SiteDiaryPage() {
         setHsIncidents(hsIncidentsFromDb(existing.hs_incidents))
         setRfis(rfisFromDb(existing.rfis))
         setVariations(variationsFromDb(existing.variations))
+        setTemporaryWorksApplicable(
+          temporaryWorksApplicableFromDb(
+            existing.temporary_works_applicable,
+            existing.temporary_works,
+          ),
+        )
+        setTemporaryWorks(temporaryWorksFromDb(existing.temporary_works))
         if (existing.branding_id || existing.brand_color || existing.brand_logo_url) {
           setBrandingSelection({
             brandingId: existing.branding_id || null,
@@ -1487,6 +1502,9 @@ export default function SiteDiaryPage() {
           hs_incidents: hsIncidentsPayload(hsIncidents),
           rfis: rfisPayload(rfis),
           variations: variationsPayload(variations),
+          temporary_works_applicable: temporaryWorksApplicable,
+          temporary_works:
+            temporaryWorksApplicable === true ? temporaryWorksPayload(temporaryWorks) : [],
           ...brandingPayload(brandingSelection),
         },
         coverPlan,
@@ -2345,6 +2363,15 @@ export default function SiteDiaryPage() {
             + Add Equipment
           </button>
         </GlassSection>
+
+        <DiaryTemporaryWorksSection
+          accent={DIARY_ACCENT}
+          disabled={isDiaryViewMode}
+          applicable={temporaryWorksApplicable}
+          rows={temporaryWorks}
+          onApplicableChange={setTemporaryWorksApplicable}
+          onRowsChange={setTemporaryWorks}
+        />
 
         <GlassSection title="Visitors" accent={DIARY_ACCENT}>
           <div style={carriedVisitors ? carriedFieldWrapStyle : undefined}>

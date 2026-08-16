@@ -1,11 +1,11 @@
 # Site Diary — Screen Contract
 
 **Layer:** B — Screen  
-**Version:** 1.9.0
-**Date Updated:** 2026-08-15
-**Reason Updated:** Lock the Save PDF export interaction — Save As dialog where supported, download only as fallback
-**User Decision:** MANUAL QA REGRESSION — PDF SAVE NO LONGER PROMPTS FOR FILENAME / LOCATION
-**Previous Version:** 1.8.0
+**Version:** 1.12.0
+**Date Updated:** 2026-08-16
+**Reason Updated:** Lock Temporary Works & Scaffolding Checks as protected Site Diary behaviour after manual approval
+**User Decision:** LOCK, COMMIT AND PUSH — ALL APPROVED WORK FROM THIS SESSION
+**Previous Version:** 1.11.1
 
 **Status:** Binding production contract  
 **Routes:**
@@ -141,6 +141,7 @@ Protected interactions:
 - Branding not forced in normal Edit
 - Summary optional
 - Plant / daily content isolated by report ID
+- Temporary Works & Scaffolding Checks records and explicit applicable / N/A choice reload by report ID
 - Project association retained; Project Day visible when dates exist
 - Shift reloads from `daily_reports.shift`
 - Saved work areas show their saved photos and captions by default, using the area’s saved 1 / 4 / 6 review density.
@@ -157,7 +158,7 @@ Reached from **Open to review**. This is a finished historical record, not an ed
 **Must:**
 
 - Present the diary as **one complete, continuous document on a single vertically scrolling page**.
-- Render, in this order: Project & Report Details (project · reporting · this report, including **Current Phase**) → Cover Photo → Weather → H&S Incidents / Observations → RFIs → Variations → Site Summary → Labour on Site → Plant → Equipment on Hire → Visitors → Delays & Issues → Actions Required → Photo Evidence → Signature.
+- Render, in this order: Project & Report Details (project · reporting · this report, including **Current Phase**) → Cover Photo → Weather → H&S Incidents / Observations → RFIs → Variations → Site Summary → Labour on Site → Plant → Equipment on Hire → Temporary Works & Scaffolding Checks → Visitors → Delays & Issues → Actions Required → Photo Evidence → Signature.
 - Show every saved photograph with its caption by default, at the area’s saved 1 / 4 / 6 review density, numbered continuously across the document.
 - Read **Current Phase** from `daily_reports.current_phase` for that diary. `projects.current_phase` is never read.
 - Show `Not recorded` where the diary genuinely holds no value, so blank never reads as broken.
@@ -172,6 +173,49 @@ Reached from **Open to review**. This is a finished historical record, not an ed
 **Onward action:** exactly one — **Edit This Diary** — which returns to the composition workflow on the same diary ID.
 
 Permits and deliveries are named in hub copy but are **not** saved diary fields today; the viewer does not invent them.
+
+### Temporary Works & Scaffolding Checks
+
+**FROZEN — approved production behaviour.**
+
+Workbench position (after Equipment on hire, before Visitors):
+
+Equipment on hire → Temporary Works & Scaffolding Checks → Visitors
+
+Applicability (exactly these labels):
+
+- **Temporary works apply today**
+- **Not applicable today**
+
+When **Not applicable today** is selected: no further Temporary Works input is required; records are cleared only after confirmation if any already exist; the section persists and reports as not applicable; PDF omits an empty schedule.
+
+When **Temporary works apply today** is selected, the user may add, edit and delete multiple items. Each item uses:
+
+- Temporary Works Type — Scaffold · Hoarding · Excavation support · Temporary propping · Edge protection · Access platform · Formwork / falsework · Other
+- Location / Description
+- Status — In place · Inspected · Modified · Removed · Issue identified
+- TWC / TWS / Reference — optional
+- Check Result — Satisfactory · Action required
+- Notes / Action
+
+Scaffold-only fields (shown only when Type = Scaffold):
+
+- Scaffold check / inspection status — Checked today — satisfactory · Formal inspection current · Issue identified · Not checked today
+- Scaffold tag / inspection reference — optional
+
+Persistence:
+
+- Report-owned on `daily_reports.temporary_works_applicable` and `daily_reports.temporary_works`
+- Survives Save Site Diary, reopen, Edit This Diary, saved review, and PDF regenerate
+- Inline edits follow the established diary pattern and are persisted by **Save Site Diary**
+
+Saved viewer / PDF:
+
+- Saved viewer shows recorded items, or a concise Not applicable today state
+- PDF flattens recorded items into the existing Temporary Works & Scaffolding Checks schedule columns and section banner. N/A produces no empty schedule.
+- Do not invent a separate Temporary Works PDF visual language
+
+Canonical helpers: `lib/diary-daily-records.js`, `components/diary/DiaryTemporaryWorksSection.jsx`. Gate: `lib/diary-daily-records.test.js`, `lib/diary-saved-view.test.js`, `lib/diary-share-workflow.test.js`.
 
 ---
 

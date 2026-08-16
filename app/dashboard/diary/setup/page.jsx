@@ -15,6 +15,7 @@ import {
   typeTokens,
 } from '@/lib/premium-ui'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
+import { extractBrandColorFromFile } from '@/lib/extract-brand-color'
 import { ProjectDatesFields } from '@/components/project/ProjectDatesFields'
 import { ProjectStickyFields } from '@/components/project/ProjectStickyFields'
 import { validateProjectDates } from '@/lib/project-day'
@@ -483,7 +484,7 @@ function SiteDiarySetupPage() {
   const uploadLogoIfNeeded = async (userId) => {
     if (!logoFile) return logoStoragePath
     const ext = logoFile.name.split('.').pop()?.toLowerCase() || 'jpg'
-    const path = `${userId}/branding/setup-${Date.now()}.${ext}`
+    const path = `${userId}/branding/setup-colour-v2-${Date.now()}.${ext}`
     const { error: upErr } = await supabase.storage
       .from('site-photos')
       .upload(path, logoFile, { contentType: logoFile.type || 'image/jpeg', upsert: false })
@@ -523,8 +524,12 @@ function SiteDiarySetupPage() {
       if (!user) throw new Error('You must be signed in')
 
       let brandLogoUrl = logoStoragePath
+      let candidateBrandColor = brandColor
       if (logoFile) {
-        brandLogoUrl = await uploadLogoIfNeeded(user.id)
+        ;[brandLogoUrl, candidateBrandColor] = await Promise.all([
+          uploadLogoIfNeeded(user.id),
+          extractBrandColorFromFile(logoFile, '#4B5563'),
+        ])
       }
 
       // Persist Reporting Company as one identity (name + logo + metadata) before draft write.
@@ -532,10 +537,10 @@ function SiteDiarySetupPage() {
         companyName: reportingCompany,
         logoUrl: brandLogoUrl || null,
         brandingId,
-        brandColor,
+        brandColor: candidateBrandColor,
       })
       const nextBrandingId = companySnapshot.brandingId || brandingId
-      const nextBrandColor = companySnapshot.brandColor || brandColor
+      const nextBrandColor = companySnapshot.brandColor || candidateBrandColor
       const nextLogoUrl = companySnapshot.brandLogoUrl !== undefined
         ? companySnapshot.brandLogoUrl
         : brandLogoUrl || null

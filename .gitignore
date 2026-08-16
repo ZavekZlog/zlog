@@ -40,6 +40,10 @@ yarn-error.log*
 # Per-task scope declaration for anti-regression gates (never commit)
 .zlog-task-scope.json
 
+# Local temporary PDF proof / audit harness output (never production)
+/tmp-page1-proof/
+/scripts/tmp-*.mjs
+
 # Supabase CLI local temp
 supabase/.temp/
 

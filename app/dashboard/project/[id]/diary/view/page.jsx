@@ -13,12 +13,17 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { Pencil } from 'lucide-react'
+import { FileDown, Pencil } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { PremiumShell, GlassSection, SecondaryButton } from '@/lib/premium-ui'
+import { PremiumShell, GlassSection, PrimaryCTA, SecondaryButton } from '@/lib/premium-ui'
 import { REPORT_THEMES } from '@/lib/report-theme'
 import { NOT_RECORDED, loadSavedDiaryView } from '@/lib/diary-saved-view'
+import {
+  temporaryWorkInspectionStatus,
+  temporaryWorkNotesDisplay,
+} from '@/lib/diary-daily-records'
 import { diaryHubHref, editExistingDiaryHref } from '@/lib/diary-routing'
+import { downloadSiteDiaryPdf, prepareSiteDiaryPdf } from '@/lib/diary-share'
 
 const DIARY_ACCENT = REPORT_THEMES.diary.accent
 
@@ -225,6 +230,8 @@ function SavedDiaryViewer() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [view, setView] = useState(null)
+  const [generatingPdf, setGeneratingPdf] = useState(false)
+  const [pdfStatus, setPdfStatus] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -299,6 +306,35 @@ function SavedDiaryViewer() {
     reportId: view.reportId,
     reportDate: view.reportDate,
   })
+
+  const handleGeneratePdf = async () => {
+    if (generatingPdf) return
+    setGeneratingPdf(true)
+    setPdfStatus('')
+    try {
+      const prepared = await prepareSiteDiaryPdf({
+        projectId: view.projectId,
+        reportId: view.reportId,
+      })
+      if (!prepared.ok) {
+        setPdfStatus(prepared.message || 'We couldn’t prepare the PDF.')
+        return
+      }
+      const result = await downloadSiteDiaryPdf({
+        blob: prepared.blob,
+        fileName: prepared.fileName,
+      })
+      if (!result.ok) {
+        setPdfStatus(result.message || 'Could not save the PDF.')
+        return
+      }
+      if (!result.cancelled) setPdfStatus(result.message || 'PDF saved.')
+    } catch (err) {
+      setPdfStatus(err?.message || 'We couldn’t generate the PDF. Try again.')
+    } finally {
+      setGeneratingPdf(false)
+    }
+  }
 
   return (
     <PremiumShell
@@ -490,6 +526,29 @@ function SavedDiaryViewer() {
         )}
       </GlassSection>
 
+      <GlassSection title="Temporary Works & Scaffolding Checks" accent={DIARY_ACCENT}>
+        {view.temporaryWorksApplicable === false ? (
+          <EmptySection>Not applicable today.</EmptySection>
+        ) : view.temporaryWorks.length ? (
+          <RecordList
+            rows={view.temporaryWorks.map((row) => ({
+              ...row,
+              item: row.type || '',
+              inspectionStatus: temporaryWorkInspectionStatus(row),
+              notesDisplay: temporaryWorkNotesDisplay(row),
+            }))}
+            columns={[
+              { key: 'item', label: 'Temporary Works Type' },
+              { key: 'location', label: 'Location / Description' },
+              { key: 'inspectionStatus', label: 'Status / Check Result' },
+              { key: 'notesDisplay', label: 'Notes / Action' },
+            ]}
+          />
+        ) : (
+          <EmptySection>No temporary works items were recorded.</EmptySection>
+        )}
+      </GlassSection>
+
       <TextSection
         title="Visitors"
         value={view.visitors}
@@ -571,17 +630,42 @@ function SavedDiaryViewer() {
         </p>
       </GlassSection>
 
-      {editHref ? (
-        <div style={{ marginTop: 8, paddingTop: 16, borderTop: '1px solid var(--edge)' }}>
-          <SecondaryButton
+      <div style={{ marginTop: 8, paddingTop: 16, borderTop: '1px solid var(--edge)' }}>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <PrimaryCTA
             type="button"
-            onClick={() => router.push(editHref)}
-            style={{ width: '100%', minHeight: 48 }}
+            onClick={handleGeneratePdf}
+            disabled={generatingPdf}
+            accent={DIARY_ACCENT}
+            style={{ width: '100%', minHeight: 50 }}
           >
-            <Pencil size={17} strokeWidth={2.25} aria-hidden className="zlog-secondary-cta__icon" />
-            <span className="zlog-secondary-cta__label">Edit This Diary</span>
-          </SecondaryButton>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              <FileDown size={18} strokeWidth={2.25} aria-hidden />
+              {generatingPdf ? 'Generating PDF…' : 'Generate PDF'}
+            </span>
+          </PrimaryCTA>
+          {editHref ? (
+            <SecondaryButton
+              type="button"
+              onClick={() => router.push(editHref)}
+              style={{ width: '100%', minHeight: 48 }}
+            >
+              <Pencil size={17} strokeWidth={2.25} aria-hidden className="zlog-secondary-cta__icon" />
+              <span className="zlog-secondary-cta__label">Edit This Diary</span>
+            </SecondaryButton>
+          ) : null}
+        </div>
+        {pdfStatus ? (
           <p
+            role="status"
+            aria-live="polite"
             style={{
               margin: '8px 4px 0',
               color: 'var(--text-2)',
@@ -590,10 +674,22 @@ function SavedDiaryViewer() {
               textAlign: 'center',
             }}
           >
-            Reviewing does not change anything. Choose Edit This Diary to make changes.
+            {pdfStatus}
           </p>
-        </div>
-      ) : null}
+        ) : null}
+        <p
+          style={{
+            margin: '8px 4px 0',
+            color: 'var(--text-2)',
+            fontSize: 13,
+            lineHeight: 1.45,
+            textAlign: 'center',
+          }}
+        >
+          Reviewing does not change anything. Generate a PDF or choose Edit This Diary to make
+          changes.
+        </p>
+      </div>
     </PremiumShell>
   )
 }
