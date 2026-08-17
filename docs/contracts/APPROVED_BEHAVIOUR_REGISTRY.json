@@ -1,5 +1,5 @@
 {
-  "version": "1.1.7",
+  "version": "1.1.8",
   "updated": "2026-08-17",
   "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage. Source contracts are NOT screenshot visual tests.",
   "behaviours": [
@@ -390,6 +390,17 @@
       ],
       "manualQA": true,
       "manualQANote": "Source contracts protect row/action/state wiring, touch-target declarations and overflow guards. Authenticated phone inspection must confirm practical 5–7 record density, outdoor legibility, wrapping, the shared sticky bar in both states, and no viewport obstruction."
+    },
+    {
+      "id": "DIARY-031",
+      "description": "The Saved Site Diary review keeps Back accessible throughout the continuous record in a compact sticky action area while the Zlog header, navigation title, report title and report content scroll normally",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-saved-view.test.js",
+        "lib/premium-ui-layout-contract.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Source contracts protect the viewer opt-in, single Back control, opaque top:0 dock and default-off shared-shell behaviour. Authenticated phone QA on 2026-08-17 confirmed Back remains accessible, the report scrolls normally beneath it, the treatment is compact, and the header/title/report layout remain unfrozen and correct."
     },
     {
       "id": "UI-COPY-001",

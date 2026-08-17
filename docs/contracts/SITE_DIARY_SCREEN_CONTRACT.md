@@ -1,11 +1,11 @@
 # Site Diary — Screen Contract
 
 **Layer:** B — Screen  
-**Version:** 1.15.0
+**Version:** 1.16.0
 **Date Updated:** 2026-08-17
-**Reason Updated:** Keep normal-mode Select in the same sticky management bar that becomes the selection controls
-**User Decision:** APPROVED — tightly bounded View Saved Diaries UX redesign; all data and deletion behaviour preserved
-**Previous Version:** 1.14.0
+**Reason Updated:** Keep Back accessible throughout the long saved-diary review without freezing the Zlog header or report title
+**User Decision:** APPROVED — manually verified compact sticky Back on the Saved Site Diary review screen; report layout and scrolling preserved
+**Previous Version:** 1.15.0
 
 **Status:** Binding production contract  
 **Routes:**
@@ -163,6 +163,8 @@ Reached from **Open to review**. This is a finished historical record, not an ed
 - Read **Current Phase** from `daily_reports.current_phase` for that diary. `projects.current_phase` is never read.
 - Show `Not recorded` where the diary genuinely holds no value, so blank never reads as broken.
 - Perform **no writes** and create no rows.
+- Keep **Back** visible and usable throughout the continuous review using a compact, opaque sticky action area within the existing report width. The report scrolls normally beneath it.
+- Keep the large Zlog header, **Saved Site Diary** navigation title, report identity/title, and decorative content in normal document flow; none of them is frozen with Back.
 
 **Must not:**
 

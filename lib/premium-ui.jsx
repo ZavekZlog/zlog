@@ -86,6 +86,23 @@ const POWDER_CTA_NOISE =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")"
 
 export const premiumScopedCss = `
+  /* Opt-in compact Back for long report screens (SubPageLayout stickyBack).
+     Sticks flush to the scrollport and carries its inset as its own opaque
+     padding: a non-zero top offset leaves a live strip that scrolling content
+     shows through. The negative margin cancels the padding, so the surrounding
+     flow position is unchanged. */
+  .zlog-sticky-back-dock {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    isolation: isolate;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    margin: -12px 0 12px;
+    padding: 12px 0 8px;
+    background: #0b0d12;
+  }
   .dashboard-premium-bg { position: relative; }
   .dashboard-premium-bg::before {
     content: '';
@@ -1021,10 +1038,15 @@ export function ZlogInternalHeader({
   accent: _accent = DIARY_ACCENT,
   trailing = null,
   hideModuleNav = false,
+  stickyBack = false,
   brandRegionStyle,
   contentMaxWidth = 448,
 }) {
   const showNavRow = !hideModuleNav && Boolean(backHref || onBack || title || trailing)
+  // stickyBack moves Back into the sticky dock inside main. ReportModuleNav then
+  // renders its own spacer in Back's place, so the title stays centred.
+  const navBackHref = stickyBack ? undefined : backHref
+  const navOnBack = stickyBack ? undefined : onBack
 
   return (
     <>
@@ -1058,8 +1080,8 @@ export function ZlogInternalHeader({
           >
             <ReportModuleNav
               title={title}
-              onBack={onBack}
-              backHref={backHref}
+              onBack={navOnBack}
+              backHref={navBackHref}
               trailing={trailing}
             />
           </div>
@@ -1088,9 +1110,11 @@ export function SubPageLayout({
   maxWidth,
   trailing = null,
   hideModuleNav = false,
+  stickyBack = false,
   brandRegionStyle,
 }) {
   const contentMaxWidth = maxWidth ?? 448
+  const showStickyBack = stickyBack && !hideModuleNav && Boolean(backHref || onBack)
 
   return (
     <div className="min-h-screen bg-[#0d0f12] text-[#f3f4f6] flex flex-col pb-6 pt-0 selection:bg-[#ff5500]/30">
@@ -1103,12 +1127,18 @@ export function SubPageLayout({
         accent={accent}
         trailing={hideModuleNav ? null : trailing}
         hideModuleNav={hideModuleNav}
+        stickyBack={stickyBack}
         brandRegionStyle={brandRegionStyle}
         contentMaxWidth={contentMaxWidth}
       />
 
       <div className="px-4">
         <main className="w-full mx-auto flex-1" style={{ maxWidth: contentMaxWidth }}>
+          {showStickyBack ? (
+            <div className="zlog-sticky-back-dock" data-sticky-back>
+              <ZlogBackControl href={backHref} onClick={onBack} />
+            </div>
+          ) : null}
           {children}
         </main>
       </div>

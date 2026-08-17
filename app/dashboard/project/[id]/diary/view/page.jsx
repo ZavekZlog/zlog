@@ -369,6 +369,7 @@ function SavedDiaryViewer() {
       backHref={diaryHubHref()}
       accent={DIARY_ACCENT}
       maxWidth={640}
+      stickyBack
     >
       <p
         style={{
