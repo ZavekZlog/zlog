@@ -670,7 +670,7 @@ export const AUTHENTICATED_SHELL_BRAND_COMPACT_STYLE = {
  */
 export const AUTHENTICATED_SHELL_HEADER_STYLE = {
   position: 'relative',
-  overflowX: 'hidden',
+  overflowX: 'visible',
   overflowY: 'visible',
   background: 'transparent',
 }

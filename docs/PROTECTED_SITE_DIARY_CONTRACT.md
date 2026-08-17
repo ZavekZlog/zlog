@@ -1,10 +1,10 @@
 # Protected Site Diary Contract
 
-**Version:** 1.8.0
+**Version:** 1.10.0
 **Date Updated:** 2026-08-17
-**Reason Updated:** Add confirmed saved-diary deletion; children cascade; Storage cleanup is durable and reference-safe
-**User Decision:** APPROVED — saved-report deletion behaviour plus minimum shared deletion infrastructure
-**Previous Version:** 1.7.0
+**Reason Updated:** Lock one shared sticky management bar carrying Select in normal browsing and the selection controls in Select mode
+**User Decision:** APPROVED — View Saved Diaries UX density redesign with all existing actions and deletion behaviour preserved
+**Previous Version:** 1.9.0
 
 **Status:** Binding behavioural summary for Site Diary  
 **Authority:** Production product contract. Detail and control order live in **`docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md`**. Do not remove, rename, relocate, disable, or silently change protected behaviours unless the user explicitly requests that exact change.
@@ -131,6 +131,8 @@ Do not invent Author Role when none was saved.
 | After save | Return to that diary in View mode |
 | Recent lists | Only on diary-selection / hub screens — not on the open report page |
 | Content isolation | Plant/equipment/temporary works and all daily content isolated by diary ID |
+| Saved-list presentation | Compact records-management rows: project name primary; report date + shift; existing short summary where useful; main row area opens to review; compact trailing **Use for Today**; no oversized dashboard cards or horizontal overflow |
+| Selection presentation | Explicit Select mode only; clear row checkbox/selected state; live **n selected** count; one compact opaque sticky management bar holding **Select** in normal browsing and **Cancel / Select All / Delete n Diaries** in Select mode; never two sticky bars; title is not sticky |
 | Delete saved diary | Explicit **Select** on the saved list, or **Delete Diary** on the opened viewer / project recent list. Never one-tap. Confirmed with the actual count. Remaining diaries stay. Feature contract: `docs/contracts/REPORT_DELETION_CONTRACT.md` |
 
 Project & Report Details is a pre-flight, not a create flow. It hydrates the

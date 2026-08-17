@@ -1,11 +1,11 @@
 # Site Diary — Screen Contract
 
 **Layer:** B — Screen  
-**Version:** 1.13.0
+**Version:** 1.15.0
 **Date Updated:** 2026-08-17
-**Reason Updated:** Add confirmed saved-diary deletion on the saved list and viewer; lock reusable deletion infrastructure
-**User Decision:** APPROVED — saved-report deletion behaviour plus minimum shared deletion infrastructure
-**Previous Version:** 1.12.0
+**Reason Updated:** Keep normal-mode Select in the same sticky management bar that becomes the selection controls
+**User Decision:** APPROVED — tightly bounded View Saved Diaries UX redesign; all data and deletion behaviour preserved
+**Previous Version:** 1.14.0
 
 **Status:** Binding production contract  
 **Routes:**
@@ -264,9 +264,10 @@ The longer supporting sentence sets the row height; it is never clipped or short
 
 - **Start a New Diary** → `/dashboard/diary/setup` (clears setup session draft; blank init for today)
 - **View Saved Diaries** → the saved-diary list. Opening the list creates, copies and updates nothing.
-  Each entry keeps its identifying information and offers two actions, in this order:
-  - **Open to review** → the exact selected report in the read-only saved-diary viewer (§4A). Edit is reached from there.
-  - **Use for Today** → creates a **new** diary from that one and lands on its Project & Report Details (§3 flow C). The selected diary stays saved and unchanged.
+  Each entry is a compact records-management row, not a dashboard card. It shows project name (primary), report date, shift, and the existing short summary where useful.
+  - The main information area is the large **Open to review** tap target → the exact selected report in the read-only saved-diary viewer (§4A). Edit is reached from there.
+  - Compact trailing **Use for Today** → creates a **new** diary from that one and lands on its Project & Report Details (§3 flow C). The selected diary stays saved and unchanged.
+  - Project name/date/shift remain readable and wrap safely; the row has no horizontal overflow. Touch targets remain at least 44px.
 - Saved-list deletion is a separate explicit **Select** mode (§5A). Checkboxes are not shown until Select is chosen. Open to review and Use for Today remain.
 
 **Use a Previous Diary is not a hub card.** Review and reuse both live on the saved-diary entry, so a
@@ -284,6 +285,8 @@ Feature contract: `docs/contracts/REPORT_DELETION_CONTRACT.md`.
 - Keep hub wording **View Saved Diaries**.
 - Offer **Select** only when the user invokes it. Checkboxes appear only in Select mode.
 - Offer **Select All** and a count-aware **Delete Selected** / **Delete Diary** action.
+- Show a live **n selected** count and a clear selected-row state.
+- Keep one compact sticky management bar above the list while scrolling. In normal browsing it holds **Select**; in Select mode the same bar holds the live count, **Cancel**, **Select All**, and the count-aware delete action. The bar sticks below the viewport top, stays opaque, and the title/header does not stick.
 - Never delete on one tap. Confirmation shows the actual count (`Delete Diary` / `Delete 6 Diaries` and `Permanently delete this saved diary?` / `Permanently delete these 6 saved diaries?`).
 - Keep **Cancel** on the confirmation. Cancel deletes nothing.
 - On the opened saved diary, offer **Delete Diary** visually separated from Edit/PDF; after confirm, return to the saved list.

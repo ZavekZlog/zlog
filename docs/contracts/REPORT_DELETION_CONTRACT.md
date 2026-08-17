@@ -1,11 +1,11 @@
 # Report Deletion Contract
 
 **Layer:** C — Feature  
-**Version:** 1.0.0  
+**Version:** 1.2.0
 **Date Updated:** 2026-08-17  
-**Reason Updated:** Lock reusable saved-report deletion: confirmed single/bulk delete, transactional RPC, durable Storage cleanup with reference safety  
-**User Decision:** APPROVED — implement saved-report deletion plus the minimum shared deletion infrastructure required to make that behaviour safe and reusable  
-**Previous Version:** none
+**Reason Updated:** Make the sticky management area a single shared surface that carries Select in normal browsing and the selection controls in Select mode
+**User Decision:** APPROVED — tightly bounded View Saved Diaries presentation and interaction-density redesign; deletion backend remains unchanged
+**Previous Version:** 1.1.0
 
 **Status:** Binding production contract for deleting saved reports  
 **First host:** Site Diary saved-diary list, saved-diary viewer, and project-page recent diary entries  
@@ -59,10 +59,15 @@ Future modules reuse the same helper with their own singular/plural labels. The 
 ### Saved-diary list (`/dashboard/diary`, View Saved Diaries)
 
 - Hub wording stays **View Saved Diaries**.
+- Saved records use compact, restrained list rows rather than dashboard-style cards.
+- Each row shows project name first, then report date and shift, with the existing short summary where useful.
+- In normal mode, the record information is the large **Open to review** tap target; **Use for Today** is a clear compact trailing action. Neither action is swipe-only or hidden behind an overflow menu.
 - Checkboxes are absent until the user chooses **Select**.
 - **Select All** selects every currently listed diary.
 - **Delete Selected** is disabled until at least one diary is selected.
 - **Open to review** and **Use for Today** remain on each entry and keep their approved behaviour.
+- Selection mode replaces navigation actions with a clear full-row checkbox target, selected-row treatment, and live `{count} selected` status.
+- One compact management bar remains sticky below the viewport top while scrolling. In normal browsing it carries **Select**; in Select mode the same bar carries the live count, **Cancel**, **Select All**, and the count-aware delete action. It is fully opaque, does not duplicate into a second sticky bar, and does not freeze the page title.
 
 ### Opened saved diary (`/dashboard/project/[id]/diary/view`)
 
@@ -142,3 +147,28 @@ Focused: `lib/report-deletion.test.js`
 Site Diary regression: `lib/diary-site-diary-contract.test.js`, `lib/diary-saved-view.test.js`
 
 A passing source-string gate is not visual QA. Authenticated delete of a real saved diary remains manual QA.
+
+---
+
+## 8. Saved-report management presentation (reusable)
+
+The Site Diary list establishes the required presentation pattern for future saved-report modules. This section authorises no other module implementation.
+
+**Dashboard vs management:**
+
+- Dashboard/module entry surfaces may use expressive cards.
+- Saved-report management surfaces use compact, highly legible record rows designed for fast scanning.
+
+**Every future saved-report list must:**
+
+- Prioritise project/report identity, date, and report-specific context.
+- Aim to show approximately 5–7 records on a normal phone viewport where content permits, without tiny text or undersized touch targets.
+- Use restrained separators or row containers instead of large decorative card spacing.
+- Keep primary record opening obvious and provide efficient, visibly labelled secondary actions.
+- Avoid swipe-only actions, obscure gestures, horizontal scrolling, and unnecessary truncation of project/date identity.
+- Keep touch targets at least 44px and text readable in outdoor/mobile conditions.
+- Use explicit **Select**, per-row selection, **Select All**, live selected count, count-aware delete, and confirmation before deletion.
+- Provide exactly one sticky management area per saved-report list. It carries the minimal normal-state control (**Select**) and becomes the selection controls when Select is activated.
+- Keep that sticky area compact, opaque, and offset from viewport edges; it must not obscure records or device/browser navigation.
+
+If optional summary text is constrained for density, project name, date, shift, and action labels remain fully legible. Visual/mobile inspection is required because source contracts cannot prove geometry or records-per-screen.

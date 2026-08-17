@@ -337,7 +337,7 @@
       "requiresUserApproval": true
     },
     "saved-report-deletion": {
-      "description": "Approved saved-report deletion: RPC/outbox, confirmation dialog, Site Diary list/viewer and project-page delete path.",
+      "description": "Approved saved-report management: compact list/selection UX plus RPC/outbox, confirmation dialog, Site Diary list/viewer and project-page delete path.",
       "allowedPathPrefixes": [
         "supabase/migrations/",
         "lib/report-deletion.js",
@@ -410,6 +410,7 @@
     "DIARY-026",
     "DIARY-028",
     "DIARY-029",
+    "DIARY-030",
     "AUTH-001",
     "AUTH-004",
     "UI-COPY-001"

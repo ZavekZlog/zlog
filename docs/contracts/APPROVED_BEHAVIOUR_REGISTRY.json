@@ -1,5 +1,5 @@
 {
-  "version": "1.1.6",
+  "version": "1.1.7",
   "updated": "2026-08-17",
   "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage. Source contracts are NOT screenshot visual tests.",
   "behaviours": [
@@ -379,6 +379,17 @@
       ],
       "manualQA": true,
       "manualQANote": "Authenticated delete of a real saved diary, Storage orphan/reference-safety on live data, and mobile visual review of Select mode / confirmation remain manual QA; copy, confirmation, RPC wiring, cascade/outbox source contracts and remaining-list behaviour are automated."
+    },
+    {
+      "id": "DIARY-030",
+      "description": "View Saved Diaries uses compact mobile-first record rows with project/date/shift identity, main-row review, compact Use for Today, and one sticky management bar carrying Select in normal browsing and the live count / Cancel / Select All / count-aware delete controls in Select mode",
+      "area": "site-diary",
+      "tests": [
+        "lib/report-deletion.test.js",
+        "lib/diary-site-diary-contract.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Source contracts protect row/action/state wiring, touch-target declarations and overflow guards. Authenticated phone inspection must confirm practical 5–7 record density, outdoor legibility, wrapping, the shared sticky bar in both states, and no viewport obstruction."
     },
     {
       "id": "UI-COPY-001",
