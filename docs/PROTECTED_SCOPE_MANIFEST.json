@@ -336,6 +336,30 @@
       "allowsHighRisk": true,
       "requiresUserApproval": true
     },
+    "saved-report-deletion": {
+      "description": "Approved saved-report deletion: RPC/outbox, confirmation dialog, Site Diary list/viewer and project-page delete path.",
+      "allowedPathPrefixes": [
+        "supabase/migrations/",
+        "lib/report-deletion.js",
+        "lib/report-deletion.test.js",
+        "components/report-management/",
+        "app/dashboard/diary/page.jsx",
+        "app/dashboard/project/[id]/diary/view/page.jsx",
+        "app/dashboard/project/[id]/page.jsx",
+        "docs/contracts/REPORT_DELETION_CONTRACT.md",
+        "docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md",
+        "docs/PROTECTED_SITE_DIARY_CONTRACT.md"
+      ],
+      "allowedGlobs": [
+        "lib/report-deletion*",
+        "components/report-management/**",
+        "lib/diary-site-diary-contract.test.js",
+        "lib/diary-saved-view.test.js"
+      ],
+      "maxProductFiles": 12,
+      "allowsHighRisk": true,
+      "requiresUserApproval": true
+    },
     "photo-workspace": {
       "description": "Shared Photo Workspace (P2B+) without Site Diary save refactor.",
       "allowedPathPrefixes": [
@@ -385,6 +409,7 @@
     "DIARY-021",
     "DIARY-026",
     "DIARY-028",
+    "DIARY-029",
     "AUTH-001",
     "AUTH-004",
     "UI-COPY-001"

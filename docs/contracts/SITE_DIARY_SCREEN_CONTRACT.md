@@ -1,11 +1,11 @@
 # Site Diary — Screen Contract
 
 **Layer:** B — Screen  
-**Version:** 1.12.0
-**Date Updated:** 2026-08-16
-**Reason Updated:** Lock Temporary Works & Scaffolding Checks as protected Site Diary behaviour after manual approval
-**User Decision:** LOCK, COMMIT AND PUSH — ALL APPROVED WORK FROM THIS SESSION
-**Previous Version:** 1.11.1
+**Version:** 1.13.0
+**Date Updated:** 2026-08-17
+**Reason Updated:** Add confirmed saved-diary deletion on the saved list and viewer; lock reusable deletion infrastructure
+**User Decision:** APPROVED — saved-report deletion behaviour plus minimum shared deletion infrastructure
+**Previous Version:** 1.12.0
 
 **Status:** Binding production contract  
 **Routes:**
@@ -119,7 +119,7 @@ Do not show helper lines that explain persistence (for example “Programme date
 | **A. Start a new diary** | Hub → setup; preselect the signed-in user’s last-used project when it still exists, while keeping Project Name editable/selectable; Author Name prefills from profile; Reporting On Behalf Of prefills from the signed-in user’s most recently used value and remains editable; Report Date may be today; approved default branding / company name may load |
 | **B. Select existing project** | Via **Project Name** matching an existing project; load remembered project fields from `public.projects`; keep `project_id`; do **not** copy diary content |
 | **C. Use a previous diary** | **Not a hub choice.** Reuse lives on each saved-diary entry as **Use for Today**, beside **Open to review**. It creates a **new** diary ID from the selected diary (appropriate reusable fields only), then opens that new diary’s populated **Project & Report Details** for review before the workbench — never straight into compose; Author from profile, not source; the source diary is never modified |
-| **D. View saved diary** | **Open to review** opens the read-only saved-diary viewer (§4A): the whole record on one continuous page, no compose/edit controls, no write. **Edit This Diary** from the viewer keeps the same diary ID — today’s diary through its Project & Report Details pre-flight, a historical diary in explicit Edit |
+| **D. View saved diary** | **Open to review** opens the read-only saved-diary viewer (§4A): the whole record on one continuous page, no compose/edit controls, no write except confirmed **Delete Diary**. **Edit This Diary** from the viewer keeps the same diary ID — today’s diary through its Project & Report Details pre-flight, a historical diary in explicit Edit. **Delete Diary** is visually separated, confirmed, and returns to the saved list |
 | **E. Edit saved diary** | Same diary ID; rehydrate saved values; no duplicate; save → View |
 
 State from one flow must not leak into another.
@@ -170,7 +170,9 @@ Reached from **Open to review**. This is a finished historical record, not an ed
 - Hide any part of the diary behind a button that leaves the page. Project & Report Details is simply the first section of the same artifact.
 - Offer Expand / Collapse.
 
-**Onward action:** exactly one — **Edit This Diary** — which returns to the composition workflow on the same diary ID.
+**Onward actions (v1.13.0):** **Generate PDF** (does not write the diary), **Edit This Diary** (same diary ID, composition workflow), and **Delete Diary** (visually separated from Edit/PDF; never one-tap; confirmed with count-aware copy; then return to the saved-diary list). See `docs/contracts/REPORT_DELETION_CONTRACT.md`.
+
+Supersedes v1.12.0 “exactly one — Edit This Diary”. Generate PDF was already present on the viewer and remains.
 
 Permits and deliveries are named in hub copy but are **not** saved diary fields today; the viewer does not invent them.
 
@@ -265,10 +267,35 @@ The longer supporting sentence sets the row height; it is never clipped or short
   Each entry keeps its identifying information and offers two actions, in this order:
   - **Open to review** → the exact selected report in the read-only saved-diary viewer (§4A). Edit is reached from there.
   - **Use for Today** → creates a **new** diary from that one and lands on its Project & Report Details (§3 flow C). The selected diary stays saved and unchanged.
+- Saved-list deletion is a separate explicit **Select** mode (§5A). Checkboxes are not shown until Select is chosen. Open to review and Use for Today remain.
 
 **Use a Previous Diary is not a hub card.** Review and reuse both live on the saved-diary entry, so a
 third hub-level entry is redundant. Removing the card must not remove or break the reuse
 implementation.
+
+---
+
+## 5A. Saved-diary deletion (v1.13.0)
+
+Feature contract: `docs/contracts/REPORT_DELETION_CONTRACT.md`.
+
+**Must:**
+
+- Keep hub wording **View Saved Diaries**.
+- Offer **Select** only when the user invokes it. Checkboxes appear only in Select mode.
+- Offer **Select All** and a count-aware **Delete Selected** / **Delete Diary** action.
+- Never delete on one tap. Confirmation shows the actual count (`Delete Diary` / `Delete 6 Diaries` and `Permanently delete this saved diary?` / `Permanently delete these 6 saved diaries?`).
+- Keep **Cancel** on the confirmation. Cancel deletes nothing.
+- On the opened saved diary, offer **Delete Diary** visually separated from Edit/PDF; after confirm, return to the saved list.
+- Delete the real diary-owned rows and safe diary-owned Storage objects. Do not delete the project or shared assets still referenced elsewhere.
+- Leave remaining diaries visible.
+
+**Must not:**
+
+- Replace Open to review / Use for Today with delete.
+- Use the previous project-page sequential client deletes (`report_photos` then labour then plant then `daily_reports`, then best-effort Storage remove).
+
+Canonical helper: `lib/report-deletion.js`. Canonical RPC: `delete_site_diaries`.
 
 ---
 

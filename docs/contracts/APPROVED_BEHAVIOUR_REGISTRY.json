@@ -1,6 +1,6 @@
 {
-  "version": "1.1.5",
-  "updated": "2026-08-15",
+  "version": "1.1.6",
+  "updated": "2026-08-17",
   "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage. Source contracts are NOT screenshot visual tests.",
   "behaviours": [
     {
@@ -367,6 +367,18 @@
       ],
       "manualQA": true,
       "manualQANote": "Authenticated save/reopen of Temporary Works records and mobile visual review of the section require manual QA; section position, applicability labels, scaffold options, payload/hydrate and PDF handoff are automated."
+    },
+    {
+      "id": "DIARY-029",
+      "description": "Saved Site Diaries can be deleted for real via confirmed Select / Delete Diary; children cascade; Storage cleanup is durable and skips assets still referenced elsewhere; remaining diaries, the project, and shared branding stay",
+      "area": "site-diary",
+      "tests": [
+        "lib/report-deletion.test.js",
+        "lib/diary-site-diary-contract.test.js",
+        "lib/diary-saved-view.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Authenticated delete of a real saved diary, Storage orphan/reference-safety on live data, and mobile visual review of Select mode / confirmation remain manual QA; copy, confirmation, RPC wiring, cascade/outbox source contracts and remaining-list behaviour are automated."
     },
     {
       "id": "UI-COPY-001",

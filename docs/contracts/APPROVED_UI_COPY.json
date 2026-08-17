@@ -1,6 +1,6 @@
 {
-  "version": "1.4.0",
-  "updated": "2026-08-16",
+  "version": "1.4.1",
+  "updated": "2026-08-17",
   "description": "Approved application UI terminology. Protects labels from accidental replacement. Does NOT freeze dynamic report content. This is a source-string contract — NOT a visual test.",
   "terms": [
     {
@@ -106,6 +106,22 @@
       "id": "COPY-SCAFFOLD-CHECK-STATUS",
       "label": "Scaffold check / inspection status",
       "files": ["components/diary/DiaryTemporaryWorksSection.jsx"]
+    },
+    {
+      "id": "COPY-DELETE-DIARY",
+      "label": "Delete Diary",
+      "files": [
+        "lib/report-deletion.js",
+        "app/dashboard/project/[id]/diary/view/page.jsx",
+        "app/dashboard/project/[id]/page.jsx"
+      ],
+      "notes": "Count-aware helper returns Delete Diary for one saved diary. Viewer and project recent list use this label. Saved list uses the same helper when one diary is selected."
+    },
+    {
+      "id": "COPY-SELECT-ALL",
+      "label": "Select All",
+      "files": ["app/dashboard/diary/page.jsx"],
+      "notes": "Saved-diary list Select mode only."
     }
   ]
 }

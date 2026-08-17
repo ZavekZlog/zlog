@@ -15,7 +15,14 @@ import { Suspense, useEffect, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { FileDown, Pencil } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { PremiumShell, GlassSection, PrimaryCTA, SecondaryButton } from '@/lib/premium-ui'
+import {
+  PremiumShell,
+  GlassSection,
+  PrimaryCTA,
+  SecondaryButton,
+  DestructiveButton,
+} from '@/lib/premium-ui'
+import { ReportDeletionDialog } from '@/components/report-management/ReportDeletionDialog'
 import { REPORT_THEMES } from '@/lib/report-theme'
 import { NOT_RECORDED, loadSavedDiaryView } from '@/lib/diary-saved-view'
 import {
@@ -23,6 +30,7 @@ import {
   temporaryWorkNotesDisplay,
 } from '@/lib/diary-daily-records'
 import { diaryHubHref, editExistingDiaryHref } from '@/lib/diary-routing'
+import { deleteSiteDiaries, savedReportListHref } from '@/lib/report-deletion'
 import { downloadSiteDiaryPdf, prepareSiteDiaryPdf } from '@/lib/diary-share'
 
 const DIARY_ACCENT = REPORT_THEMES.diary.accent
@@ -232,6 +240,9 @@ function SavedDiaryViewer() {
   const [view, setView] = useState(null)
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [pdfStatus, setPdfStatus] = useState('')
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -333,6 +344,22 @@ function SavedDiaryViewer() {
       setPdfStatus(err?.message || 'We couldn’t generate the PDF. Try again.')
     } finally {
       setGeneratingPdf(false)
+    }
+  }
+
+  const confirmDeleteDiary = async () => {
+    if (deleting || !view?.reportId) return
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      const supabase = createClient()
+      await deleteSiteDiaries(supabase, [view.reportId])
+      router.push(savedReportListHref())
+    } catch (deleteFailure) {
+      setDeleteError(
+        deleteFailure?.message || 'We couldn’t delete this diary. Try again.',
+      )
+      setDeleting(false)
     }
   }
 
@@ -635,7 +662,7 @@ function SavedDiaryViewer() {
           <PrimaryCTA
             type="button"
             onClick={handleGeneratePdf}
-            disabled={generatingPdf}
+            disabled={generatingPdf || deleting}
             accent={DIARY_ACCENT}
             style={{ width: '100%', minHeight: 50 }}
           >
@@ -654,6 +681,7 @@ function SavedDiaryViewer() {
           {editHref ? (
             <SecondaryButton
               type="button"
+              disabled={deleting}
               onClick={() => router.push(editHref)}
               style={{ width: '100%', minHeight: 48 }}
             >
@@ -686,10 +714,52 @@ function SavedDiaryViewer() {
             textAlign: 'center',
           }}
         >
-          Reviewing does not change anything. Generate a PDF or choose Edit This Diary to make
+          Reviewing does not change this diary. Generate a PDF, or choose Edit This Diary to make
           changes.
         </p>
+        <div
+          style={{
+            marginTop: 18,
+            paddingTop: 16,
+            borderTop: '1px solid var(--edge)',
+          }}
+        >
+          <DestructiveButton
+            type="button"
+            disabled={deleting || generatingPdf}
+            onClick={() => {
+              setDeleteError('')
+              setDeleteOpen(true)
+            }}
+            style={{ width: '100%', minHeight: 48 }}
+          >
+            Delete Diary
+          </DestructiveButton>
+          <p
+            style={{
+              margin: '8px 4px 0',
+              color: 'var(--text-2)',
+              fontSize: 13,
+              lineHeight: 1.45,
+              textAlign: 'center',
+            }}
+          >
+            Remove this saved diary. The project and other diaries stay.
+          </p>
+        </div>
       </div>
+      <ReportDeletionDialog
+        open={deleteOpen}
+        count={1}
+        busy={deleting}
+        error={deleteError}
+        onCancel={() => {
+          if (deleting) return
+          setDeleteOpen(false)
+          setDeleteError('')
+        }}
+        onConfirm={confirmDeleteDiary}
+      />
     </PremiumShell>
   )
 }

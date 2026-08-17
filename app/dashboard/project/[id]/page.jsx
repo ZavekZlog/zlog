@@ -20,6 +20,8 @@ import {
 } from '@/lib/premium-ui'
 import { REPORT_THEMES } from '@/lib/report-theme'
 import { openExistingDiaryHref } from '@/lib/diary-routing'
+import { deleteSiteDiaries } from '@/lib/report-deletion'
+import { ReportDeletionDialog } from '@/components/report-management/ReportDeletionDialog'
 import { ProjectDatesEditor } from '@/components/project/ProjectDatesFields'
 import { ProjectStickyEditor } from '@/components/project/ProjectStickyFields'
 import { toDateInputValue } from '@/lib/project-day'
@@ -29,7 +31,9 @@ export default function ProjectPage() {
   const [project, setProject] = useState(null)
   const [diaries, setDiaries] = useState([])
   const [loading, setLoading] = useState(true)
-  const [deletingId, setDeletingId] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteIds, setDeleteIds] = useState([])
+  const [deleteError, setDeleteError] = useState('')
   const supabase = createClient()
   const router = useRouter()
   const { id } = useParams()
@@ -62,81 +66,27 @@ export default function ProjectPage() {
     }
   }, [id])
 
-  const handleDeleteDiary = async (report) => {
-    if (!report?.id) return
-    const label = report.report_date || 'this report'
-    if (!window.confirm(`Delete diary entry for ${label}? This cannot be undone.`)) return
+  const requestDeleteDiary = (report) => {
+    if (!report?.id || deleting) return
+    setDeleteError('')
+    setDeleteIds([report.id])
+  }
 
-    setDeletingId(report.id)
+  const confirmDeleteDiary = async () => {
+    if (deleting || deleteIds.length < 1) return
+    setDeleting(true)
+    setDeleteError('')
     try {
-      // Collect storage paths before DB deletes (best-effort cleanup after success)
-      const { data: photoRows, error: photoSelectError } = await supabase
-        .from('report_photos')
-        .select('url')
-        .eq('report_id', report.id)
-
-      if (photoSelectError) {
-        window.alert(photoSelectError.message || 'Failed to prepare photo cleanup')
-        return
-      }
-
-      const storagePaths = [
-        report.cover_photo_url,
-        report.signature_url,
-        ...(photoRows || []).map((row) => row.url),
-      ].filter(Boolean)
-
-      const { error: photosError } = await supabase
-        .from('report_photos')
-        .delete()
-        .eq('report_id', report.id)
-      if (photosError) {
-        window.alert(photosError.message || 'Failed to delete report photos')
-        return
-      }
-
-      const { error: labourError } = await supabase
-        .from('report_labour')
-        .delete()
-        .eq('report_id', report.id)
-      if (labourError) {
-        window.alert(labourError.message || 'Failed to delete labour rows')
-        return
-      }
-
-      const { error: plantError } = await supabase
-        .from('report_plant')
-        .delete()
-        .eq('report_id', report.id)
-      if (plantError) {
-        window.alert(plantError.message || 'Failed to delete plant rows')
-        return
-      }
-
-      const { error: reportError } = await supabase
-        .from('daily_reports')
-        .delete()
-        .eq('id', report.id)
-        .eq('project_id', id)
-
-      if (reportError) {
-        window.alert(reportError.message || 'Failed to delete report')
-        return
-      }
-
-      setDiaries((prev) => prev.filter((d) => d.id !== report.id))
-
-      // Best-effort: remove storage objects after the DB row is gone
-      if (storagePaths.length > 0) {
-        try {
-          const { error: storageError } = await supabase.storage.from('site-photos').remove(storagePaths)
-          void storageError // report row is already deleted — ignore storage failures
-        } catch {
-          // Ignore storage failures — report row is already deleted
-        }
-      }
+      const result = await deleteSiteDiaries(supabase, deleteIds)
+      const deleted = new Set(result.deletedIds)
+      setDiaries((prev) => prev.filter((d) => !deleted.has(String(d.id))))
+      setDeleteIds([])
+    } catch (deleteFailure) {
+      setDeleteError(
+        deleteFailure?.message || 'We couldn’t delete this diary. Try again.',
+      )
     } finally {
-      setDeletingId(null)
+      setDeleting(false)
     }
   }
 
@@ -293,16 +243,28 @@ export default function ProjectPage() {
               </SecondaryButton>
               <DestructiveButton
                 type="button"
-                disabled={deletingId === d.id}
-                onClick={() => handleDeleteDiary(d)}
+                disabled={deleting}
+                onClick={() => requestDeleteDiary(d)}
                 style={recentEntryActionButtonStyle}
               >
-                {deletingId === d.id ? 'Deleting…' : 'Delete'}
+                {deleting && deleteIds.includes(d.id) ? 'Deleting…' : 'Delete Diary'}
               </DestructiveButton>
             </div>
           </RecentEntryCard>
         ))
       )}
+      <ReportDeletionDialog
+        open={deleteIds.length > 0}
+        count={deleteIds.length}
+        busy={deleting}
+        error={deleteError}
+        onCancel={() => {
+          if (deleting) return
+          setDeleteIds([])
+          setDeleteError('')
+        }}
+        onConfirm={confirmDeleteDiary}
+      />
     </PremiumShell>
   )
 }

@@ -1,10 +1,10 @@
 # Contract hierarchy (commercial product)
 
-**Version:** 1.5.1  
-**Date Updated:** 2026-08-07  
-**Reason Updated:** Constitution frozen at ZLOG_PRODUCT_CONSTITUTION v1.3  
-**User Decision:** Freeze Constitution; no casual Principle 8+  
-**Previous Version:** 1.5.0  
+**Version:** 1.5.2  
+**Date Updated:** 2026-08-17  
+**Reason Updated:** Add REPORT_DELETION_CONTRACT for reusable saved-report deletion  
+**User Decision:** APPROVED — saved-report deletion behaviour plus minimum shared deletion infrastructure  
+**Previous Version:** 1.5.1  
 
 Zlog is a **commercial product**, not a prototype. Approved screens, flows, controls, wording, ordering, persistence and interactions are production contracts.
 
@@ -20,6 +20,7 @@ Zlog is a **commercial product**, not a prototype. Approved screens, flows, cont
 | **C. Feature** | `docs/contracts/PROJECT_MODEL_CONTRACT.md` | Project sticky / programme / ownership |
 | **C. Feature** | `docs/contracts/REPORT_BRANDING_CONTRACT.md` | Report branding association |
 | **C. Feature** | `docs/contracts/PHOTO_WORKSPACE_CONTRACT.md` | Photo / location evidence (implemented freeze) |
+| **C. Feature** | `docs/contracts/REPORT_DELETION_CONTRACT.md` | Confirmed saved-report deletion, RPC, Storage reference safety |
 | **Backlog** | **`docs/ZLOG_PRODUCT_BACKLOG.md`** | Living issue tracker |
 
 Related (do not weaken):

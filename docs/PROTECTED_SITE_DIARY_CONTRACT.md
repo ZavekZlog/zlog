@@ -1,10 +1,10 @@
 # Protected Site Diary Contract
 
-**Version:** 1.7.0
-**Date Updated:** 2026-08-16
-**Reason Updated:** Lock Temporary Works & Scaffolding Checks as protected Site Diary behaviour after manual approval
-**User Decision:** LOCK, COMMIT AND PUSH — ALL APPROVED WORK FROM THIS SESSION
-**Previous Version:** 1.6.1
+**Version:** 1.8.0
+**Date Updated:** 2026-08-17
+**Reason Updated:** Add confirmed saved-diary deletion; children cascade; Storage cleanup is durable and reference-safe
+**User Decision:** APPROVED — saved-report deletion behaviour plus minimum shared deletion infrastructure
+**Previous Version:** 1.7.0
 
 **Status:** Binding behavioural summary for Site Diary  
 **Authority:** Production product contract. Detail and control order live in **`docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md`**. Do not remove, rename, relocate, disable, or silently change protected behaviours unless the user explicitly requests that exact change.
@@ -13,7 +13,7 @@
 
 - Product: `docs/PROTECTED_PRODUCT_DECISIONS.md`
 - Screen: `docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md`
-- Feature: `docs/contracts/PROJECT_MODEL_CONTRACT.md`, `REPORT_BRANDING_CONTRACT.md`, `PHOTO_WORKSPACE_CONTRACT.md`
+- Feature: `docs/contracts/PROJECT_MODEL_CONTRACT.md`, `REPORT_BRANDING_CONTRACT.md`, `PHOTO_WORKSPACE_CONTRACT.md`, `REPORT_DELETION_CONTRACT.md`
 - Backlog: `docs/ZLOG_PRODUCT_BACKLOG.md`
 - Gaps (no silent fix): `docs/contracts/PENDING_APPROVAL_GAPS.md`
 
@@ -125,12 +125,13 @@ Do not invent Author Role when none was saved.
 | Open today’s diary for editing | Project & Report Details first; no write on open; Continue uses the same report ID |
 | Open historical diary for editing | Workbench View / Edit mode (`lib/diary-view-mode.js`) |
 | Wording | Must not imply editing while reviewing |
-| Actions | Viewer: **Edit This Diary** only. Workbench View: **Edit This Diary**, **Use as Basis for New Diary** |
+| Actions | Viewer: **Generate PDF**, **Edit This Diary**, and visually separated **Delete Diary** (confirmed; returns to the saved list). Workbench View: **Edit This Diary**, **Use as Basis for New Diary** |
 | Edit ID | Same diary ID |
 | Open write | Opening performs **no** database write |
 | After save | Return to that diary in View mode |
 | Recent lists | Only on diary-selection / hub screens — not on the open report page |
 | Content isolation | Plant/equipment/temporary works and all daily content isolated by diary ID |
+| Delete saved diary | Explicit **Select** on the saved list, or **Delete Diary** on the opened viewer / project recent list. Never one-tap. Confirmed with the actual count. Remaining diaries stay. Feature contract: `docs/contracts/REPORT_DELETION_CONTRACT.md` |
 
 Project & Report Details is a pre-flight, not a create flow. It hydrates the
 existing report’s saved Report Date, Shift, Current Phase, identity and linked
@@ -211,6 +212,7 @@ No implementation until that analysis is complete.
 - [ ] Author Name + Author Role order
 - [ ] Report-level vs project-level split
 - [ ] View / Edit / Basis / no open write / post-save View
+- [ ] Confirmed saved-diary delete (Select mode / Delete Diary; project + shared assets preserved)
 - [ ] No Recent list on open report
 - [ ] Branding not forced in Edit
 - [ ] Summary optional

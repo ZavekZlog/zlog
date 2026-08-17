@@ -17,6 +17,7 @@ import {
   ZlogModulePageHeader,
   ModuleHomeCard,
   SecondaryButton,
+  DestructiveButton,
   RecentEntryCard,
   recentEntryDateStyle,
   recentEntrySummaryStyle,
@@ -24,6 +25,7 @@ import {
   recentEntryActionButtonStyle,
   dashboardCardInteractionCss,
 } from '@/lib/premium-ui'
+import { ReportDeletionDialog } from '@/components/report-management/ReportDeletionDialog'
 import { REPORT_THEMES } from '@/lib/report-theme'
 import {
   DIARY_MISSING_MESSAGE,
@@ -32,6 +34,12 @@ import {
 } from '@/lib/diary-routing'
 import { createTodaysDiaryDraft } from '@/lib/diary-draft'
 import { clearSetupFormDraft } from '@/lib/report-setup'
+import {
+  deleteReportActionLabel,
+  deleteSiteDiaries,
+  selectAllReports,
+  toggleReportSelection,
+} from '@/lib/report-deletion'
 
 const DIARY_ACCENT = REPORT_THEMES.diary.accent
 
@@ -84,12 +92,20 @@ function SiteDiaryEntryPage() {
   const missingReport = searchParams.get('missing') === '1'
   const supabase = createClient()
 
-  const [mode, setMode] = useState(null) // null | 'previous' | 'saved'
+  const [mode, setMode] = useState(() => (
+    searchParams.get('view') === 'saved' ? 'saved' : null
+  )) // null | 'previous' | 'saved'
   const [loading, setLoading] = useState(false)
   const [busyId, setBusyId] = useState(null)
   const [confirmRow, setConfirmRow] = useState(null)
   const [error, setError] = useState(() => (missingReport ? DIARY_MISSING_MESSAGE : ''))
   const [reports, setReports] = useState([])
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [deleteIds, setDeleteIds] = useState([])
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+  const [deleteStatus, setDeleteStatus] = useState('')
 
   const title = useMemo(() => {
     if (mode === 'previous') return 'Use a Previous Diary'
@@ -182,6 +198,61 @@ function SiteDiaryEntryPage() {
     router.push(`/dashboard/diary/setup${q}`)
   }
 
+  const leaveSavedList = () => {
+    setMode(null)
+    setSelectionMode(false)
+    setSelectedIds(new Set())
+    setDeleteIds([])
+    setDeleteError('')
+    setDeleteStatus('')
+  }
+
+  const toggleSelectionMode = () => {
+    setSelectionMode((current) => !current)
+    setSelectedIds(new Set())
+    setDeleteError('')
+    setDeleteStatus('')
+  }
+
+  const toggleSelected = (reportId) => {
+    setSelectedIds((current) => toggleReportSelection(current, reportId))
+  }
+
+  const selectAllVisible = () => {
+    setSelectedIds(selectAllReports(reports))
+  }
+
+  const requestDeleteSelected = () => {
+    if (selectedIds.size < 1) return
+    setDeleteError('')
+    setDeleteIds([...selectedIds])
+  }
+
+  const confirmDeleteSelected = async () => {
+    if (deleting || deleteIds.length < 1) return
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      const result = await deleteSiteDiaries(supabase, deleteIds)
+      const deleted = new Set(result.deletedIds)
+      setReports((current) => current.filter((row) => !deleted.has(String(row.id))))
+      setSelectedIds(new Set())
+      setSelectionMode(false)
+      setDeleteIds([])
+      setDeleteStatus(
+        result.cleanupPending
+          ? 'Selected diaries were deleted. Some report files are queued for cleanup.'
+          : '',
+      )
+    } catch (deleteFailure) {
+      setDeleteError(
+        deleteFailure?.message || 'We couldn’t delete the selected diaries. Try again.',
+      )
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <PremiumShell
       hideModuleNav
@@ -196,7 +267,7 @@ function SiteDiaryEntryPage() {
       <ZlogModulePageHeader
         title={title}
         backHref={mode ? undefined : '/dashboard'}
-        onBack={mode ? () => setMode(null) : undefined}
+        onBack={mode ? leaveSavedList : undefined}
       />
 
       {error && (
@@ -251,6 +322,59 @@ function SiteDiaryEntryPage() {
 
       {(mode === 'previous' || mode === 'saved') && (
         <>
+          {mode === 'saved' && !loading && reports.length > 0 ? (
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 8,
+                margin: '0 0 12px',
+              }}
+            >
+              <SecondaryButton
+                type="button"
+                onClick={toggleSelectionMode}
+                style={{ minHeight: 44, width: 'auto', padding: '8px 14px' }}
+              >
+                {selectionMode ? 'Cancel selection' : 'Select'}
+              </SecondaryButton>
+              {selectionMode ? (
+                <>
+                  <SecondaryButton
+                    type="button"
+                    disabled={reports.length < 1 || selectedIds.size === reports.length}
+                    onClick={selectAllVisible}
+                    style={{ minHeight: 44, width: 'auto', padding: '8px 14px' }}
+                  >
+                    Select All
+                  </SecondaryButton>
+                  <DestructiveButton
+                    type="button"
+                    disabled={selectedIds.size < 1 || deleting}
+                    onClick={requestDeleteSelected}
+                    style={{ minHeight: 44, width: 'auto', padding: '8px 14px' }}
+                  >
+                    {deleteReportActionLabel(selectedIds.size)}
+                  </DestructiveButton>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+
+          {deleteStatus ? (
+            <p
+              role="status"
+              style={{
+                margin: '0 0 12px',
+                color: 'var(--text-2)',
+                fontSize: 14,
+                lineHeight: 1.45,
+              }}
+            >
+              {deleteStatus}
+            </p>
+          ) : null}
+
           {loading && <p style={{ color: 'var(--text-2)' }}>Loading your diaries…</p>}
 
           {!loading && reports.length === 0 && (
@@ -306,6 +430,28 @@ function SiteDiaryEntryPage() {
                       {summary}
                     </div>
                   ) : null}
+                  {mode === 'saved' && selectionMode ? (
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        minHeight: 44,
+                        margin: '8px 0 0',
+                        fontSize: 14,
+                        color: 'var(--text)',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(row.id)}
+                        disabled={Boolean(busyId) || deleting}
+                        onChange={() => toggleSelected(row.id)}
+                        aria-label={`Select ${projectName} ${formatReportDate(row.report_date)}`}
+                      />
+                      Select
+                    </label>
+                  ) : null}
                   <div
                     style={{
                       ...recentEntryActionsStyle,
@@ -352,6 +498,19 @@ function SiteDiaryEntryPage() {
             })}
         </>
       )}
+
+      <ReportDeletionDialog
+        open={deleteIds.length > 0}
+        count={deleteIds.length}
+        busy={deleting}
+        error={deleteError}
+        onCancel={() => {
+          if (deleting) return
+          setDeleteIds([])
+          setDeleteError('')
+        }}
+        onConfirm={confirmDeleteSelected}
+      />
 
       {confirmRow ? (
         <div
