@@ -539,7 +539,7 @@ function SiteDiaryEntryPage() {
           <div className="premium-dash-card-wrap" style={{ animationDelay: '0ms' }}>
             <ModuleHomeCard
               title="Start a New Diary"
-              description="Enter everything from scratch."
+              description="Start a fresh diary with your saved details ready."
               icon={IconNewDiary}
               accent={DIARY_ACCENT}
               onClick={startNewReport}
@@ -549,7 +549,7 @@ function SiteDiaryEntryPage() {
           <div className="premium-dash-card-wrap" style={{ animationDelay: '70ms' }}>
             <ModuleHomeCard
               title="View Saved Diaries"
-              description="Review a saved diary — or reuse one for today…"
+              description="Review past diaries or choose one to continue your next."
               icon={IconSavedDiaries}
               accent={DIARY_ACCENT}
               onClick={() => setMode('saved')}

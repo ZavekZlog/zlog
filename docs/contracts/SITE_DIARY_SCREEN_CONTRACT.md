@@ -1,11 +1,11 @@
 # Site Diary — Screen Contract
 
 **Layer:** B — Screen  
-**Version:** 1.16.0
+**Version:** 1.16.1
 **Date Updated:** 2026-08-17
-**Reason Updated:** Keep Back accessible throughout the long saved-diary review without freezing the Zlog header or report title
-**User Decision:** APPROVED — manually verified compact sticky Back on the Saved Site Diary review screen; report layout and scrolling preserved
-**Previous Version:** 1.15.0
+**Reason Updated:** Update the two Site Diary hub card supporting sentences only
+**User Decision:** APPROVED — exact replacement of the two entry-card helper strings; titles and all other behaviour preserved
+**Previous Version:** 1.16.0
 
 **Status:** Binding production contract  
 **Routes:**
@@ -258,8 +258,8 @@ to a secondary action:
 
 | Position | Card | Supporting text |
 |----------|------|-----------------|
-| Left | **Start a New Diary** | Enter everything from scratch. |
-| Right | **View Saved Diaries** | Review a saved diary — or reuse one for today… |
+| Left | **Start a New Diary** | Start a fresh diary with your saved details ready. |
+| Right | **View Saved Diaries** | Review past diaries or choose one to continue your next. |
 
 The two cards are peers and **render at equal height** (`docs/contracts/GLOBAL_UI_TEXT_FIT_CONTRACT.md` §2.1).
 The longer supporting sentence sets the row height; it is never clipped or shortened to match its neighbour.
