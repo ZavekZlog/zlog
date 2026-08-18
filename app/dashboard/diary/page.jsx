@@ -19,6 +19,7 @@ import {
   SecondaryButton,
   DestructiveButton,
   dashboardCardInteractionCss,
+  recentEntryActionButtonStyle,
 } from '@/lib/premium-ui'
 import { ReportDeletionDialog } from '@/components/report-management/ReportDeletionDialog'
 import { REPORT_THEMES } from '@/lib/report-theme'
@@ -32,6 +33,7 @@ import { clearSetupFormDraft } from '@/lib/report-setup'
 import {
   deleteReportActionLabel,
   deleteSiteDiaries,
+  savedReportListHref,
   selectAllReports,
   toggleReportSelection,
 } from '@/lib/report-deletion'
@@ -356,6 +358,12 @@ function SiteDiaryEntryPage() {
   }, [missingReport])
 
   useEffect(() => {
+    if (mode === 'saved' && filterProjectId) {
+      router.replace(savedReportListHref())
+    }
+  }, [filterProjectId, mode, router])
+
+  useEffect(() => {
     if (mode !== 'previous' && mode !== 'saved') return
     let cancelled = false
     const load = async () => {
@@ -369,7 +377,8 @@ function SiteDiaryEntryPage() {
           .order('created_at', { ascending: false })
           .limit(50)
 
-        if (filterProjectId) {
+        // View Saved Diaries is cross-project; only project-scoped hub entry uses ?project=.
+        if (filterProjectId && mode !== 'saved') {
           query = query.eq('project_id', filterProjectId)
         }
 
@@ -428,6 +437,12 @@ function SiteDiaryEntryPage() {
       setError(err?.message || 'We couldn’t start today’s diary from that one. Try again.')
       setBusyId(null)
     }
+  }
+
+  const openSavedDiaries = () => {
+    setError((prev) => (prev === DIARY_MISSING_MESSAGE ? prev : ''))
+    setMode('saved')
+    router.replace(savedReportListHref())
   }
 
   const startNewReport = () => {
@@ -552,7 +567,7 @@ function SiteDiaryEntryPage() {
               description="Review past diaries or choose one to continue your next."
               icon={IconSavedDiaries}
               accent={DIARY_ACCENT}
-              onClick={() => setMode('saved')}
+              onClick={openSavedDiaries}
               style={{ minHeight: 0, height: '100%', padding: '8px 12px 8px' }}
             />
           </div>
@@ -646,7 +661,7 @@ function SiteDiaryEntryPage() {
 
           {!loading && reports.length === 0 && (
             <div style={{ padding: '8px 0 24px', color: 'var(--text-2)', fontSize: 14, lineHeight: 1.5 }}>
-              No saved Site Diaries yet{filterProjectId ? ' for this project' : ''}.
+              No saved Site Diaries yet{filterProjectId && mode !== 'saved' ? ' for this project' : ''}.
               <div style={{ marginTop: 14 }}>
                 <SecondaryButton type="button" onClick={startNewReport}>
                   Start a New Diary
