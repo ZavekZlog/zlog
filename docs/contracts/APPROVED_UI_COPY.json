@@ -1,6 +1,6 @@
 {
-  "version": "1.4.1",
-  "updated": "2026-08-17",
+  "version": "1.4.2",
+  "updated": "2026-08-18",
   "description": "Approved application UI terminology. Protects labels from accidental replacement. Does NOT freeze dynamic report content. This is a source-string contract — NOT a visual test.",
   "terms": [
     {
@@ -122,6 +122,60 @@
       "label": "Select All",
       "files": ["app/dashboard/diary/page.jsx"],
       "notes": "Saved-diary list Select mode only."
+    },
+    {
+      "id": "COPY-AUTOSAVE-SAVING",
+      "label": "Saving your work…",
+      "files": [
+        "lib/diary-autosave.js",
+        "app/dashboard/project/[id]/diary/page.jsx"
+      ],
+      "notes": "Unobtrusive in-progress autosave status. Not the Save / Share button."
+    },
+    {
+      "id": "COPY-AUTOSAVE-SAVED",
+      "label": "Work saved",
+      "files": [
+        "lib/diary-autosave.js",
+        "app/dashboard/project/[id]/diary/page.jsx"
+      ],
+      "notes": "Shown only after a successful content UPDATE. Must not imply the diary is finished or shared."
+    },
+    {
+      "id": "COPY-AUTOSAVE-FAILED",
+      "label": "Work not saved. Check your connection.",
+      "files": [
+        "lib/diary-autosave.js",
+        "app/dashboard/project/[id]/diary/page.jsx"
+      ],
+      "notes": "Autosave network/offline failure only. Database, auth, and conflict failures use distinct copy."
+    },
+    {
+      "id": "COPY-AUTOSAVE-FAILED-DB",
+      "label": "Work not saved. Try again in a moment.",
+      "files": [
+        "lib/diary-autosave.js",
+        "app/dashboard/project/[id]/diary/page.jsx"
+      ],
+      "notes": "Autosave database/update failure — not a connection message."
+    },
+    {
+      "id": "COPY-AUTOSAVE-FAILED-AUTH",
+      "label": "Your sign-in has timed out. Sign in again to keep editing.",
+      "files": [
+        "lib/diary-autosave.js",
+        "app/dashboard/project/[id]/diary/page.jsx"
+      ],
+      "notes": "Autosave blocked by expired session."
+    },
+    {
+      "id": "COPY-AUTOSAVE-CONFLICT",
+      "label": "Updated from your last saved copy.",
+      "files": [
+        "lib/diary-autosave.js",
+        "app/dashboard/project/[id]/diary/page.jsx"
+      ],
+      "notes": "Stale-write protection restored server content into the form."
     }
   ]
 }

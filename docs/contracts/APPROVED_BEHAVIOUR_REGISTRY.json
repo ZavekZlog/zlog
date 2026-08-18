@@ -1,6 +1,6 @@
 {
-  "version": "1.1.8",
-  "updated": "2026-08-17",
+  "version": "1.1.9",
+  "updated": "2026-08-18",
   "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage. Source contracts are NOT screenshot visual tests.",
   "behaviours": [
     {
@@ -401,6 +401,17 @@
       ],
       "manualQA": true,
       "manualQANote": "Source contracts protect the viewer opt-in, single Back control, opaque top:0 dock and default-off shared-shell behaviour. Authenticated phone QA on 2026-08-17 confirmed Back remains accessible, the report scrolls normally beneath it, the treatment is compact, and the header/title/report layout remain unfrozen and correct."
+    },
+    {
+      "id": "DIARY-032",
+      "description": "In-progress Site Diary workbench content autosaves onto the existing daily_reports row after a short pause so an interrupted session can be resumed; Save / Share still finalises; failed/offline writes are not shown as saved",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-autosave.test.js",
+        "lib/diary-site-diary-contract.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Authenticated phone QA must confirm Weather / H&S survive a killed tab on the same report id, status copy stays honest when offline, and Save / Share still completes. Start a New Diary must still create a new diary."
     },
     {
       "id": "UI-COPY-001",

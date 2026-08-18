@@ -49,6 +49,18 @@ import {
 } from '@/lib/diary-draft'
 import { DiarySaveError, DIARY_SAVE_LOG, finalizeSiteDiarySave } from '@/lib/diary-save'
 import {
+  DIARY_AUTOSAVE_DEBOUNCE_MS,
+  autosavePayloadsEqual,
+  autosaveStatusAfterResult,
+  autosaveStatusMessage,
+  buildDiaryAutosavePayload,
+  classifyAutosaveFailure,
+  runDiaryAutosave,
+  shouldRunDiaryAutosave,
+  resolveHydrateAutosaveSuppress,
+  snapshotFromLiveRow,
+} from '@/lib/diary-autosave'
+import {
   hsIncidentsFromDb,
   hsIncidentsPayload,
   rfisFromDb,
@@ -92,8 +104,14 @@ import {
 } from '@/lib/diary-form-hydrate'
 import { readReportSetupExtras, reportDateInputValue, todayIsoDate } from '@/lib/report-setup'
 import {
+  describeDiaryWorkbenchLoadFailure,
+  DIARY_PREVIEW_URL_TIMEOUT_MS,
+  DIARY_WORKBENCH_LOAD_FAILED_COPY,
+  DIARY_WORKBENCH_LOAD_TIMEOUT_MS,
   fetchProjectRowForEditHydrate,
   hydrateEditModeCoverAndReference,
+  shouldCommitDiaryLoadState,
+  withTimeout,
 } from '@/lib/diary-edit-hydrate'
 import {
   diaryLinkedProjectSelectColumns,
@@ -311,7 +329,15 @@ function labourRowHasData(row) {
 }
 
 async function signedUrlForPath(supabase, path) {
-  return resolveCoverPhotoPreviewUrl(supabase, path)
+  try {
+    return await withTimeout(
+      resolveCoverPhotoPreviewUrl(supabase, path),
+      DIARY_PREVIEW_URL_TIMEOUT_MS,
+      'preview-url-timeout',
+    )
+  } catch {
+    return null
+  }
 }
 
 function dataUrlToBlob(dataUrl) {
@@ -360,7 +386,9 @@ export default function SiteDiaryPage() {
   const isDiaryExplicitEditMode = diaryMode === 'edit'
   const showDiaryModeChrome = showExistingDiaryModeChrome(diaryMode)
   const router = useRouter()
-  const supabase = createClient()
+  const routerRef = useRef(router)
+  routerRef.current = router
+  const supabase = useMemo(() => createClient(), [])
 
   const showStartScreen = !editingReportId
 
@@ -371,9 +399,19 @@ export default function SiteDiaryPage() {
   const [showSaveBanner, setShowSaveBanner] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(false)
   const [error, setError] = useState('')
+  const [loadDiagnostic, setLoadDiagnostic] = useState('')
+  const loadGenerationRef = useRef(0)
   const saveNavTimerRef = useRef(null)
   const saveLockRef = useRef(false)
   const completingRef = useRef(false)
+  const [hydrateComplete, setHydrateComplete] = useState(false)
+  const [autosaveStatus, setAutosaveStatus] = useState(null)
+  const ackedSnapshotRef = useRef(null)
+  const latestPayloadRef = useRef(null)
+  const autosaveTimerRef = useRef(null)
+  const autosaveInFlightRef = useRef(null)
+  const autosaveQueuedRef = useRef(false)
+  const suppressAutosaveRef = useRef(false)
 
   // Clear stale locks when opening/switching a report so Save is never silently blocked.
   useEffect(() => {
@@ -383,6 +421,11 @@ export default function SiteDiaryPage() {
     setJustSaved(false)
     setShowSaveBanner(false)
     setReportIsDraft(null)
+    setHydrateComplete(false)
+    setAutosaveStatus(null)
+    setLoadDiagnostic('')
+    ackedSnapshotRef.current = null
+    suppressAutosaveRef.current = true
   }, [editingReportId])
 
   // Detect session loss while editing — recover via Sign in CTA (do not leave Save enabled).
@@ -575,14 +618,43 @@ export default function SiteDiaryPage() {
   useEffect(() => {
     if (!editingReportId) return
     let cancelled = false
+    const generation = ++loadGenerationRef.current
+    const commit = () => shouldCommitDiaryLoadState({
+      cancelled,
+      generation,
+      activeGeneration: loadGenerationRef.current,
+    })
+    const failLoad = (stage, err) => {
+      if (!commit()) return
+      const failure = describeDiaryWorkbenchLoadFailure({
+        stage,
+        reportId: editingReportId,
+        projectId,
+        error: err,
+      })
+      setLoadDiagnostic(failure.diagnostic)
+      setError(failure.userMessage)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(failure.diagnostic, err || null)
+      }
+    }
     const load = async () => {
       console.log(DIARY_SAVE_LOG, 'load:start', { editingReportId, projectId })
       setLoading(true)
+      setHydrateComplete(false)
+      setLoadDiagnostic('')
+      ackedSnapshotRef.current = null
+      suppressAutosaveRef.current = true
       setError('')
       setPrefilledFromLast(false)
       setDuplicatedFromReport(false)
       setCarriedVisitors(false)
       setCarriedDelaysIssues(false)
+
+      const watchdog = setTimeout(() => {
+        failLoad('timeout', new Error('diary-load-timeout'))
+        if (commit()) setLoading(false)
+      }, DIARY_WORKBENCH_LOAD_TIMEOUT_MS)
 
       try {
         const proj = await fetchProjectRowForEditHydrate(supabase, projectId)
@@ -648,27 +720,35 @@ export default function SiteDiaryPage() {
           const preview = await signedUrlForPath(supabase, storagePath)
           if (cancelled) return
           if (!preview) {
-            setSignature(null)
-            setSignatureMode('draw')
+            setSignature({ file: null, preview: null, storagePath })
+            setSignatureMode('carried')
             return
           }
           setSignature({ file: null, preview, storagePath })
           setSignatureMode('carried')
         }
 
-        const { data: existing, error: existingError } = await supabase
-          .from('daily_reports')
-          .select('*')
-          .eq('id', editingReportId)
-          .eq('project_id', projectId)
-          .maybeSingle()
+        const { data: existing, error: existingError } = await withTimeout(
+          supabase
+            .from('daily_reports')
+            .select('*')
+            .eq('id', editingReportId)
+            .eq('project_id', projectId)
+            .maybeSingle(),
+          DIARY_WORKBENCH_LOAD_TIMEOUT_MS,
+          'daily_reports-timeout',
+        )
 
         if (cancelled) return
 
-        if (existingError || !existing) {
+        if (existingError) {
+          failLoad('daily_reports', existingError)
+          return
+        }
+        if (!existing) {
           console.log(DIARY_SAVE_LOG, 'load:not-found', { existingError, editingReportId })
           // Soft recovery — never leave the user on a raw Next.js 404.
-          router.replace(diaryHubHref({ projectId, missing: true }))
+          routerRef.current.replace(diaryHubHref({ projectId, missing: true }))
           return
         }
         console.log(DIARY_SAVE_LOG, 'load:ok', {
@@ -851,16 +931,226 @@ export default function SiteDiaryPage() {
           logs = fallback.data
         }
         if (!cancelled) setRecentDiaries(logs || [])
+        try {
+          ackedSnapshotRef.current = snapshotFromLiveRow(existing)
+        } catch (snapErr) {
+          console.log(DIARY_SAVE_LOG, 'load:snapshot-failed', snapErr)
+          ackedSnapshotRef.current = null
+        }
+        suppressAutosaveRef.current = true
+        if (commit()) {
+          setLoadDiagnostic('')
+          setHydrateComplete(true)
+        }
       } catch (err) {
-        if (!cancelled) setError(err?.message || 'Failed to load diary entry')
+        failLoad('exception', err)
       } finally {
-        // Camera cancel / Back mid-load remounts must not leave Loading stuck
-        setLoading(false)
+        clearTimeout(watchdog)
+        if (commit()) setLoading(false)
       }
     }
     load()
     return () => { cancelled = true }
-  }, [projectId, editingReportId, formReloadToken, router])
+  }, [projectId, editingReportId, formReloadToken, supabase])
+
+  const autosavePayload = useMemo(() => buildDiaryAutosavePayload({
+    weather,
+    siteSummary,
+    visitors,
+    delaysIssues,
+    actions: actionsRequired,
+    equipmentHireRows,
+    hsIncidents,
+    rfis,
+    variations,
+    temporaryWorksApplicable,
+    temporaryWorks,
+  }), [
+    weather,
+    siteSummary,
+    visitors,
+    delaysIssues,
+    actionsRequired,
+    equipmentHireRows,
+    hsIncidents,
+    rfis,
+    variations,
+    temporaryWorksApplicable,
+    temporaryWorks,
+  ])
+  latestPayloadRef.current = autosavePayload
+
+  const applyAutosaveSnapshot = useCallback((snapshot) => {
+    if (!snapshot) return
+    setWeather(snapshot.weather || '')
+    setSiteSummary(snapshot.site_summary || '')
+    setVisitors(snapshot.visitors || '')
+    setDelaysIssues(snapshot.delays_issues || '')
+    setActionsRequired(snapshot.actions || '')
+    setEquipmentHireRows(equipmentHireFromDb(snapshot.equipment_hire))
+    setHsIncidents(hsIncidentsFromDb(snapshot.hs_incidents))
+    setRfis(rfisFromDb(snapshot.rfis))
+    setVariations(variationsFromDb(snapshot.variations))
+    // Temporary Works are not on live daily_reports yet — never wipe in-form values.
+  }, [])
+
+  const performAutosave = useCallback(async () => {
+    if (!editingReportId || !projectId || !isDiaryEditMode) return { ok: false, reason: 'missing-report' }
+    if (autosaveInFlightRef.current) {
+      autosaveQueuedRef.current = true
+      return autosaveInFlightRef.current
+    }
+
+    const run = async () => {
+      const payload = latestPayloadRef.current
+      if (!payload || autosavePayloadsEqual(payload, ackedSnapshotRef.current)) {
+        return { ok: true, reason: 'already-saved', wrote: false }
+      }
+
+      setAutosaveStatus('saving')
+      let result
+      try {
+        result = await runDiaryAutosave(supabase, {
+          reportId: editingReportId,
+          projectId,
+          payload,
+          ackedSnapshot: ackedSnapshotRef.current,
+        })
+      } catch (err) {
+        result = {
+          ok: false,
+          reason: 'update-failed',
+          acked: ackedSnapshotRef.current,
+          wrote: false,
+          error: { message: err?.message || String(err), code: err?.code || null },
+        }
+      }
+
+      if (result.ok) {
+        ackedSnapshotRef.current = result.acked
+        setAutosaveStatus(autosaveStatusAfterResult(result))
+        return result
+      }
+
+      if (result.reason === 'stale' && result.acked) {
+        suppressAutosaveRef.current = true
+        ackedSnapshotRef.current = result.acked
+        applyAutosaveSnapshot(result.acked)
+        const failure = classifyAutosaveFailure({
+          reason: result.reason,
+          error: result.error,
+          sessionExpired,
+        })
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[zlog:diary-autosave]', failure.diagnostic, result.error || null)
+        }
+        setAutosaveStatus(failure.kind)
+        return result
+      }
+
+      const failure = classifyAutosaveFailure({
+        reason: result.reason,
+        error: result.error,
+        sessionExpired,
+      })
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[zlog:diary-autosave]', failure.diagnostic, result.error || null)
+      }
+      setAutosaveStatus(failure.kind)
+      return result
+    }
+
+    const pending = run().finally(() => {
+      if (autosaveInFlightRef.current === pending) autosaveInFlightRef.current = null
+    }).then(async (result) => {
+      if (autosaveQueuedRef.current) {
+        autosaveQueuedRef.current = false
+        return performAutosave()
+      }
+      return result
+    })
+    autosaveInFlightRef.current = pending
+    return pending
+  }, [applyAutosaveSnapshot, editingReportId, isDiaryEditMode, projectId, sessionExpired, supabase])
+
+  const flushPendingAutosave = useCallback(async () => {
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
+    if (!hydrateComplete || !editingReportId || !isDiaryEditMode || sessionExpired) return
+    const payload = latestPayloadRef.current
+    if (!payload || autosavePayloadsEqual(payload, ackedSnapshotRef.current)) return
+    await performAutosave()
+  }, [editingReportId, hydrateComplete, isDiaryEditMode, performAutosave, sessionExpired])
+
+  useEffect(() => {
+    if (!hydrateComplete || !isDiaryEditMode || !editingReportId || sessionExpired || saving) {
+      return undefined
+    }
+    const hydrateGate = resolveHydrateAutosaveSuppress(
+      suppressAutosaveRef.current,
+      autosavePayload,
+      ackedSnapshotRef.current,
+    )
+    suppressAutosaveRef.current = hydrateGate.suppress
+    if (hydrateGate.block) {
+      return undefined
+    }
+    if (!shouldRunDiaryAutosave({
+      hydrateComplete,
+      writable: isDiaryEditMode,
+      reportId: editingReportId,
+      sessionExpired,
+      finalSaveInProgress: saving,
+      payload: autosavePayload,
+      ackedSnapshot: ackedSnapshotRef.current,
+    })) {
+      return undefined
+    }
+
+    autosaveTimerRef.current = setTimeout(() => {
+      autosaveTimerRef.current = null
+      void performAutosave()
+    }, DIARY_AUTOSAVE_DEBOUNCE_MS)
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current)
+        autosaveTimerRef.current = null
+      }
+    }
+  }, [
+    autosavePayload,
+    editingReportId,
+    hydrateComplete,
+    isDiaryEditMode,
+    performAutosave,
+    saving,
+    sessionExpired,
+  ])
+
+  useEffect(() => {
+    const flush = () => {
+      void flushPendingAutosave()
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush()
+    }
+    const onOnline = () => {
+      if (!autosavePayloadsEqual(latestPayloadRef.current, ackedSnapshotRef.current)) {
+        void performAutosave()
+      }
+    }
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('online', onOnline)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('online', onOnline)
+    }
+  }, [flushPendingAutosave, performAutosave])
 
   const handleLocationWalkChange = useCallback((next) => {
     setLocationWalk(next)
@@ -1279,6 +1569,14 @@ export default function SiteDiaryPage() {
     }
   }
 
+  const retryDiaryLoad = () => {
+    setLoadDiagnostic('')
+    setError('')
+    setHydrateComplete(false)
+    setLoading(true)
+    setFormReloadToken((n) => n + 1)
+  }
+
   const diaryModeBannerCopy = useMemo(
     () => diaryModeBanner({ mode: diaryMode || 'view', projectName: project?.name || '' }),
     [diaryMode, project?.name],
@@ -1424,6 +1722,8 @@ export default function SiteDiaryPage() {
         failSave('We couldn’t save your Site Diary because it wasn’t opened correctly. Go back to Site Diary and choose Open Latest Diary or Start New Site Diary.')
         return
       }
+
+      await flushPendingAutosave()
 
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       diarySaveLog('auth check', {
@@ -1655,7 +1955,7 @@ export default function SiteDiaryPage() {
     }
   }, [])
 
-  if (loading) {
+  if (loading && !loadDiagnostic) {
     return (
       <PremiumShell
         title="Site Diary"
@@ -1664,6 +1964,42 @@ export default function SiteDiaryPage() {
         maxWidth={720}
       >
         <p style={{ color: 'var(--text-2)' }}>Loading…</p>
+      </PremiumShell>
+    )
+  }
+
+  if (loadDiagnostic && !hydrateComplete) {
+    return (
+      <PremiumShell
+        title="Site Diary"
+        backHref={diaryHubHref({ projectId }) || '/dashboard'}
+        accent={REPORT_THEMES.diary.accent}
+        maxWidth={720}
+      >
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            background: 'rgba(220,50,50,0.1)',
+            border: '1px solid rgba(220,50,50,0.3)',
+            color: '#ff6b6b',
+            padding: '12px 14px',
+            fontSize: 14,
+            marginBottom: 16,
+            borderRadius: 10,
+            lineHeight: 1.45,
+          }}
+        >
+          {error || DIARY_WORKBENCH_LOAD_FAILED_COPY}
+          {process.env.NODE_ENV !== 'production' ? (
+            <p style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.4, color: 'var(--text-2)', whiteSpace: 'pre-wrap' }}>
+              {loadDiagnostic}
+            </p>
+          ) : null}
+        </div>
+        <SecondaryButton type="button" onClick={retryDiaryLoad}>
+          Try again
+        </SecondaryButton>
       </PremiumShell>
     )
   }
@@ -2502,6 +2838,23 @@ export default function SiteDiaryPage() {
               {error}
             </div>
           )}
+          {autosaveStatus && !saving && !justSaved ? (
+            <p
+              role="status"
+              aria-live="polite"
+              style={{
+                margin: '0 0 10px',
+                fontSize: 13,
+                lineHeight: 1.45,
+                color:
+                  autosaveStatus === 'network' || autosaveStatus === 'auth' || autosaveStatus === 'db'
+                    ? '#ff6b6b'
+                    : 'color-mix(in srgb, var(--text) 72%, var(--text-2))',
+              }}
+            >
+              {autosaveStatusMessage(autosaveStatus)}
+            </p>
+          ) : null}
           <PrimaryCTA
             type="button"
             onClick={sessionExpired ? goToSignInForSave : handleSave}

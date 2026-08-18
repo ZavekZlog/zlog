@@ -1,11 +1,11 @@
 # Site Diary — Screen Contract
 
 **Layer:** B — Screen  
-**Version:** 1.16.1
-**Date Updated:** 2026-08-17
-**Reason Updated:** Update the two Site Diary hub card supporting sentences only
-**User Decision:** APPROVED — exact replacement of the two entry-card helper strings; titles and all other behaviour preserved
-**Previous Version:** 1.16.0
+**Version:** 1.17.0
+**Date Updated:** 2026-08-18
+**Reason Updated:** Persist in-progress workbench content on the existing diary row so an interrupted session can be resumed
+**User Decision:** APPROVED — interruption-safe autosave/resume on daily_reports; no is_draft; no parallel store; Start a New Diary unchanged
+**Previous Version:** 1.16.1
 
 **Status:** Binding production contract  
 **Routes:**
@@ -138,6 +138,9 @@ Protected interactions:
 - **Edit This Diary** → same ID
 - **Use as Basis for New Diary** → new ID
 - Save → same diary in View; no Recent Diaries list on open report page
+- In-progress workbench content (Weather, H&S / RFIs / Variations, summary, visitors, delays, actions, equipment on hire, Temporary Works) autosaves onto the **same** `daily_reports` id after a short pause. It never creates a row, never writes `is_draft`, and never marks the diary finished. **Save / Share** remains the explicit complete/share action and flushes pending content first.
+- Autosave status (unobtrusive, near Save / Share): **Saving your work…** / **Work saved** / **Work not saved. Check your connection.** A failed or offline write must not be shown as saved.
+- Reopening that same in-progress diary hydrates the last successfully autosaved content. **Start a New Diary** is unchanged and still creates a new id.
 - Branding not forced in normal Edit
 - Summary optional
 - Plant / daily content isolated by report ID
