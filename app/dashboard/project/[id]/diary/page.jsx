@@ -226,6 +226,11 @@ const todaysDiaryDividerStyle = {
   margin: '0 0 14px',
 }
 
+/** Save / Share stays in document flow; mobile chrome clearance is in .zlog-diary-save-share-action. */
+const DIARY_SAVE_SHARE_ACTION_STYLE = {
+  marginTop: 8,
+}
+
 const todaysDiaryDividerTitleStyle = {
   fontSize: 12,
   fontWeight: 600,
@@ -2818,7 +2823,11 @@ export default function SiteDiaryPage() {
         </fieldset>
 
         {isDiaryEditMode ? (
-        <div ref={saveCtaRef} style={{ marginTop: 8 }}>
+        <div
+          ref={saveCtaRef}
+          className="zlog-diary-save-share-action"
+          style={DIARY_SAVE_SHARE_ACTION_STYLE}
+        >
           {error && (
             <div
               role="status"
@@ -2927,6 +2936,14 @@ export default function SiteDiaryPage() {
             12% { opacity: 1; transform: translateX(-50%) translateY(0); }
             78% { opacity: 1; transform: translateX(-50%) translateY(0); }
             100% { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+          }
+          .zlog-diary-save-share-action {
+            padding-bottom: 0;
+          }
+          @media (max-width: 768px) {
+            .zlog-diary-save-share-action {
+              padding-bottom: calc(32px + max(env(safe-area-inset-bottom, 0px), 40px));
+            }
           }
         `}</style>
       </form>
