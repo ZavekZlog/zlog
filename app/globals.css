@@ -517,14 +517,15 @@ body {
     height: 44px !important;
   }
 
-  .premium-shell-header {
-    background: transparent !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-  }
-
   .zlog-dashboard-topbar.premium-shell-header {
     background: transparent !important;
     margin-bottom: 0 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+
+  .premium-shell-header.zlog-internal-header {
+    background: transparent !important;
+    border-bottom: none !important;
   }
 
   .premium-diary-empty {

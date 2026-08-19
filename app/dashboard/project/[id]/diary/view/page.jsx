@@ -54,6 +54,67 @@ const deleteActionStyle = {
 
 const hideRedundantShellTitleCss = `
   .zlog-report-module-nav { display: none; }
+
+  @media (max-width: 639px) {
+    .zlog-saved-diary-review__title {
+      margin-bottom: 2px !important;
+    }
+
+    .zlog-saved-diary-review__intro {
+      margin-bottom: 6px !important;
+      line-height: 1.35 !important;
+    }
+
+    .zlog-saved-diary-review__actions {
+      margin-bottom: 8px !important;
+    }
+
+    .zlog-saved-diary-review__actions-grid {
+      gap: 6px !important;
+    }
+
+    .zlog-saved-diary-review__action-btn {
+      min-height: 44px !important;
+      padding: 6px 12px !important;
+    }
+
+    .zlog-saved-diary-review__delete-btn {
+      min-height: 42px !important;
+      padding: 6px 12px !important;
+    }
+
+    .zlog-saved-diary-review__status {
+      margin-top: 4px !important;
+    }
+
+    .zlog-saved-diary-review__delete-divider {
+      margin-top: 8px !important;
+      padding-top: 6px !important;
+    }
+
+    .zlog-saved-diary-review__identity .premium-glass-panel {
+      padding: 14px 16px;
+      margin-bottom: 10px;
+    }
+
+    .zlog-saved-diary-review__identity .premium-section-title {
+      margin-top: 2px;
+      margin-bottom: 10px;
+    }
+
+    .zlog-saved-diary-review__identity-grid {
+      column-gap: 12px;
+      row-gap: 0;
+    }
+
+    .zlog-saved-diary-review__identity-row {
+      margin-bottom: 5px !important;
+    }
+
+    .zlog-saved-diary-review__identity-row .zlog-saved-diary-review__identity-value {
+      margin-top: 2px !important;
+    }
+  }
 `
 
 const labelStyle = {
@@ -93,11 +154,26 @@ const groupTitleStyle = {
   color: 'color-mix(in srgb, var(--text) 78%, var(--text-2))',
 }
 
-function DetailRow({ label, value, recorded }) {
+const compactIdentityGridStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  columnGap: 14,
+  rowGap: 2,
+}
+
+function DetailRow({ label, value, recorded, compact = false }) {
   return (
-    <div style={{ marginBottom: 12, minWidth: 0 }}>
+    <div
+      className={compact ? 'zlog-saved-diary-review__identity-row' : undefined}
+      style={{ marginBottom: compact ? 8 : 12, minWidth: 0 }}
+    >
       <p style={labelStyle}>{label}</p>
-      <p style={recorded ? valueStyle : emptyValueStyle}>{value}</p>
+      <p
+        className={compact ? 'zlog-saved-diary-review__identity-value' : undefined}
+        style={recorded ? valueStyle : emptyValueStyle}
+      >
+        {value}
+      </p>
     </div>
   )
 }
@@ -407,6 +483,7 @@ function SavedDiaryViewer() {
   }
 
   const actionsBusy = generatingPdf || deleting || basisBusy
+  const reportGroup = view.detailGroups.find((group) => group.key === 'report') || null
 
   return (
     <PremiumShell
@@ -416,7 +493,9 @@ function SavedDiaryViewer() {
       stickyBack
     >
       <style>{hideRedundantShellTitleCss}</style>
+      <div className="zlog-saved-diary-review">
       <p
+        className="zlog-saved-diary-review__title"
         style={{
           margin: '0 0 4px',
           fontSize: 17,
@@ -428,6 +507,7 @@ function SavedDiaryViewer() {
         {view.projectName || 'Site Diary'} — {view.reportDateDisplay}
       </p>
       <p
+        className="zlog-saved-diary-review__intro"
         style={{
           margin: '0 0 10px',
           fontSize: 14,
@@ -435,18 +515,18 @@ function SavedDiaryViewer() {
           color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
         }}
       >
-        This is your saved diary exactly as it was recorded. Scroll down to review the whole
-        report.
+        This is your saved diary exactly as it was recorded.
       </p>
 
-      <div style={{ margin: '0 0 14px' }}>
-        <div style={{ display: 'grid', gap: 8 }}>
+      <div className="zlog-saved-diary-review__actions" style={{ margin: '0 0 14px' }}>
+        <div className="zlog-saved-diary-review__actions-grid" style={{ display: 'grid', gap: 8 }}>
           <PrimaryCTA
             type="button"
             surface="workbench"
             onClick={handleGeneratePdf}
             disabled={actionsBusy}
             loading={generatingPdf}
+            className="zlog-saved-diary-review__action-btn"
             style={reviewActionStyle}
           >
             <span
@@ -466,6 +546,7 @@ function SavedDiaryViewer() {
               type="button"
               disabled={actionsBusy}
               onClick={() => router.push(editHref)}
+              className="zlog-saved-diary-review__action-btn"
               style={reviewActionStyle}
             >
               <Pencil size={15} strokeWidth={2.25} aria-hidden className="zlog-secondary-cta__icon" />
@@ -476,6 +557,7 @@ function SavedDiaryViewer() {
             type="button"
             disabled={actionsBusy}
             onClick={handleUseAsBasisForNewDiary}
+            className="zlog-saved-diary-review__action-btn"
             style={reviewActionStyle}
           >
             <CopyPlus size={15} strokeWidth={2.25} aria-hidden className="zlog-secondary-cta__icon" />
@@ -488,6 +570,7 @@ function SavedDiaryViewer() {
           <p
             role="status"
             aria-live="polite"
+            className="zlog-saved-diary-review__status"
             style={{
               margin: '6px 2px 0',
               color: 'var(--text-2)',
@@ -501,6 +584,7 @@ function SavedDiaryViewer() {
         {basisError ? (
           <p
             role="status"
+            className="zlog-saved-diary-review__status"
             style={{
               margin: '6px 2px 0',
               color: '#ff6b6b',
@@ -512,6 +596,7 @@ function SavedDiaryViewer() {
           </p>
         ) : null}
         <div
+          className="zlog-saved-diary-review__delete-divider"
           style={{
             marginTop: 12,
             paddingTop: 10,
@@ -525,6 +610,7 @@ function SavedDiaryViewer() {
               setDeleteError('')
               setDeleteOpen(true)
             }}
+            className="zlog-saved-diary-review__delete-btn"
             style={deleteActionStyle}
           >
             <Trash2 size={15} strokeWidth={2.25} aria-hidden />
@@ -532,6 +618,56 @@ function SavedDiaryViewer() {
           </DestructiveButton>
         </div>
       </div>
+
+      <div className="zlog-saved-diary-review__identity">
+        <GlassSection title="This Saved Diary" accent={DIARY_ACCENT}>
+          <div className="zlog-saved-diary-review__identity-grid" style={compactIdentityGridStyle}>
+          <DetailRow
+            compact
+            label="Project"
+            value={view.projectName}
+            recorded={Boolean(view.projectName)}
+          />
+          <DetailRow
+            compact
+            label="Report Date"
+            value={view.reportDateDisplay}
+            recorded={view.reportDateDisplay !== NOT_RECORDED}
+          />
+          {(reportGroup?.rows || [])
+            .filter((row) => row.key !== 'reportDate')
+            .filter((row) => row.key !== 'currentPhase' || row.recorded)
+            .map((row) => (
+              <DetailRow
+                compact
+                key={row.key}
+                label={row.label}
+                value={row.value}
+                recorded={row.recorded}
+              />
+            ))}
+          </div>
+        </GlassSection>
+      </div>
+
+      <GlassSection title="Cover Photo" accent={DIARY_ACCENT}>
+        {view.coverPhotoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={view.coverPhotoUrl}
+            alt="Site Diary cover photo"
+            style={{
+              display: 'block',
+              width: '100%',
+              borderRadius: 12,
+              border: '1px solid var(--edge)',
+              background: '#0b0d12',
+            }}
+          />
+        ) : (
+          <EmptySection>No cover photo was saved on this diary.</EmptySection>
+        )}
+      </GlassSection>
 
       <GlassSection title="Project & Report Details" accent={DIARY_ACCENT}>
         {view.detailGroups.map((group, groupIndex) => (
@@ -555,25 +691,6 @@ function SavedDiaryViewer() {
             </div>
           </div>
         ))}
-      </GlassSection>
-
-      <GlassSection title="Cover Photo" accent={DIARY_ACCENT}>
-        {view.coverPhotoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={view.coverPhotoUrl}
-            alt="Site Diary cover photo"
-            style={{
-              display: 'block',
-              width: '100%',
-              borderRadius: 12,
-              border: '1px solid var(--edge)',
-              background: '#0b0d12',
-            }}
-          />
-        ) : (
-          <EmptySection>No cover photo was saved on this diary.</EmptySection>
-        )}
       </GlassSection>
 
       <TextSection
@@ -809,6 +926,7 @@ function SavedDiaryViewer() {
         }}
         onConfirm={confirmDeleteDiary}
       />
+      </div>
     </PremiumShell>
   )
 }

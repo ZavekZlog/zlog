@@ -103,6 +103,19 @@ export const premiumScopedCss = `
     padding: 12px 0 8px;
     background: #0b0d12;
   }
+  /* Workbench shells (PremiumShell default): tighter sticky Back dock for long records. */
+  .zlog-workbench-shell .zlog-sticky-back-dock {
+    margin: -8px 0 6px;
+    padding: 6px 0 4px;
+  }
+  .zlog-workbench-shell .zlog-module-page-header {
+    margin-bottom: 16px;
+  }
+  /* Cancels the globals.css 1px .premium-shell-header hairline on workbench pages. */
+  .zlog-workbench-shell .premium-shell-header,
+  .zlog-workbench-shell .zlog-internal-header {
+    border-bottom: none !important;
+  }
   .dashboard-premium-bg { position: relative; }
   .dashboard-premium-bg::before {
     content: '';
@@ -706,8 +719,27 @@ export const BRAND_HEADER_SPACE = {
 }
 
 /**
+ * Compact workbench brand region — all PremiumShell module/working screens (default).
+ * Maximises mobile working space once the user is inside a task.
+ */
+export const WORKBENCH_BRAND_HEADER_SPACE = {
+  regionPadTop: 28,
+  regionPadBottom: 12,
+  regionMinHeight: 64,
+  belowControls: 12,
+  navRowMinHeight: 44,
+  wordmarkOffsetY: -10,
+}
+
+export const AUTHENTICATED_SHELL_BRAND_WORKBENCH_STYLE = {
+  minHeight: WORKBENCH_BRAND_HEADER_SPACE.regionMinHeight,
+  paddingTop: WORKBENCH_BRAND_HEADER_SPACE.regionPadTop,
+  paddingBottom: WORKBENCH_BRAND_HEADER_SPACE.regionPadBottom,
+}
+
+/**
  * Compact brand-region spacing — dashboard masthead only (Sign out sits immediately below).
- * Workbench pages keep BRAND_HEADER_SPACE (calmer). Do not retune glow tokens here.
+ * Landing/Dashboard keep this treatment; PremiumShell workbench screens use WORKBENCH_* tokens.
  */
 export const AUTHENTICATED_SHELL_BRAND_COMPACT_STYLE = {
   minHeight: 64,
@@ -807,16 +839,19 @@ export function ZlogBrandWordmark({ size = 'lg', centered = true, style = {} }) 
  * min height, and spacing to chrome immediately below.
  * Page nav (Back / title) and dashboard utilities are NOT part of this region.
  */
-export function ZlogBrandRegion({ style = {} } = {}) {
+export function ZlogBrandRegion({ style = {}, headerMode = 'expressive' } = {}) {
+  const isWorkbench = headerMode === 'workbench'
+  const regionSpace = isWorkbench ? WORKBENCH_BRAND_HEADER_SPACE : BRAND_HEADER_SPACE
+
   return (
     <div
-      className="zlog-brand-region"
+      className={`zlog-brand-region${isWorkbench ? ' zlog-brand-region--workbench' : ''}`}
       style={{
         boxSizing: 'border-box',
         width: '100%',
-        minHeight: BRAND_HEADER_SPACE.regionMinHeight,
-        paddingTop: BRAND_HEADER_SPACE.regionPadTop,
-        paddingBottom: BRAND_HEADER_SPACE.regionPadBottom,
+        minHeight: regionSpace.regionMinHeight,
+        paddingTop: regionSpace.regionPadTop,
+        paddingBottom: regionSpace.regionPadBottom,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -824,7 +859,11 @@ export function ZlogBrandRegion({ style = {} } = {}) {
         ...style,
       }}
     >
-      <ZlogBrandWordmark size="md" centered />
+      <ZlogBrandWordmark
+        size="md"
+        centered
+        style={isWorkbench ? { transform: `translateY(${regionSpace.wordmarkOffsetY}px)` } : undefined}
+      />
     </div>
   )
 }
@@ -923,7 +962,11 @@ export function ReportModuleNav({
   onBack,
   backHref,
   trailing = null,
+  headerMode = 'expressive',
 }) {
+  const isWorkbench = headerMode === 'workbench'
+  const navSpace = isWorkbench ? WORKBENCH_BRAND_HEADER_SPACE : BRAND_HEADER_SPACE
+
   const backControl =
     backHref || onBack ? (
       <ZlogBackControl href={backHref} onClick={onBack} />
@@ -941,10 +984,10 @@ export function ReportModuleNav({
         display: 'flex',
         alignItems: 'center',
         gap: 12,
-        minHeight: BRAND_HEADER_SPACE.navRowMinHeight,
-        paddingTop: 4,
-        paddingBottom: 12,
-        marginBottom: BRAND_HEADER_SPACE.belowControls,
+        minHeight: navSpace.navRowMinHeight,
+        paddingTop: isWorkbench ? 2 : 4,
+        paddingBottom: isWorkbench ? 8 : 12,
+        marginBottom: navSpace.belowControls,
       }}
     >
       {backControl}
@@ -1074,6 +1117,7 @@ export function ZlogInternalHeader({
   hideModuleNav = false,
   stickyBack = false,
   brandRegionStyle,
+  headerMode = 'workbench',
   contentMaxWidth = 448,
 }) {
   const showNavRow = !hideModuleNav && Boolean(backHref || onBack || title || trailing)
@@ -1088,7 +1132,6 @@ export function ZlogInternalHeader({
         className="premium-shell-header zlog-internal-header"
         style={{
           ...AUTHENTICATED_SHELL_HEADER_STYLE,
-          zIndex: 50,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -1098,7 +1141,7 @@ export function ZlogInternalHeader({
           pointerEvents: 'auto',
         }}
       >
-        <ZlogBrandRegion style={brandRegionStyle} />
+        <ZlogBrandRegion style={brandRegionStyle} headerMode={headerMode} />
       </header>
 
       {showNavRow ? (
@@ -1117,6 +1160,7 @@ export function ZlogInternalHeader({
               onBack={navOnBack}
               backHref={navBackHref}
               trailing={trailing}
+              headerMode={headerMode}
             />
           </div>
         </div>
@@ -1146,12 +1190,17 @@ export function SubPageLayout({
   hideModuleNav = false,
   stickyBack = false,
   brandRegionStyle,
+  headerMode = 'workbench',
 }) {
   const contentMaxWidth = maxWidth ?? 448
   const showStickyBack = stickyBack && !hideModuleNav && Boolean(backHref || onBack)
+  const shellClassName =
+    headerMode === 'workbench'
+      ? 'min-h-screen bg-[#0d0f12] text-[#f3f4f6] flex flex-col pb-6 pt-0 selection:bg-[#ff5500]/30 zlog-workbench-shell'
+      : 'min-h-screen bg-[#0d0f12] text-[#f3f4f6] flex flex-col pb-6 pt-0 selection:bg-[#ff5500]/30'
 
   return (
-    <div className="min-h-screen bg-[#0d0f12] text-[#f3f4f6] flex flex-col pb-6 pt-0 selection:bg-[#ff5500]/30">
+    <div className={shellClassName}>
       <style>{premiumScopedCss}</style>
 
       <SubPageHeader
@@ -1163,6 +1212,7 @@ export function SubPageLayout({
         hideModuleNav={hideModuleNav}
         stickyBack={stickyBack}
         brandRegionStyle={brandRegionStyle}
+        headerMode={headerMode}
         contentMaxWidth={contentMaxWidth}
       />
 
@@ -1183,6 +1233,9 @@ export function SubPageLayout({
 /**
  * Uniform report / sub-page shell. Delegates to SubPageLayout (login-matched header).
  * reportName / meta / subtitle are accepted but never painted in the header (prevents legacy strings).
+ *
+ * headerMode defaults to `workbench` (compact brand region + nav spacing).
+ * Pass `headerMode="expressive"` only when the full masthead is intentionally required.
  */
 export function PremiumShell(props) {
   return <SubPageLayout {...props} />

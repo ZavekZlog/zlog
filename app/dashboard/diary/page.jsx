@@ -326,8 +326,6 @@ function SiteDiaryEntryPage() {
       hideModuleNav
       accent={DIARY_ACCENT}
       maxWidth={560}
-      /* Entry hub only: tighten air below wordmark (~25%); keep pad-top / logo size. */
-      brandRegionStyle={{ paddingBottom: 30 }}
     >
       <style>{dashboardCardInteractionCss}</style>
       <style>{entryChoiceCardsCss}</style>
@@ -477,7 +475,6 @@ export default function SiteDiaryEntryRoute() {
           backHref="/dashboard"
           accent={DIARY_ACCENT}
           maxWidth={560}
-          brandRegionStyle={{ paddingBottom: 30 }}
         >
           <p style={{ color: 'var(--text-2)' }}>Loading…</p>
         </PremiumShell>
