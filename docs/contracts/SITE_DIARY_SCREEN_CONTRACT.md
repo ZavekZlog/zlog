@@ -1,11 +1,11 @@
 # Site Diary — Screen Contract
 
 **Layer:** B — Screen  
-**Version:** 1.17.0
-**Date Updated:** 2026-08-18
-**Reason Updated:** Persist in-progress workbench content on the existing diary row so an interrupted session can be resumed
-**User Decision:** APPROVED — interruption-safe autosave/resume on daily_reports; no is_draft; no parallel store; Start a New Diary unchanged
-**Previous Version:** 1.16.1
+**Version:** 1.20.2
+**Date Updated:** 2026-08-19
+**Reason Updated:** Restore locked workbench button family (PrimaryCTA surface=workbench) and mutually exclusive persist UI; Delete uses established destructive-border treatment
+**User Decision:** APPROVED — regression repair of locked workbench visual language and save-state exclusivity; not a redesign
+**Previous Version:** 1.20.1
 
 **Status:** Binding production contract  
 **Routes:**
@@ -118,8 +118,8 @@ Do not show helper lines that explain persistence (for example “Programme date
 |------|----------|
 | **A. Start a new diary** | Hub → setup; preselect the signed-in user’s last-used project when it still exists, while keeping Project Name editable/selectable; Author Name prefills from profile; Reporting On Behalf Of prefills from the signed-in user’s most recently used value and remains editable; Report Date may be today; approved default branding / company name may load |
 | **B. Select existing project** | Via **Project Name** matching an existing project; load remembered project fields from `public.projects`; keep `project_id`; do **not** copy diary content |
-| **C. Use a previous diary** | **Not a hub choice.** Reuse lives on each saved-diary entry as **Use for Today**, beside **Open to review**. It creates a **new** diary ID from the selected diary (appropriate reusable fields only), then opens that new diary’s populated **Project & Report Details** for review before the workbench — never straight into compose; Author from profile, not source; the source diary is never modified |
-| **D. View saved diary** | **Open to review** opens the read-only saved-diary viewer (§4A): the whole record on one continuous page, no compose/edit controls, no write except confirmed **Delete Diary**. **Edit This Diary** from the viewer keeps the same diary ID — today’s diary through its Project & Report Details pre-flight, a historical diary in explicit Edit. **Delete Diary** is visually separated, confirmed, and returns to the saved list |
+| **C. Use a previous diary** | **Not a hub choice.** Reuse lives on the opened saved diary as **Use as Basis for New Diary**. It creates a **new** diary ID from that diary (appropriate reusable fields only) via `createTodaysDiaryDraft`, then opens that new diary’s populated **Project & Report Details** for review before the workbench — never straight into compose; Author from profile, not source; the source diary is never modified |
+| **D. View saved diary** | Tapping a Saved Diaries row opens the read-only saved-diary viewer (§4A): the whole record on one continuous page, no compose/edit controls on open. **Generate / Share PDF**, **Edit This Diary**, **Use as Basis for New Diary**, and confirmed **Delete Diary** live on that opened screen. **Edit This Diary** keeps the same diary ID — today’s diary through its Project & Report Details pre-flight, a historical diary in explicit Edit. **Delete Diary** is visually separated and quiet, confirmed, and returns to the saved list |
 | **E. Edit saved diary** | Same diary ID; rehydrate saved values; no duplicate; save → View |
 
 State from one flow must not leak into another.
@@ -156,7 +156,7 @@ Protected interactions:
 ## 4A. Saved diary viewer (read-only artifact)
 
 Route: `/dashboard/project/[id]/diary/view?report=…`  
-Reached from **Open to review**. This is a finished historical record, not an editor.
+Reached by tapping a Saved Diaries row. This is a finished historical record, not an editor.
 
 **Must:**
 
@@ -165,9 +165,9 @@ Reached from **Open to review**. This is a finished historical record, not an ed
 - Show every saved photograph with its caption by default, at the area’s saved 1 / 4 / 6 review density, numbered continuously across the document.
 - Read **Current Phase** from `daily_reports.current_phase` for that diary. `projects.current_phase` is never read.
 - Show `Not recorded` where the diary genuinely holds no value, so blank never reads as broken.
-- Perform **no writes** and create no rows.
-- Keep **Back** visible and usable throughout the continuous review using a compact, opaque sticky action area within the existing report width. The report scrolls normally beneath it.
-- Keep the large Zlog header, **Saved Site Diary** navigation title, report identity/title, and decorative content in normal document flow; none of them is frozen with Back.
+- Opening and reviewing perform **no writes** and create no rows.
+- Keep **Back** visible and usable throughout the continuous review using a compact, opaque sticky action area within the existing report width. The report scrolls normally beneath it. The large page title and report content are not frozen.
+- Do not show a redundant **Saved Site Diary** shell heading above sticky Back. Diary identity is the project name and date line beneath Back.
 
 **Must not:**
 
@@ -175,7 +175,7 @@ Reached from **Open to review**. This is a finished historical record, not an ed
 - Hide any part of the diary behind a button that leaves the page. Project & Report Details is simply the first section of the same artifact.
 - Offer Expand / Collapse.
 
-**Onward actions (v1.13.0):** **Generate PDF** (does not write the diary), **Edit This Diary** (same diary ID, composition workflow), and **Delete Diary** (visually separated from Edit/PDF; never one-tap; confirmed with count-aware copy; then return to the saved-diary list). See `docs/contracts/REPORT_DELETION_CONTRACT.md`.
+**Onward actions (v1.20.2):** **Generate / Share PDF** (does not write the diary; `PrimaryCTA` `surface="workbench"` — restrained rust-perimeter plate, not landing powder-coat), **Edit This Diary** (same diary ID, composition workflow), **Use as Basis for New Diary** (new ID via existing `createTodaysDiaryDraft` → Project & Report Details; source unchanged), and **Delete Diary** (`DestructiveButton` destructive-border treatment, visually separated, never one-tap; confirmed with count-aware copy; then return to the saved-diary list). Productive actions sit together as a compact group; Delete is separated below. Do not freeze the action group with Back. See `docs/contracts/REPORT_DELETION_CONTRACT.md`.
 
 Supersedes v1.12.0 “exactly one — Edit This Diary”. Generate PDF was already present on the viewer and remains.
 
@@ -269,38 +269,38 @@ The longer supporting sentence sets the row height; it is never clipped or short
 
 - **Start a New Diary** → `/dashboard/diary/setup` (clears setup session draft; blank init for today)
 - **View Saved Diaries** → the saved-diary list. Opening the list creates, copies and updates nothing.
-  Each entry is a compact records-management row, not a dashboard card. It shows project name (primary), report date, shift, and the existing short summary where useful.
-  - The main information area is the large **Open to review** tap target → the exact selected report in the read-only saved-diary viewer (§4A). Edit is reached from there.
-  - Compact trailing **Use for Today** → creates a **new** diary from that one and lands on its Project & Report Details (§3 flow C). The selected diary stays saved and unchanged.
-  - Project name/date/shift remain readable and wrap safely; the row has no horizontal overflow. Touch targets remain at least 44px.
-- Saved-list deletion is a separate explicit **Select** mode (§5A). Checkboxes are not shown until Select is chosen. Open to review and Use for Today remain.
+  Each entry is a compact, information-dense tappable row, not a dashboard card. It shows project name (primary), report date, shift, and the existing short summary where useful.
+  - Tapping anywhere on the row opens that exact report in the read-only saved-diary viewer (§4A).
+  - The list has no **Open to review**, **Use for Today**, or **Delete** controls on individual rows.
+  - Helper copy is exactly: **Tap a diary to open and review it.**
+  - Project name/date/shift remain readable and wrap safely; the row has no horizontal overflow. The whole row is the tap target.
+- Saved-list deletion does not live on browsing rows. Confirmed **Delete Diary** lives on the opened viewer (§5A). There is no browsing-surface **Select** mode.
 
-**Use a Previous Diary is not a hub card.** Review and reuse both live on the saved-diary entry, so a
-third hub-level entry is redundant. Removing the card must not remove or break the reuse
+**Use a Previous Diary is not a hub card.** Reuse lives on the opened saved diary as **Use as Basis for New Diary**. Removing the card must not remove or break the reuse
 implementation.
 
 ---
 
-## 5A. Saved-diary deletion (v1.13.0)
+## 5A. Saved-diary deletion (v1.19.0)
 
 Feature contract: `docs/contracts/REPORT_DELETION_CONTRACT.md`.
 
 **Must:**
 
 - Keep hub wording **View Saved Diaries**.
-- Offer **Select** only when the user invokes it. Checkboxes appear only in Select mode.
-- Offer **Select All** and a count-aware **Delete Selected** / **Delete Diary** action.
-- Show a live **n selected** count and a clear selected-row state.
-- Keep one compact sticky management bar above the list while scrolling. In normal browsing it holds **Select**; in Select mode the same bar holds the live count, **Cancel**, **Select All**, and the count-aware delete action. The bar sticks below the viewport top, stays opaque, and the title/header does not stick.
+- Keep the Saved Diaries list as browsing only: each compact row opens review; no per-row management buttons.
 - Never delete on one tap. Confirmation shows the actual count (`Delete Diary` / `Delete 6 Diaries` and `Permanently delete this saved diary?` / `Permanently delete these 6 saved diaries?`).
 - Keep **Cancel** on the confirmation. Cancel deletes nothing.
-- On the opened saved diary, offer **Delete Diary** visually separated from Edit/PDF; after confirm, return to the saved list.
+- Keep one compact sticky contextual bar above the list while scrolling, holding **Back** and **Tap a diary to open and review it.** It does not expose **Select**. The bar sticks below the viewport top, stays opaque, and the title/header does not stick.
+- On the opened saved diary, offer **Delete Diary** as a quiet separated control, lower emphasis than Generate / Share PDF / Edit / Use as Basis; after confirm, return to the saved list.
+- Keep **Back** reachable while scrolling the opened diary via the established compact sticky treatment. Do not freeze the large title or report body.
 - Delete the real diary-owned rows and safe diary-owned Storage objects. Do not delete the project or shared assets still referenced elsewhere.
 - Leave remaining diaries visible.
 
 **Must not:**
 
-- Replace Open to review / Use for Today with delete.
+- Require a separate **Select** / checkbox / **Select All** browsing workflow for ordinary deletion.
+- Put Delete, Use as Basis, or Edit on Saved Diaries list rows.
 - Use the previous project-page sequential client deletes (`report_photos` then labour then plant then `daily_reports`, then best-effort Storage remove).
 
 Canonical helper: `lib/report-deletion.js`. Canonical RPC: `delete_site_diaries`.

@@ -1,6 +1,6 @@
 {
-  "version": "1.4.2",
-  "updated": "2026-08-18",
+  "version": "1.4.6",
+  "updated": "2026-08-19",
   "description": "Approved application UI terminology. Protects labels from accidental replacement. Does NOT freeze dynamic report content. This is a source-string contract — NOT a visual test.",
   "terms": [
     {
@@ -40,7 +40,10 @@
     {
       "id": "COPY-EDIT-THIS-DIARY",
       "label": "Edit This Diary",
-      "files": ["app/dashboard/project/[id]/diary/page.jsx"]
+      "files": [
+        "app/dashboard/project/[id]/diary/page.jsx",
+        "app/dashboard/project/[id]/diary/view/page.jsx"
+      ]
     },
     {
       "id": "COPY-CONTINUE-TODAYS-DIARY",
@@ -57,6 +60,28 @@
       "label": "View Saved Diaries",
       "files": ["app/dashboard/diary/page.jsx"],
       "notes": "Second of exactly two equal Site Diary hub cards, beside Start a New Diary."
+    },
+    {
+      "id": "COPY-TAP-DIARY-TO-REVIEW",
+      "label": "Tap a diary to open and review it.",
+      "files": ["app/dashboard/diary/page.jsx"],
+      "notes": "Exact helper copy on the Saved Diaries browsing list. Do not expand."
+    },
+    {
+      "id": "COPY-GENERATE-SHARE-PDF",
+      "label": "Generate / Share PDF",
+      "files": ["app/dashboard/project/[id]/diary/view/page.jsx"],
+      "notes": "Opened saved-diary review action. Reuses the existing PDF pipeline; PrimaryCTA surface=workbench (restrained rust perimeter, not landing powder-coat)."
+    },
+    {
+      "id": "COPY-USE-AS-BASIS",
+      "label": "Use as Basis for New Diary",
+      "files": [
+        "app/dashboard/project/[id]/diary/page.jsx",
+        "app/dashboard/project/[id]/diary/view/page.jsx",
+        "app/dashboard/project/[id]/page.jsx"
+      ],
+      "notes": "Creates a new diary ID from the opened saved diary. Source diary is never modified."
     },
     {
       "id": "COPY-SIGN-OUT",
@@ -115,66 +140,42 @@
         "app/dashboard/project/[id]/diary/view/page.jsx",
         "app/dashboard/project/[id]/page.jsx"
       ],
-      "notes": "Count-aware helper returns Delete Diary for one saved diary. Viewer and project recent list use this label. Saved list uses the same helper when one diary is selected."
-    },
-    {
-      "id": "COPY-SELECT-ALL",
-      "label": "Select All",
-      "files": ["app/dashboard/diary/page.jsx"],
-      "notes": "Saved-diary list Select mode only."
+      "notes": "Count-aware helper returns Delete Diary for one saved diary. Viewer and project recent list use this label. Saved Diaries browsing rows do not offer Delete."
     },
     {
       "id": "COPY-AUTOSAVE-SAVING",
       "label": "Saving your work…",
-      "files": [
-        "lib/diary-autosave.js",
-        "app/dashboard/project/[id]/diary/page.jsx"
-      ],
-      "notes": "Unobtrusive in-progress autosave status. Not the Save / Share button."
+      "files": ["lib/diary-autosave.js"],
+      "notes": "Unobtrusive in-progress autosave status. The workbench renders this via autosaveStatusMessage(). Not the Save / Share button."
     },
     {
       "id": "COPY-AUTOSAVE-SAVED",
       "label": "Work saved",
-      "files": [
-        "lib/diary-autosave.js",
-        "app/dashboard/project/[id]/diary/page.jsx"
-      ],
+      "files": ["lib/diary-autosave.js"],
       "notes": "Shown only after a successful content UPDATE. Must not imply the diary is finished or shared."
     },
     {
       "id": "COPY-AUTOSAVE-FAILED",
       "label": "Work not saved. Check your connection.",
-      "files": [
-        "lib/diary-autosave.js",
-        "app/dashboard/project/[id]/diary/page.jsx"
-      ],
+      "files": ["lib/diary-autosave.js"],
       "notes": "Autosave network/offline failure only. Database, auth, and conflict failures use distinct copy."
     },
     {
       "id": "COPY-AUTOSAVE-FAILED-DB",
       "label": "Work not saved. Try again in a moment.",
-      "files": [
-        "lib/diary-autosave.js",
-        "app/dashboard/project/[id]/diary/page.jsx"
-      ],
+      "files": ["lib/diary-autosave.js"],
       "notes": "Autosave database/update failure — not a connection message."
     },
     {
       "id": "COPY-AUTOSAVE-FAILED-AUTH",
       "label": "Your sign-in has timed out. Sign in again to keep editing.",
-      "files": [
-        "lib/diary-autosave.js",
-        "app/dashboard/project/[id]/diary/page.jsx"
-      ],
+      "files": ["lib/diary-autosave.js"],
       "notes": "Autosave blocked by expired session."
     },
     {
       "id": "COPY-AUTOSAVE-CONFLICT",
       "label": "Updated from your last saved copy.",
-      "files": [
-        "lib/diary-autosave.js",
-        "app/dashboard/project/[id]/diary/page.jsx"
-      ],
+      "files": ["lib/diary-autosave.js"],
       "notes": "Stale-write protection restored server content into the form."
     }
   ]

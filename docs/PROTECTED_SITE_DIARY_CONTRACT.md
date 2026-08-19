@@ -1,10 +1,10 @@
 # Protected Site Diary Contract
 
-**Version:** 1.10.0
-**Date Updated:** 2026-08-17
-**Reason Updated:** Lock one shared sticky management bar carrying Select in normal browsing and the selection controls in Select mode
-**User Decision:** APPROVED — View Saved Diaries UX density redesign with all existing actions and deletion behaviour preserved
-**Previous Version:** 1.9.0
+**Version:** 1.13.1
+**Date Updated:** 2026-08-19
+**Reason Updated:** Workbench Save / Share and review Generate / Share PDF share PrimaryCTA surface=workbench; Delete uses DestructiveButton
+**User Decision:** APPROVED — restore locked workbench button family
+**Previous Version:** 1.13.0
 
 **Status:** Binding behavioural summary for Site Diary  
 **Authority:** Production product contract. Detail and control order live in **`docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md`**. Do not remove, rename, relocate, disable, or silently change protected behaviours unless the user explicitly requests that exact change.
@@ -120,20 +120,20 @@ Do not invent Author Role when none was saved.
 
 | Requirement | Contract |
 |-------------|----------|
-| Open to review (hub) | Read-only saved-diary viewer — the whole record on one scrolling page (`/dashboard/project/[id]/diary/view?report=…`); no compose/edit controls; no write |
+| Open to review (hub) | Tapping a compact Saved Diaries row opens the read-only saved-diary viewer — the whole record on one scrolling page (`/dashboard/project/[id]/diary/view?report=…`); no compose/edit controls on open |
 | Viewer content | Project & Report Details incl. **Current Phase** from `daily_reports.current_phase`, cover, weather, H&S / RFIs / variations, summary, labour, plant, equipment, Temporary Works & Scaffolding Checks, visitors, delays, actions, photo evidence with captions visible, signature |
 | Open today’s diary for editing | Project & Report Details first; no write on open; Continue uses the same report ID |
 | Open historical diary for editing | Workbench View / Edit mode (`lib/diary-view-mode.js`) |
 | Wording | Must not imply editing while reviewing |
-| Actions | Viewer: **Generate PDF**, **Edit This Diary**, and visually separated **Delete Diary** (confirmed; returns to the saved list). Workbench View: **Edit This Diary**, **Use as Basis for New Diary** |
+| Actions | Viewer: **Generate / Share PDF** (`PrimaryCTA` `surface="workbench"`), **Edit This Diary**, **Use as Basis for New Diary**, and visually separated **Delete Diary** (`DestructiveButton`; confirmed; returns to the saved list). Workbench View: **Edit This Diary**, **Use as Basis for New Diary** |
 | Edit ID | Same diary ID |
 | Open write | Opening performs **no** database write |
 | After save | Return to that diary in View mode |
 | Recent lists | Only on diary-selection / hub screens — not on the open report page |
 | Content isolation | Plant/equipment/temporary works and all daily content isolated by diary ID |
-| Saved-list presentation | Compact records-management rows: project name primary; report date + shift; existing short summary where useful; main row area opens to review; compact trailing **Use for Today**; no oversized dashboard cards or horizontal overflow |
-| Selection presentation | Explicit Select mode only; clear row checkbox/selected state; live **n selected** count; one compact opaque sticky management bar holding **Select** in normal browsing and **Cancel / Select All / Delete n Diaries** in Select mode; never two sticky bars; title is not sticky |
-| Delete saved diary | Explicit **Select** on the saved list, or **Delete Diary** on the opened viewer / project recent list. Never one-tap. Confirmed with the actual count. Remaining diaries stay. Feature contract: `docs/contracts/REPORT_DELETION_CONTRACT.md` |
+| Saved-list presentation | Compact browsing rows: project name primary; report date + shift; existing short summary where useful; the whole row opens review; no Open / Use for Today / Delete buttons on the row; no oversized dashboard cards or horizontal overflow |
+| Selection presentation | No browsing-surface Select / checkbox / Select All workflow. One compact opaque sticky contextual bar holding **Back** and **Tap a diary to open and review it.**; never two sticky bars; title is not sticky |
+| Delete saved diary | Confirmed **Delete Diary** on the opened viewer / project recent list. Never on Saved Diaries browsing rows. Never one-tap. Confirmed with the actual count. Remaining diaries stay. Feature contract: `docs/contracts/REPORT_DELETION_CONTRACT.md` |
 
 Project & Report Details is a pre-flight, not a create flow. It hydrates the
 existing report’s saved Report Date, Shift, Current Phase, identity and linked

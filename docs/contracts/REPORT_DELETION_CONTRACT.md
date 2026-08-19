@@ -1,11 +1,11 @@
 # Report Deletion Contract
 
 **Layer:** C — Feature  
-**Version:** 1.2.0
-**Date Updated:** 2026-08-17  
-**Reason Updated:** Make the sticky management area a single shared surface that carries Select in normal browsing and the selection controls in Select mode
-**User Decision:** APPROVED — tightly bounded View Saved Diaries presentation and interaction-density redesign; deletion backend remains unchanged
-**Previous Version:** 1.1.0
+**Version:** 1.4.2
+**Date Updated:** 2026-08-19  
+**Reason Updated:** Opened-diary Delete restored to the established DestructiveButton border treatment; confirmation and backend unchanged
+**User Decision:** APPROVED — regression repair: Delete uses the same destructive-border treatment as elsewhere
+**Previous Version:** 1.4.1
 
 **Status:** Binding production contract for deleting saved reports  
 **First host:** Site Diary saved-diary list, saved-diary viewer, and project-page recent diary entries  
@@ -24,7 +24,7 @@ This rule applies first to Site Diary and is the required pattern for future rep
 **Must:**
 
 - Delete the real parent report and its report-owned child records.
-- Require an explicit Select / delete action. Never delete on a single tap.
+- Require an explicit delete action plus confirmation. Never delete on a single tap.
 - Confirm with the actual count before destroying anything.
 - Keep a visible **Cancel** control that closes the confirmation without deleting.
 - After a confirmed opened-report delete, return the user to that module’s saved list.
@@ -61,18 +61,17 @@ Future modules reuse the same helper with their own singular/plural labels. The 
 - Hub wording stays **View Saved Diaries**.
 - Saved records use compact, restrained list rows rather than dashboard-style cards.
 - Each row shows project name first, then report date and shift, with the existing short summary where useful.
-- In normal mode, the record information is the large **Open to review** tap target; **Use for Today** is a clear compact trailing action. Neither action is swipe-only or hidden behind an overflow menu.
-- Checkboxes are absent until the user chooses **Select**.
-- **Select All** selects every currently listed diary.
-- **Delete Selected** is disabled until at least one diary is selected.
-- **Open to review** and **Use for Today** remain on each entry and keep their approved behaviour.
-- Selection mode replaces navigation actions with a clear full-row checkbox target, selected-row treatment, and live `{count} selected` status.
-- One compact management bar remains sticky below the viewport top while scrolling. In normal browsing it carries **Select**; in Select mode the same bar carries the live count, **Cancel**, **Select All**, and the count-aware delete action. It is fully opaque, does not duplicate into a second sticky bar, and does not freeze the page title.
+- The entire row is the tap target and opens that diary in review. There are no **Open to review**, **Use for Today**, or **Delete** controls on the row.
+- There is no browsing-surface **Select**, checkbox, **Select All**, or bulk selection mode.
+- Helper copy is exactly: **Tap a diary to open and review it.**
+- Delete never runs from this browsing list.
+- One compact contextual bar remains sticky below the viewport top while scrolling. It carries **Back** and the helper copy. It does not expose Select. It is fully opaque, does not duplicate into a second sticky bar, and does not freeze the page title.
 
 ### Opened saved diary (`/dashboard/project/[id]/diary/view`)
 
-- **Delete Diary** is visually separated from **Generate PDF** and **Edit This Diary**.
-- Generate PDF and Edit This Diary remain.
+- **Delete Diary** uses the established **DestructiveButton** destructive-border treatment, visually separated and lower in the action hierarchy than **Generate / Share PDF**, **Edit This Diary**, and **Use as Basis for New Diary**.
+- Generate / Share PDF, Edit This Diary, and Use as Basis for New Diary remain as the productive actions.
+- Delete never runs on one tap. Confirmation uses the existing count-aware dialog with **Cancel**, identifying that the saved diary will be permanently deleted.
 - Confirmed delete returns to the saved-diary list (`?view=saved`).
 
 ### Project page recent entries (`/dashboard/project/[id]`)
@@ -167,8 +166,8 @@ The Site Diary list establishes the required presentation pattern for future sav
 - Keep primary record opening obvious and provide efficient, visibly labelled secondary actions.
 - Avoid swipe-only actions, obscure gestures, horizontal scrolling, and unnecessary truncation of project/date identity.
 - Keep touch targets at least 44px and text readable in outdoor/mobile conditions.
-- Use explicit **Select**, per-row selection, **Select All**, live selected count, count-aware delete, and confirmation before deletion.
-- Provide exactly one sticky management area per saved-report list. It carries the minimal normal-state control (**Select**) and becomes the selection controls when Select is activated.
+- Offer restrained per-row delete with confirmation before deletion. Do not require a separate **Select** browsing workflow for ordinary deletion.
+- Provide exactly one sticky contextual area per saved-report list. It carries the browsing helper copy and must not advertise Select.
 - Keep that sticky area compact, opaque, and offset from viewport edges; it must not obscure records or device/browser navigation.
 
 If optional summary text is constrained for density, project name, date, shift, and action labels remain fully legible. Visual/mobile inspection is required because source contracts cannot prove geometry or records-per-screen.

@@ -371,33 +371,57 @@ function PowderCtaOverlays() {
 }
 
 /**
+ * Restrained report/workbench primary — same dark plate + rust perimeter as the
+ * locked saved-diary review action. Not landing powder-coat enamel.
+ */
+export function workbenchPrimaryButtonStyle(disabled = false) {
+  return {
+    ...equalChoiceButtonStyle(disabled),
+    width: '100%',
+    border: '1px solid color-mix(in srgb, var(--rust) 42%, var(--edge))',
+    boxShadow: 'inset 0 1px 0 var(--edge-highlight)',
+  }
+}
+
+/**
  * @param {{
  *   children: import('react').ReactNode
  *   disabled?: boolean
+ *   loading?: boolean
  *   type?: string
  *   onClick?: import('react').MouseEventHandler
  *   href?: string
  *   style?: import('react').CSSProperties
  *   className?: string
  *   accent?: string
+ *   surface?: 'brand' | 'workbench'
  * }} props
  */
 export function PrimaryCTA({
   children,
   disabled = false,
+  loading = false,
   type = 'button',
   onClick,
   href,
   style,
   className = '',
   accent,
+  surface = 'brand',
 }) {
-  const classNames = `zlog-primary-cta premium-primary-btn ${className}`.trim()
-  const merged = { ...primaryButtonStyle(accent, disabled), ...style }
+  const isWorkbench = surface === 'workbench'
+  const isDisabled = Boolean(disabled || loading)
+  const classNames = isWorkbench
+    ? `zlog-equal-choice-btn zlog-workbench-primary-cta ${className}`.trim()
+    : `zlog-primary-cta premium-primary-btn ${className}`.trim()
+  const merged = {
+    ...(isWorkbench ? workbenchPrimaryButtonStyle(isDisabled) : primaryButtonStyle(accent, isDisabled)),
+    ...style,
+  }
 
   const content = (
     <>
-      <PowderCtaOverlays />
+      {isWorkbench ? null : <PowderCtaOverlays />}
       <span style={{ position: 'relative', zIndex: 1, width: '100%' }}>{children}</span>
     </>
   )
@@ -407,6 +431,8 @@ export function PrimaryCTA({
       <Link
         href={href}
         className={classNames}
+        data-zlog-cta-surface={surface}
+        aria-busy={loading || undefined}
         style={{
           ...merged,
           textDecoration: 'none',
@@ -415,7 +441,7 @@ export function PrimaryCTA({
           justifyContent: merged.justifyContent ?? 'center',
         }}
         onClick={onClick}
-        aria-disabled={disabled || undefined}
+        aria-disabled={isDisabled || undefined}
       >
         {content}
       </Link>
@@ -423,7 +449,15 @@ export function PrimaryCTA({
   }
 
   return (
-    <button type={type} disabled={disabled} onClick={onClick} className={classNames} style={merged}>
+    <button
+      type={type}
+      disabled={isDisabled}
+      onClick={onClick}
+      className={classNames}
+      data-zlog-cta-surface={surface}
+      aria-busy={loading || undefined}
+      style={merged}
+    >
       {content}
     </button>
   )
@@ -488,8 +522,8 @@ export function SecondaryButton({
 }
 
 /**
- * Strong neutral / equal-choice action — between PrimaryCTA (orange progression)
- * and SecondaryButton (ordinary secondary / nav).
+ * Strong neutral / equal-choice action — between PrimaryCTA (brand powder-coat
+ * or workbench rust-framed progression) and SecondaryButton (ordinary secondary / nav).
  * Use when two or more significant routes share equal hierarchy.
  * Never solid orange fill; peers must stay visually matched.
  */

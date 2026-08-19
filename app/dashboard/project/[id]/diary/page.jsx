@@ -53,6 +53,8 @@ import {
   autosavePayloadsEqual,
   autosaveStatusAfterResult,
   autosaveStatusMessage,
+  shouldShowDiaryAutosaveStatus,
+  shouldShowManualSaveConfirmation,
   buildDiaryAutosavePayload,
   classifyAutosaveFailure,
   runDiaryAutosave,
@@ -77,6 +79,7 @@ import {
   planCoverPhotoPersistence,
   coverPhotoStoragePath,
   applyCoverPhotoPatch,
+  coverPhotoPersistedOnRow,
 } from '@/lib/diary-cover-photo'
 import {
   diaryHubHref,
@@ -411,6 +414,8 @@ export default function SiteDiaryPage() {
   const completingRef = useRef(false)
   const [hydrateComplete, setHydrateComplete] = useState(false)
   const [autosaveStatus, setAutosaveStatus] = useState(null)
+  const persistUiErrorRef = useRef('')
+  const finalSaveInProgressRef = useRef(false)
   const ackedSnapshotRef = useRef(null)
   const latestPayloadRef = useRef(null)
   const autosaveTimerRef = useRef(null)
@@ -427,6 +432,8 @@ export default function SiteDiaryPage() {
     setShowSaveBanner(false)
     setReportIsDraft(null)
     setHydrateComplete(false)
+    persistUiErrorRef.current = ''
+    finalSaveInProgressRef.current = false
     setAutosaveStatus(null)
     setLoadDiagnostic('')
     ackedSnapshotRef.current = null
@@ -441,7 +448,11 @@ export default function SiteDiaryPage() {
       if (cancelled) return
       if (user) {
         setSessionExpired(false)
-        setError((prev) => (prev === SESSION_EXPIRED_SAVE_MESSAGE ? '' : prev))
+        setError((prev) => {
+          if (prev !== SESSION_EXPIRED_SAVE_MESSAGE) return prev
+          persistUiErrorRef.current = ''
+          return ''
+        })
         return
       }
       setSessionExpired(true)
@@ -1012,7 +1023,13 @@ export default function SiteDiaryPage() {
         return { ok: true, reason: 'already-saved', wrote: false }
       }
 
-      setAutosaveStatus('saving')
+      const paintAutosaveStatus = (kind) => {
+        if (persistUiErrorRef.current) return
+        if (finalSaveInProgressRef.current) return
+        setAutosaveStatus(kind)
+      }
+
+      paintAutosaveStatus('saving')
       let result
       try {
         result = await runDiaryAutosave(supabase, {
@@ -1033,7 +1050,7 @@ export default function SiteDiaryPage() {
 
       if (result.ok) {
         ackedSnapshotRef.current = result.acked
-        setAutosaveStatus(autosaveStatusAfterResult(result))
+        paintAutosaveStatus(autosaveStatusAfterResult(result))
         return result
       }
 
@@ -1049,7 +1066,7 @@ export default function SiteDiaryPage() {
         if (process.env.NODE_ENV !== 'production') {
           console.log('[zlog:diary-autosave]', failure.diagnostic, result.error || null)
         }
-        setAutosaveStatus(failure.kind)
+        paintAutosaveStatus(failure.kind)
         return result
       }
 
@@ -1061,7 +1078,7 @@ export default function SiteDiaryPage() {
       if (process.env.NODE_ENV !== 'production') {
         console.log('[zlog:diary-autosave]', failure.diagnostic, result.error || null)
       }
-      setAutosaveStatus(failure.kind)
+      paintAutosaveStatus(failure.kind)
       return result
     }
 
@@ -1090,7 +1107,15 @@ export default function SiteDiaryPage() {
   }, [editingReportId, hydrateComplete, isDiaryEditMode, performAutosave, sessionExpired])
 
   useEffect(() => {
-    if (!hydrateComplete || !isDiaryEditMode || !editingReportId || sessionExpired || saving) {
+    if (
+      !hydrateComplete ||
+      !isDiaryEditMode ||
+      !editingReportId ||
+      sessionExpired ||
+      saving ||
+      justSaved ||
+      error
+    ) {
       return undefined
     }
     const hydrateGate = resolveHydrateAutosaveSuppress(
@@ -1107,7 +1132,7 @@ export default function SiteDiaryPage() {
       writable: isDiaryEditMode,
       reportId: editingReportId,
       sessionExpired,
-      finalSaveInProgress: saving,
+      finalSaveInProgress: saving || justSaved || finalSaveInProgressRef.current,
       payload: autosavePayload,
       ackedSnapshot: ackedSnapshotRef.current,
     })) {
@@ -1132,6 +1157,8 @@ export default function SiteDiaryPage() {
     isDiaryEditMode,
     performAutosave,
     saving,
+    justSaved,
+    error,
     sessionExpired,
   ])
 
@@ -1663,6 +1690,9 @@ export default function SiteDiaryPage() {
       setSaving(false)
       setJustSaved(false)
       setShowSaveBanner(false)
+      persistUiErrorRef.current = SESSION_EXPIRED_SAVE_MESSAGE
+      finalSaveInProgressRef.current = false
+      setAutosaveStatus(null)
       setError(SESSION_EXPIRED_SAVE_MESSAGE)
     })
     saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
@@ -1695,6 +1725,8 @@ export default function SiteDiaryPage() {
         ? 'Save already completed for this attempt. Change a field or reopen the report.'
         : 'Save is already in progress.'
       flushSync(() => {
+        persistUiErrorRef.current = blockMsg
+        setAutosaveStatus(null)
         setError(blockMsg)
       })
       saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
@@ -1702,10 +1734,13 @@ export default function SiteDiaryPage() {
     }
 
     saveLockRef.current = true
+    finalSaveInProgressRef.current = true
     flushSync(() => {
       setSaving(true)
       setJustSaved(false)
       setShowSaveBanner(false)
+      persistUiErrorRef.current = ''
+      setAutosaveStatus(null)
       setError('')
     })
 
@@ -1713,10 +1748,13 @@ export default function SiteDiaryPage() {
       diarySaveLog('fail', { message })
       saveLockRef.current = false
       completingRef.current = false
+      finalSaveInProgressRef.current = false
       flushSync(() => {
         setSaving(false)
         setJustSaved(false)
         setShowSaveBanner(false)
+        persistUiErrorRef.current = message
+        setAutosaveStatus(null)
         setError(message)
       })
       saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
@@ -1748,6 +1786,7 @@ export default function SiteDiaryPage() {
         coverRemoved: coverRemovedRef.current,
       })
       let signatureUrl = signature?.storagePath || null
+      let requiredCoverPath = null
 
       if (coverPlan.needsUpload && coverPlan.file) {
         const ext = coverPlan.file.name?.split('.').pop()?.toLowerCase() || 'jpg'
@@ -1768,13 +1807,21 @@ export default function SiteDiaryPage() {
           coverRemoved: false,
           uploadedPath: coverPath,
         })
-        loadedCoverPathRef.current = coverPath
+        if (!coverPlan.patch?.cover_photo_url) {
+          failSave('We couldn’t upload the cover photo. Check your connection and try Save / Share again.')
+          return
+        }
+        requiredCoverPath = coverPlan.patch.cover_photo_url
+        loadedCoverPathRef.current = requiredCoverPath
         coverRemovedRef.current = false
-        const keepPreview =
-          liveCover?.preview && String(liveCover.preview).startsWith('blob:')
-            ? liveCover.preview
-            : null
-        setCoverPhoto(coverPhotoStateFromSaved(coverPath, keepPreview))
+        // Keep the local File until the diary row is verified so a later failure can retry.
+        setCoverPhoto({
+          file: liveCover.file,
+          preview: liveCover.preview,
+          storagePath: requiredCoverPath,
+        })
+      } else if (coverPlan.patch?.cover_photo_url) {
+        requiredCoverPath = coverPlan.patch.cover_photo_url
       }
 
       if (signature?.file) {
@@ -1928,19 +1975,42 @@ export default function SiteDiaryPage() {
         return
       }
 
+      if (requiredCoverPath && !coverPhotoPersistedOnRow(saved.row, requiredCoverPath)) {
+        failSave('We couldn’t save your Site Diary. Check your connection and try again.')
+        return
+      }
+
       // Persist first, then hand off to existing Report Complete / Share flow.
+      if (requiredCoverPath) {
+        const keepPreview = coverPhotoRef.current?.preview || null
+        setCoverPhoto(coverPhotoStateFromSaved(requiredCoverPath, keepPreview))
+      }
+      if (saved.row) {
+        ackedSnapshotRef.current = snapshotFromLiveRow(saved.row)
+      } else if (latestPayloadRef.current) {
+        ackedSnapshotRef.current = latestPayloadRef.current
+      }
       setReportIsDraft(false)
       flushSync(() => {
         setSaving(false)
         setJustSaved(true)
         setShowSaveBanner(true)
+        setAutosaveStatus(null)
+        setError('')
       })
       diarySaveLog('success', { reportId: saved.id })
 
       const shareHref = postSaveDiaryHref(projectId, saved.id)
       if (shareHref) {
         completingRef.current = true
-        router.replace(shareHref)
+        if (saveNavTimerRef.current) clearTimeout(saveNavTimerRef.current)
+        saveNavTimerRef.current = setTimeout(() => {
+          saveNavTimerRef.current = null
+          finalSaveInProgressRef.current = false
+          router.replace(shareHref)
+        }, 3200)
+      } else {
+        finalSaveInProgressRef.current = false
       }
     } catch (err) {
       const message =
@@ -2847,7 +2917,33 @@ export default function SiteDiaryPage() {
               {error}
             </div>
           )}
-          {autosaveStatus && !saving && !justSaved ? (
+          {shouldShowManualSaveConfirmation({ error, saving, justSaved }) ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="zlog-manual-save-confirmation"
+              style={{
+                marginBottom: 12,
+                padding: '12px 14px',
+                fontSize: 14,
+                lineHeight: 1.45,
+                borderRadius: 10,
+                fontWeight: 600,
+                background: 'rgba(34,197,94,0.14)',
+                border: '1px solid rgba(34,197,94,0.38)',
+                color: '#4ade80',
+              }}
+            >
+              ✓ Your Site Diary has been saved.
+            </div>
+          ) : null}
+          {shouldShowDiaryAutosaveStatus({
+            error,
+            saving,
+            justSaved,
+            autosaveStatus,
+            finalSaveInProgress: saving || justSaved,
+          }) ? (
             <p
               role="status"
               aria-live="polite"
@@ -2866,31 +2962,10 @@ export default function SiteDiaryPage() {
           ) : null}
           <PrimaryCTA
             type="button"
+            surface="workbench"
+            loading={sessionExpired ? false : saving}
             onClick={sessionExpired ? goToSignInForSave : handleSave}
             disabled={sessionExpired ? false : saving || justSaved}
-            accent={REPORT_THEMES.diary.accent}
-            style={
-              sessionExpired
-                ? {
-                    cursor: 'pointer',
-                    opacity: 1,
-                  }
-                : justSaved
-                ? {
-                    border: '1px solid color-mix(in srgb, #22c55e, var(--ink) 45%)',
-                    background:
-                      'linear-gradient(180deg, color-mix(in srgb, #22c55e, var(--text) 14%) 0%, #16a34a 42%, color-mix(in srgb, #15803d, var(--ink) 18%) 100%)',
-                    boxShadow: 'inset 0 1px 0 color-mix(in srgb, var(--text), transparent 78%)',
-                    cursor: 'default',
-                    opacity: 1,
-                  }
-                : saving
-                  ? {
-                      cursor: 'wait',
-                      opacity: 1,
-                    }
-                  : undefined
-            }
           >
             <span
               style={{

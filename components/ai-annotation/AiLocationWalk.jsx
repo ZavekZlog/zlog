@@ -662,6 +662,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
           <div style={{ marginTop: 18 }}>
             <PrimaryCTA
               type="button"
+              surface="workbench"
               accent={accent}
               disabled={capturing}
               onClick={saveArea}
@@ -723,7 +724,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
       {phase === 'review' && (
         <div>
           {locationWalk.length === 0 ? (
-            <PrimaryCTA type="button" accent={accent} onClick={beginCreate} style={primaryTap}>
+            <PrimaryCTA type="button" surface="workbench" accent={accent} onClick={beginCreate} style={primaryTap}>
               {copy.createGroup}
             </PrimaryCTA>
           ) : (

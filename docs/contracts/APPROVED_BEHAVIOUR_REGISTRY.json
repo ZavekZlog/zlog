@@ -1,6 +1,6 @@
 {
-  "version": "1.1.9",
-  "updated": "2026-08-18",
+  "version": "1.1.11",
+  "updated": "2026-08-19",
   "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage. Source contracts are NOT screenshot visual tests.",
   "behaviours": [
     {
@@ -272,7 +272,7 @@
     },
     {
       "id": "DIARY-021",
-      "description": "Today's diary opens through populated Project & Report Details — including Use a Previous Diary / Use for Today — and Continue opens the same report in compose without duplicating or resetting report content",
+      "description": "Today's diary opens through populated Project & Report Details — including Use as Basis for New Diary from an opened saved diary — and Continue opens the same report in compose without duplicating or resetting report content",
       "area": "site-diary",
       "tests": [
         "lib/diary-setup-continue.test.js",
@@ -370,7 +370,7 @@
     },
     {
       "id": "DIARY-029",
-      "description": "Saved Site Diaries can be deleted for real via confirmed Select / Delete Diary; children cascade; Storage cleanup is durable and skips assets still referenced elsewhere; remaining diaries, the project, and shared branding stay",
+      "description": "Saved Site Diaries can be deleted for real via confirmed Delete Diary on the opened diary (and project recent list); children cascade; Storage cleanup is durable and skips assets still referenced elsewhere; remaining diaries, the project, and shared branding stay",
       "area": "site-diary",
       "tests": [
         "lib/report-deletion.test.js",
@@ -378,18 +378,18 @@
         "lib/diary-saved-view.test.js"
       ],
       "manualQA": true,
-      "manualQANote": "Authenticated delete of a real saved diary, Storage orphan/reference-safety on live data, and mobile visual review of Select mode / confirmation remain manual QA; copy, confirmation, RPC wiring, cascade/outbox source contracts and remaining-list behaviour are automated."
+      "manualQANote": "Authenticated delete of a real saved diary, Storage orphan/reference-safety on live data, and mobile visual review of opened-diary Delete Diary / confirmation remain manual QA; copy, confirmation, RPC wiring, cascade/outbox source contracts and remaining-list behaviour are automated."
     },
     {
       "id": "DIARY-030",
-      "description": "View Saved Diaries uses compact mobile-first record rows with project/date/shift identity, main-row review, compact Use for Today, and one sticky management bar carrying Select in normal browsing and the live count / Cancel / Select All / count-aware delete controls in Select mode",
+      "description": "View Saved Diaries is a compact mobile-first browsing list: project/date/shift identity, entire row opens review, no Open/Use for Today/Delete row controls, and one sticky contextual bar with Back plus Tap a diary to open and review it.",
       "area": "site-diary",
       "tests": [
         "lib/report-deletion.test.js",
         "lib/diary-site-diary-contract.test.js"
       ],
       "manualQA": true,
-      "manualQANote": "Source contracts protect row/action/state wiring, touch-target declarations and overflow guards. Authenticated phone inspection must confirm practical 5–7 record density, outdoor legibility, wrapping, the shared sticky bar in both states, and no viewport obstruction."
+      "manualQANote": "Source contracts protect row/action/state wiring, tap-target declarations and overflow guards. Authenticated phone inspection must confirm practical 5–7 record density, outdoor legibility, wrapping, sticky Back, and no viewport obstruction."
     },
     {
       "id": "DIARY-031",
@@ -404,7 +404,7 @@
     },
     {
       "id": "DIARY-032",
-      "description": "In-progress Site Diary workbench content autosaves onto the existing daily_reports row after a short pause so an interrupted session can be resumed; Save / Share still finalises; failed/offline writes are not shown as saved",
+      "description": "In-progress Site Diary workbench content autosaves onto the existing daily_reports row after a short pause so an interrupted session can be resumed; Save / Share still finalises; persist UI is mutually exclusive (idle|saving|saved|error) so a failed save never also shows Work saved",
       "area": "site-diary",
       "tests": [
         "lib/diary-autosave.test.js",
@@ -412,6 +412,19 @@
       ],
       "manualQA": true,
       "manualQANote": "Authenticated phone QA must confirm Weather / H&S survive a killed tab on the same report id, status copy stays honest when offline, and Save / Share still completes. Start a New Diary must still create a new diary."
+    },
+    {
+      "id": "DIARY-033",
+      "description": "Site Diary workbench Save Area / Save / Share / Generate / Share PDF use PrimaryCTA surface=workbench (restrained rust-framed plate), not landing powder-coat; dashboard/auth keep the default brand PrimaryCTA",
+      "area": "site-diary",
+      "tests": [
+        "lib/premium-ui-workbench-cta-contract.test.js",
+        "lib/cta-hierarchy-contract.test.js",
+        "lib/diary-site-diary-contract.test.js",
+        "lib/diary-saved-view.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Source contracts lock the shared surface=workbench variant. Authenticated phone QA must confirm no glossy orange-gradient workbench CTAs remain on the diary editor or saved-diary review."
     },
     {
       "id": "UI-COPY-001",

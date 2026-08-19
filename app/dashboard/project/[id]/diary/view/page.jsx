@@ -13,7 +13,7 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { FileDown, Pencil } from 'lucide-react'
+import { CopyPlus, FileDown, Pencil, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import {
   PremiumShell,
@@ -29,11 +29,32 @@ import {
   temporaryWorkInspectionStatus,
   temporaryWorkNotesDisplay,
 } from '@/lib/diary-daily-records'
-import { diaryHubHref, editExistingDiaryHref } from '@/lib/diary-routing'
+import { diaryHubHref, editExistingDiaryHref, projectAndReportDetailsHref } from '@/lib/diary-routing'
+import { createTodaysDiaryDraft } from '@/lib/diary-draft'
 import { deleteSiteDiaries, savedReportListHref } from '@/lib/report-deletion'
 import { downloadSiteDiaryPdf, prepareSiteDiaryPdf } from '@/lib/diary-share'
 
 const DIARY_ACCENT = REPORT_THEMES.diary.accent
+
+const reviewActionStyle = {
+  width: '100%',
+  minHeight: 48,
+  padding: '7px 14px',
+  fontSize: 14,
+  fontWeight: 500,
+}
+
+const deleteActionStyle = {
+  width: '100%',
+  minHeight: 44,
+  padding: '7px 14px',
+  fontSize: 13,
+  fontWeight: 500,
+}
+
+const hideRedundantShellTitleCss = `
+  .zlog-report-module-nav { display: none; }
+`
 
 const labelStyle = {
   margin: 0,
@@ -243,6 +264,8 @@ function SavedDiaryViewer() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [basisBusy, setBasisBusy] = useState(false)
+  const [basisError, setBasisError] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -277,11 +300,12 @@ function SavedDiaryViewer() {
   if (loading) {
     return (
       <PremiumShell
-        title="Saved Site Diary"
         backHref={diaryHubHref()}
         accent={DIARY_ACCENT}
         maxWidth={640}
+        stickyBack
       >
+        <style>{hideRedundantShellTitleCss}</style>
         <p style={{ color: 'var(--text-2)', fontSize: 16 }}>Loading your saved diary…</p>
       </PremiumShell>
     )
@@ -290,11 +314,12 @@ function SavedDiaryViewer() {
   if (error || !view) {
     return (
       <PremiumShell
-        title="Saved Site Diary"
         backHref={diaryHubHref()}
         accent={DIARY_ACCENT}
         maxWidth={640}
+        stickyBack
       >
+        <style>{hideRedundantShellTitleCss}</style>
         <div
           style={{
             background: 'rgba(220,50,50,0.1)',
@@ -363,20 +388,40 @@ function SavedDiaryViewer() {
     }
   }
 
+  const handleUseAsBasisForNewDiary = async () => {
+    if (basisBusy || deleting || generatingPdf || !view?.projectId || !view?.reportId) return
+    setBasisBusy(true)
+    setBasisError('')
+    try {
+      const supabase = createClient()
+      const id = await createTodaysDiaryDraft(supabase, view.projectId, view.reportId)
+      const href = projectAndReportDetailsHref(view.projectId, id)
+      if (!href) throw new Error('Missing diary link')
+      router.push(href)
+    } catch (err) {
+      setBasisError(
+        err?.message || 'We couldn’t start a new diary from this one. Try again.',
+      )
+      setBasisBusy(false)
+    }
+  }
+
+  const actionsBusy = generatingPdf || deleting || basisBusy
+
   return (
     <PremiumShell
-      title="Saved Site Diary"
       backHref={diaryHubHref()}
       accent={DIARY_ACCENT}
       maxWidth={640}
       stickyBack
     >
+      <style>{hideRedundantShellTitleCss}</style>
       <p
         style={{
-          margin: '0 0 6px',
-          fontSize: 18,
+          margin: '0 0 4px',
+          fontSize: 17,
           fontWeight: 700,
-          lineHeight: 1.3,
+          lineHeight: 1.25,
           color: 'var(--text)',
         }}
       >
@@ -384,15 +429,109 @@ function SavedDiaryViewer() {
       </p>
       <p
         style={{
-          margin: '0 0 20px',
-          fontSize: 15,
-          lineHeight: 1.5,
+          margin: '0 0 10px',
+          fontSize: 14,
+          lineHeight: 1.4,
           color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
         }}
       >
         This is your saved diary exactly as it was recorded. Scroll down to review the whole
         report.
       </p>
+
+      <div style={{ margin: '0 0 14px' }}>
+        <div style={{ display: 'grid', gap: 8 }}>
+          <PrimaryCTA
+            type="button"
+            surface="workbench"
+            onClick={handleGeneratePdf}
+            disabled={actionsBusy}
+            loading={generatingPdf}
+            style={reviewActionStyle}
+          >
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              <FileDown size={15} strokeWidth={2.25} aria-hidden color="var(--rust)" />
+              {generatingPdf ? 'Generating PDF…' : 'Generate / Share PDF'}
+            </span>
+          </PrimaryCTA>
+          {editHref ? (
+            <SecondaryButton
+              type="button"
+              disabled={actionsBusy}
+              onClick={() => router.push(editHref)}
+              style={reviewActionStyle}
+            >
+              <Pencil size={15} strokeWidth={2.25} aria-hidden className="zlog-secondary-cta__icon" />
+              <span className="zlog-secondary-cta__label">Edit This Diary</span>
+            </SecondaryButton>
+          ) : null}
+          <SecondaryButton
+            type="button"
+            disabled={actionsBusy}
+            onClick={handleUseAsBasisForNewDiary}
+            style={reviewActionStyle}
+          >
+            <CopyPlus size={15} strokeWidth={2.25} aria-hidden className="zlog-secondary-cta__icon" />
+            <span className="zlog-secondary-cta__label">
+              {basisBusy ? 'Starting…' : 'Use as Basis for New Diary'}
+            </span>
+          </SecondaryButton>
+        </div>
+        {pdfStatus ? (
+          <p
+            role="status"
+            aria-live="polite"
+            style={{
+              margin: '6px 2px 0',
+              color: 'var(--text-2)',
+              fontSize: 13,
+              lineHeight: 1.4,
+            }}
+          >
+            {pdfStatus}
+          </p>
+        ) : null}
+        {basisError ? (
+          <p
+            role="status"
+            style={{
+              margin: '6px 2px 0',
+              color: '#ff6b6b',
+              fontSize: 13,
+              lineHeight: 1.4,
+            }}
+          >
+            {basisError}
+          </p>
+        ) : null}
+        <div
+          style={{
+            marginTop: 12,
+            paddingTop: 10,
+            borderTop: '1px solid var(--edge)',
+          }}
+        >
+          <DestructiveButton
+            type="button"
+            disabled={actionsBusy}
+            onClick={() => {
+              setDeleteError('')
+              setDeleteOpen(true)
+            }}
+            style={deleteActionStyle}
+          >
+            <Trash2 size={15} strokeWidth={2.25} aria-hidden />
+            <span>Delete Diary</span>
+          </DestructiveButton>
+        </div>
+      </div>
 
       <GlassSection title="Project & Report Details" accent={DIARY_ACCENT}>
         {view.detailGroups.map((group, groupIndex) => (
@@ -658,97 +797,6 @@ function SavedDiaryViewer() {
         </p>
       </GlassSection>
 
-      <div style={{ marginTop: 8, paddingTop: 16, borderTop: '1px solid var(--edge)' }}>
-        <div style={{ display: 'grid', gap: 10 }}>
-          <PrimaryCTA
-            type="button"
-            onClick={handleGeneratePdf}
-            disabled={generatingPdf || deleting}
-            accent={DIARY_ACCENT}
-            style={{ width: '100%', minHeight: 50 }}
-          >
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-              }}
-            >
-              <FileDown size={18} strokeWidth={2.25} aria-hidden />
-              {generatingPdf ? 'Generating PDF…' : 'Generate PDF'}
-            </span>
-          </PrimaryCTA>
-          {editHref ? (
-            <SecondaryButton
-              type="button"
-              disabled={deleting}
-              onClick={() => router.push(editHref)}
-              style={{ width: '100%', minHeight: 48 }}
-            >
-              <Pencil size={17} strokeWidth={2.25} aria-hidden className="zlog-secondary-cta__icon" />
-              <span className="zlog-secondary-cta__label">Edit This Diary</span>
-            </SecondaryButton>
-          ) : null}
-        </div>
-        {pdfStatus ? (
-          <p
-            role="status"
-            aria-live="polite"
-            style={{
-              margin: '8px 4px 0',
-              color: 'var(--text-2)',
-              fontSize: 13,
-              lineHeight: 1.45,
-              textAlign: 'center',
-            }}
-          >
-            {pdfStatus}
-          </p>
-        ) : null}
-        <p
-          style={{
-            margin: '8px 4px 0',
-            color: 'var(--text-2)',
-            fontSize: 13,
-            lineHeight: 1.45,
-            textAlign: 'center',
-          }}
-        >
-          Reviewing does not change this diary. Generate a PDF, or choose Edit This Diary to make
-          changes.
-        </p>
-        <div
-          style={{
-            marginTop: 18,
-            paddingTop: 16,
-            borderTop: '1px solid var(--edge)',
-          }}
-        >
-          <DestructiveButton
-            type="button"
-            disabled={deleting || generatingPdf}
-            onClick={() => {
-              setDeleteError('')
-              setDeleteOpen(true)
-            }}
-            style={{ width: '100%', minHeight: 48 }}
-          >
-            Delete Diary
-          </DestructiveButton>
-          <p
-            style={{
-              margin: '8px 4px 0',
-              color: 'var(--text-2)',
-              fontSize: 13,
-              lineHeight: 1.45,
-              textAlign: 'center',
-            }}
-          >
-            Remove this saved diary. The project and other diaries stay.
-          </p>
-        </div>
-      </div>
       <ReportDeletionDialog
         open={deleteOpen}
         count={1}
@@ -770,11 +818,12 @@ export default function SavedDiaryViewerRoute() {
     <Suspense
       fallback={
         <PremiumShell
-          title="Saved Site Diary"
           backHref="/dashboard/diary"
           accent={DIARY_ACCENT}
           maxWidth={640}
+          stickyBack
         >
+          <style>{hideRedundantShellTitleCss}</style>
           <p style={{ color: 'var(--text-2)' }}>Loading…</p>
         </PremiumShell>
       }

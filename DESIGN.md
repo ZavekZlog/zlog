@@ -261,11 +261,16 @@ Decision rules (decidable on sight):
    Areas — Continue” after an area is saved.
 3. Secondary / supporting actions → SecondaryButton (ordinary neutral / nav).
 CTA visual ladder (decidable):
-• PrimaryCTA — orange powder-coat progression
+• PrimaryCTA — orange powder-coat progression on landing, auth, and dashboard
+• PrimaryCTA surface="workbench" — restrained dark plate + rust perimeter on
+  report/workbench screens (Save Area, Save / Share, Generate / Share PDF).
+  Not landing powder-coat enamel. Do not paste POWDER_CTA_* or glossy
+  orange-gradient overrides onto workbench controls.
 • EqualChoiceButton — strong charcoal equal-choice (no solid orange fill;
   restrained rust edge/glow on hover only)
 • SecondaryButton — ordinary secondary / cancel / back / review
 Orange remains reserved for genuine primary/progression only.
+Dashboard may stay expressive/industrial; deeper report screens stay calmer.
 4. Destructive actions → established destructive/red treatment where appropriate
    (§16). Never orange.
 5. Back / Cancel / Review / alternative navigation → never compete visually with

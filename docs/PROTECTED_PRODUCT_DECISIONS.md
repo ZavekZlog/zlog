@@ -1,10 +1,10 @@
 # Protected Product Decisions & Regression Contract
 
-**Version:** 1.2.0
-**Date Updated:** 2026-08-15
-**Reason Updated:** Route today’s existing diary through same-report Project & Report Details before its workbench
-**User Decision:** TODAY’S EXISTING DIARY SETUP-FIRST WORKFLOW
-**Previous Version:** 1.1.0
+**Version:** 1.3.0
+**Date Updated:** 2026-08-19
+**Reason Updated:** Start today’s diary from a previous one lives on the opened saved diary as Use as Basis for New Diary
+**User Decision:** APPROVED — Saved Diaries list is browsing-only; reuse is an opened-diary action
+**Previous Version:** 1.2.0
 
 **Status:** Binding product decisions for commercial Zlog (not a prototype)  
 **Purpose:** Prevent regressions and premature feature builds. Agents and contributors must treat these as frozen unless the user explicitly revises them.
@@ -33,7 +33,7 @@
 |----------|----------|
 | Final save | `finalizeSiteDiarySave` — UPDATE-only by report id; verify SELECT |
 | Open today’s existing diary | `openExistingDiaryHref` → populated Project & Report Details → same report in `?compose=1` |
-| Start today’s diary from a previous one | Hub **Use for Today** → `createTodaysDiaryDraft` → `projectAndReportDetailsHref` for the new diary → `?compose=1` |
+| Start today’s diary from a previous one | Opened saved diary **Use as Basis for New Diary** → `createTodaysDiaryDraft` → `projectAndReportDetailsHref` for the new diary → `?compose=1` |
 | Open historical diary | `?report=` on `/dashboard/project/{projectId}/diary` via `existingDiaryHref` |
 | Never | Create a replacement diary when opening a selected existing record |
 | Hub copy | Dashboard → `/dashboard/diary`; “Start a new diary” / “Use a previous diary” (site language; no implementation terms) |
