@@ -11,9 +11,9 @@
  * (app/dashboard/project/[id]/diary/page.jsx) and are unchanged.
  */
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { CopyPlus, FileDown, Pencil, Trash2 } from 'lucide-react'
+import { CopyPlus, Pencil, Share2, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import {
   PremiumShell,
@@ -32,7 +32,12 @@ import {
 import { diaryHubHref, editExistingDiaryHref, projectAndReportDetailsHref } from '@/lib/diary-routing'
 import { createTodaysDiaryDraft } from '@/lib/diary-draft'
 import { deleteSiteDiaries, savedReportListHref } from '@/lib/report-deletion'
-import { downloadSiteDiaryPdf, prepareSiteDiaryPdf } from '@/lib/diary-share'
+import {
+  canSharePdfFile,
+  downloadSiteDiaryPdf,
+  prepareSiteDiaryPdf,
+  shareSiteDiaryPdfNative,
+} from '@/lib/diary-share'
 
 const DIARY_ACCENT = REPORT_THEMES.diary.accent
 
@@ -342,6 +347,7 @@ function SavedDiaryViewer() {
   const [deleteError, setDeleteError] = useState('')
   const [basisBusy, setBasisBusy] = useState(false)
   const [basisError, setBasisError] = useState('')
+  const pdfReadyRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -424,14 +430,56 @@ function SavedDiaryViewer() {
     setGeneratingPdf(true)
     setPdfStatus('')
     try {
-      const prepared = await prepareSiteDiaryPdf({
-        projectId: view.projectId,
-        reportId: view.reportId,
-      })
-      if (!prepared.ok) {
-        setPdfStatus(prepared.message || 'We couldn’t prepare the PDF.')
-        return
+      const cached = pdfReadyRef.current
+      const fromCache = Boolean(
+        cached?.ok
+          && cached.file
+          && cached.blob
+          && cached.projectId === view.projectId
+          && cached.reportId === view.reportId,
+      )
+      let prepared = fromCache ? cached : null
+      if (!prepared) {
+        prepared = await prepareSiteDiaryPdf({
+          projectId: view.projectId,
+          reportId: view.reportId,
+        })
+        if (!prepared.ok) {
+          pdfReadyRef.current = null
+          setPdfStatus(prepared.message || 'We couldn’t prepare the PDF.')
+          return
+        }
+        pdfReadyRef.current = {
+          ...prepared,
+          projectId: view.projectId,
+          reportId: view.reportId,
+        }
       }
+
+      const pdfFile = prepared.file instanceof File
+        ? prepared.file
+        : new File(
+          [prepared.blob],
+          prepared.fileName || 'Zlog-Site-Diary.pdf',
+          { type: 'application/pdf' },
+        )
+
+      if (canSharePdfFile(pdfFile)) {
+        const shareResult = await shareSiteDiaryPdfNative({
+          file: pdfFile,
+          title: prepared.title || 'Site Diary',
+          text: prepared.text,
+        })
+        if (shareResult.ok) {
+          setPdfStatus('')
+          return
+        }
+        if (!fromCache) {
+          setPdfStatus('PDF is ready. Tap Share Report again to share it.')
+          return
+        }
+      }
+
       const result = await downloadSiteDiaryPdf({
         blob: prepared.blob,
         fileName: prepared.fileName,
@@ -440,7 +488,13 @@ function SavedDiaryViewer() {
         setPdfStatus(result.message || 'Could not save the PDF.')
         return
       }
-      if (!result.cancelled) setPdfStatus(result.message || 'PDF saved.')
+      if (result.cancelled) return
+      const insecure = typeof window !== 'undefined' && window.isSecureContext === false
+      setPdfStatus(
+        insecure
+          ? 'Sharing needs a secure connection. The PDF has been saved instead.'
+          : (result.message || 'PDF saved.'),
+      )
     } catch (err) {
       setPdfStatus(err?.message || 'We couldn’t generate the PDF. Try again.')
     } finally {
@@ -537,8 +591,8 @@ function SavedDiaryViewer() {
                 gap: 8,
               }}
             >
-              <FileDown size={15} strokeWidth={2.25} aria-hidden color="var(--rust)" />
-              {generatingPdf ? 'Generating PDF…' : 'Generate / Share PDF'}
+              <Share2 size={15} strokeWidth={2.25} aria-hidden color="var(--rust)" />
+              {generatingPdf ? 'Sharing…' : 'Share Report'}
             </span>
           </PrimaryCTA>
           {editHref ? (

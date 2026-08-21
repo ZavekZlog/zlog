@@ -1,11 +1,11 @@
 # Site Diary — Screen Contract
 
 **Layer:** B — Screen  
-**Version:** 1.20.2
-**Date Updated:** 2026-08-19
-**Reason Updated:** Restore locked workbench button family (PrimaryCTA surface=workbench) and mutually exclusive persist UI; Delete uses established destructive-border treatment
-**User Decision:** APPROVED — regression repair of locked workbench visual language and save-state exclusivity; not a redesign
-**Previous Version:** 1.20.1
+**Version:** 1.20.3
+**Date Updated:** 2026-08-20
+**Reason Updated:** Saved-diary primary action is Share Report (PDF generation stays behind the scenes)
+**User Decision:** APPROVED — restore native share handoff; user-goal label Share Report
+**Previous Version:** 1.20.2
 
 **Status:** Binding production contract  
 **Routes:**
@@ -119,7 +119,7 @@ Do not show helper lines that explain persistence (for example “Programme date
 | **A. Start a new diary** | Hub → setup; preselect the signed-in user’s last-used project when it still exists, while keeping Project Name editable/selectable; Author Name prefills from profile; Reporting On Behalf Of prefills from the signed-in user’s most recently used value and remains editable; Report Date may be today; approved default branding / company name may load |
 | **B. Select existing project** | Via **Project Name** matching an existing project; load remembered project fields from `public.projects`; keep `project_id`; do **not** copy diary content |
 | **C. Use a previous diary** | **Not a hub choice.** Reuse lives on the opened saved diary as **Use as Basis for New Diary**. It creates a **new** diary ID from that diary (appropriate reusable fields only) via `createTodaysDiaryDraft`, then opens that new diary’s populated **Project & Report Details** for review before the workbench — never straight into compose; Author from profile, not source; the source diary is never modified |
-| **D. View saved diary** | Tapping a Saved Diaries row opens the read-only saved-diary viewer (§4A): the whole record on one continuous page, no compose/edit controls on open. **Generate / Share PDF**, **Edit This Diary**, **Use as Basis for New Diary**, and confirmed **Delete Diary** live on that opened screen. **Edit This Diary** keeps the same diary ID — today’s diary through its Project & Report Details pre-flight, a historical diary in explicit Edit. **Delete Diary** is visually separated and quiet, confirmed, and returns to the saved list |
+| **D. View saved diary** | Tapping a Saved Diaries row opens the read-only saved-diary viewer (§4A): the whole record on one continuous page, no compose/edit controls on open. **Share Report**, **Edit This Diary**, **Use as Basis for New Diary**, and confirmed **Delete Diary** live on that opened screen. **Edit This Diary** keeps the same diary ID — today’s diary through its Project & Report Details pre-flight, a historical diary in explicit Edit. **Delete Diary** is visually separated and quiet, confirmed, and returns to the saved list |
 | **E. Edit saved diary** | Same diary ID; rehydrate saved values; no duplicate; save → View |
 
 State from one flow must not leak into another.
@@ -175,9 +175,9 @@ Reached by tapping a Saved Diaries row. This is a finished historical record, no
 - Hide any part of the diary behind a button that leaves the page. Project & Report Details is simply the first section of the same artifact.
 - Offer Expand / Collapse.
 
-**Onward actions (v1.20.2):** **Generate / Share PDF** (does not write the diary; `PrimaryCTA` `surface="workbench"` — restrained rust-perimeter plate, not landing powder-coat), **Edit This Diary** (same diary ID, composition workflow), **Use as Basis for New Diary** (new ID via existing `createTodaysDiaryDraft` → Project & Report Details; source unchanged), and **Delete Diary** (`DestructiveButton` destructive-border treatment, visually separated, never one-tap; confirmed with count-aware copy; then return to the saved-diary list). Productive actions sit together as a compact group; Delete is separated below. Do not freeze the action group with Back. See `docs/contracts/REPORT_DELETION_CONTRACT.md`.
+**Onward actions (v1.20.3):** **Share Report** (does not write the diary; generates the existing PDF behind the scenes, then native-shares the file where supported; `PrimaryCTA` `surface="workbench"` — restrained rust-perimeter plate, not landing powder-coat), **Edit This Diary** (same diary ID, composition workflow), **Use as Basis for New Diary** (new ID via existing `createTodaysDiaryDraft` → Project & Report Details; source unchanged), and **Delete Diary** (`DestructiveButton` destructive-border treatment, visually separated, never one-tap; confirmed with count-aware copy; then return to the saved-diary list). Productive actions sit together as a compact group; Delete is separated below. Do not freeze the action group with Back. See `docs/contracts/REPORT_DELETION_CONTRACT.md`.
 
-Supersedes v1.12.0 “exactly one — Edit This Diary”. Generate PDF was already present on the viewer and remains.
+Supersedes v1.12.0 “exactly one — Edit This Diary”. Share Report remains on the viewer.
 
 Permits and deliveries are named in hub copy but are **not** saved diary fields today; the viewer does not invent them.
 
@@ -292,7 +292,7 @@ Feature contract: `docs/contracts/REPORT_DELETION_CONTRACT.md`.
 - Never delete on one tap. Confirmation shows the actual count (`Delete Diary` / `Delete 6 Diaries` and `Permanently delete this saved diary?` / `Permanently delete these 6 saved diaries?`).
 - Keep **Cancel** on the confirmation. Cancel deletes nothing.
 - Keep one compact sticky contextual bar above the list while scrolling, holding **Back** and **Tap a diary to open and review it.** It does not expose **Select**. The bar sticks below the viewport top, stays opaque, and the title/header does not stick.
-- On the opened saved diary, offer **Delete Diary** as a quiet separated control, lower emphasis than Generate / Share PDF / Edit / Use as Basis; after confirm, return to the saved list.
+- On the opened saved diary, offer **Delete Diary** as a quiet separated control, lower emphasis than Share Report / Edit / Use as Basis; after confirm, return to the saved list.
 - Keep **Back** reachable while scrolling the opened diary via the established compact sticky treatment. Do not freeze the large title or report body.
 - Delete the real diary-owned rows and safe diary-owned Storage objects. Do not delete the project or shared assets still referenced elsewhere.
 - Leave remaining diaries visible.

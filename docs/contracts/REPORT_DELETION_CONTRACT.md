@@ -1,11 +1,11 @@
 # Report Deletion Contract
 
 **Layer:** C — Feature  
-**Version:** 1.4.2
-**Date Updated:** 2026-08-19  
-**Reason Updated:** Opened-diary Delete restored to the established DestructiveButton border treatment; confirmation and backend unchanged
-**User Decision:** APPROVED — regression repair: Delete uses the same destructive-border treatment as elsewhere
-**Previous Version:** 1.4.1
+**Version:** 1.4.3
+**Date Updated:** 2026-08-20  
+**Reason Updated:** Opened-diary productive action label is Share Report; deletion behaviour unchanged
+**User Decision:** APPROVED — Share Report native share handoff
+**Previous Version:** 1.4.2
 
 **Status:** Binding production contract for deleting saved reports  
 **First host:** Site Diary saved-diary list, saved-diary viewer, and project-page recent diary entries  
@@ -69,8 +69,8 @@ Future modules reuse the same helper with their own singular/plural labels. The 
 
 ### Opened saved diary (`/dashboard/project/[id]/diary/view`)
 
-- **Delete Diary** uses the established **DestructiveButton** destructive-border treatment, visually separated and lower in the action hierarchy than **Generate / Share PDF**, **Edit This Diary**, and **Use as Basis for New Diary**.
-- Generate / Share PDF, Edit This Diary, and Use as Basis for New Diary remain as the productive actions.
+- **Delete Diary** uses the established **DestructiveButton** destructive-border treatment, visually separated and lower in the action hierarchy than **Share Report**, **Edit This Diary**, and **Use as Basis for New Diary**.
+- Share Report, Edit This Diary, and Use as Basis for New Diary remain as the productive actions.
 - Delete never runs on one tap. Confirmation uses the existing count-aware dialog with **Cancel**, identifying that the saved diary will be permanently deleted.
 - Confirmed delete returns to the saved-diary list (`?view=saved`).
 

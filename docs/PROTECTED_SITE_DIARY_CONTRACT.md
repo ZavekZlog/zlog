@@ -1,10 +1,10 @@
 # Protected Site Diary Contract
 
-**Version:** 1.13.1
-**Date Updated:** 2026-08-19
-**Reason Updated:** Workbench Save / Share and review Generate / Share PDF share PrimaryCTA surface=workbench; Delete uses DestructiveButton
-**User Decision:** APPROVED — restore locked workbench button family
-**Previous Version:** 1.13.0
+**Version:** 1.13.2
+**Date Updated:** 2026-08-20
+**Reason Updated:** Saved-diary primary action is Share Report; workbench PrimaryCTA family unchanged
+**User Decision:** APPROVED — Share Report native share handoff
+**Previous Version:** 1.13.1
 
 **Status:** Binding behavioural summary for Site Diary  
 **Authority:** Production product contract. Detail and control order live in **`docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md`**. Do not remove, rename, relocate, disable, or silently change protected behaviours unless the user explicitly requests that exact change.
@@ -125,7 +125,7 @@ Do not invent Author Role when none was saved.
 | Open today’s diary for editing | Project & Report Details first; no write on open; Continue uses the same report ID |
 | Open historical diary for editing | Workbench View / Edit mode (`lib/diary-view-mode.js`) |
 | Wording | Must not imply editing while reviewing |
-| Actions | Viewer: **Generate / Share PDF** (`PrimaryCTA` `surface="workbench"`), **Edit This Diary**, **Use as Basis for New Diary**, and visually separated **Delete Diary** (`DestructiveButton`; confirmed; returns to the saved list). Workbench View: **Edit This Diary**, **Use as Basis for New Diary** |
+| Actions | Viewer: **Share Report** (`PrimaryCTA` `surface="workbench"`), **Edit This Diary**, **Use as Basis for New Diary**, and visually separated **Delete Diary** (`DestructiveButton`; confirmed; returns to the saved list). Workbench View: **Edit This Diary**, **Use as Basis for New Diary** |
 | Edit ID | Same diary ID |
 | Open write | Opening performs **no** database write |
 | After save | Return to that diary in View mode |

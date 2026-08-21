@@ -415,7 +415,7 @@
     },
     {
       "id": "DIARY-033",
-      "description": "Site Diary workbench Save Area / Save / Share / Generate / Share PDF use PrimaryCTA surface=workbench (restrained rust-framed plate), not landing powder-coat; dashboard/auth keep the default brand PrimaryCTA",
+      "description": "Site Diary workbench Save Area / Save / Share / Share Report use PrimaryCTA surface=workbench (restrained rust-framed plate), not landing powder-coat; dashboard/auth keep the default brand PrimaryCTA",
       "area": "site-diary",
       "tests": [
         "lib/premium-ui-workbench-cta-contract.test.js",

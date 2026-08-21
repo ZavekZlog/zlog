@@ -1,6 +1,6 @@
 {
-  "version": "1.4.6",
-  "updated": "2026-08-19",
+  "version": "1.4.7",
+  "updated": "2026-08-20",
   "description": "Approved application UI terminology. Protects labels from accidental replacement. Does NOT freeze dynamic report content. This is a source-string contract — NOT a visual test.",
   "terms": [
     {
@@ -68,10 +68,10 @@
       "notes": "Exact helper copy on the Saved Diaries browsing list. Do not expand."
     },
     {
-      "id": "COPY-GENERATE-SHARE-PDF",
-      "label": "Generate / Share PDF",
+      "id": "COPY-SHARE-REPORT",
+      "label": "Share Report",
       "files": ["app/dashboard/project/[id]/diary/view/page.jsx"],
-      "notes": "Opened saved-diary review action. Reuses the existing PDF pipeline; PrimaryCTA surface=workbench (restrained rust perimeter, not landing powder-coat)."
+      "notes": "Opened saved-diary review primary action. User goal is sharing; PDF generation stays behind the scenes. PrimaryCTA surface=workbench (restrained rust perimeter, not landing powder-coat)."
     },
     {
       "id": "COPY-USE-AS-BASIS",
