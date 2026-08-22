@@ -474,10 +474,8 @@ function SavedDiaryViewer() {
           setPdfStatus('')
           return
         }
-        if (!fromCache) {
-          setPdfStatus('PDF is ready. Tap Share Report again to share it.')
-          return
-        }
+        // Do not require a second tap — user-activation may be spent after prepare.
+        // Fall through to download delivery in this same gesture.
       }
 
       const result = await downloadSiteDiaryPdf({

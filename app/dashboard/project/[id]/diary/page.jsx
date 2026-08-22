@@ -104,10 +104,15 @@ import {
   hydrateAuthorRole,
   hydratePlantFormRows,
   linkedProjectForSavedDiary,
-  postSaveDiaryHref,
   shouldShowBrandingSelector,
   shouldShowRecentDiariesOnReportPage,
 } from '@/lib/diary-form-hydrate'
+import {
+  canSharePdfFile,
+  downloadSiteDiaryPdf,
+  prepareSiteDiaryPdf,
+  shareSiteDiaryPdfNative,
+} from '@/lib/diary-share'
 import { readReportSetupExtras, reportDateInputValue, todayIsoDate } from '@/lib/report-setup'
 import {
   describeDiaryWorkbenchLoadFailure,
@@ -232,16 +237,13 @@ const todaysDiaryDividerStyle = {
   margin: '0 0 14px',
 }
 
-/** Save / Share stays in document flow; mobile chrome clearance is in .zlog-diary-save-share-action. */
+/** Share stays in document flow; mobile chrome clearance is in .zlog-diary-save-share-action. */
 const DIARY_SAVE_SHARE_ACTION_STYLE = {
   marginTop: 8,
 }
 
-/** Hold Saved ✓ visibly before navigating to Report Complete / Share. */
-const POST_SAVE_SHARE_DELAY_MS = 3200
-
 const COVER_UPLOAD_FAIL_MESSAGE =
-  'We couldn’t upload the cover photo. Check your connection and try Save / Share again.'
+  'We couldn’t upload the cover photo. Check your connection and try Share again.'
 
 const todaysDiaryDividerTitleStyle = {
   fontSize: 12,
@@ -1118,7 +1120,7 @@ export default function SiteDiaryPage() {
           }
           loadedCoverPathRef.current = storagePath
           coverRemovedRef.current = false
-          // Drop local File so Save / Share will not re-upload this object.
+          // Drop local File so Share will not re-upload this object.
           // Update ref immediately — do not wait for the next React render.
           const nextCover = coverPhotoStateAfterUpload(storagePath, liveCover.preview)
           coverPhotoRef.current = nextCover
@@ -1962,7 +1964,7 @@ export default function SiteDiaryPage() {
           .from('site-photos')
           .upload(signaturePath, signature.file, { contentType: signature.file.type, upsert: false })
         if (signatureUploadError) {
-          failSave('We couldn’t upload the signature. Check your connection and try Save / Share again.')
+          failSave('We couldn’t upload the signature. Check your connection and try Share again.')
           return
         }
         signatureUrl = signaturePath
@@ -2040,7 +2042,7 @@ export default function SiteDiaryPage() {
               overlayPath = null
             }
           } catch (overlayErr) {
-            failSave('We couldn’t upload photo mark-ups. Check your connection and try Save / Share again.')
+            failSave('We couldn’t upload photo mark-ups. Check your connection and try Share again.')
             return
           }
         }
@@ -2056,7 +2058,7 @@ export default function SiteDiaryPage() {
             .upload(storagePath, photo.file, { contentType: photo.file.type, upsert: false })
 
           if (uploadError) {
-            failSave('We couldn’t upload a photo. Check your connection and try Save / Share again.')
+            failSave('We couldn’t upload a photo. Check your connection and try Share again.')
             return
           }
 
@@ -2112,7 +2114,8 @@ export default function SiteDiaryPage() {
         return
       }
 
-      // Persist first → Saved ✓ → then hand off to Report Complete / Share.
+      // Persist first, then build PDF and open native share on THIS tap.
+      // Do not navigate to a second screen that requires another tap.
       if (requiredCoverPath) {
         const keepPreview = coverPhotoRef.current?.preview || null
         setCoverPhoto(coverPhotoStateFromSaved(requiredCoverPath, keepPreview))
@@ -2124,33 +2127,76 @@ export default function SiteDiaryPage() {
       }
       setReportIsDraft(false)
       flushSync(() => {
-        setSaving(false)
-        setJustSaved(true)
-        setShowSaveBanner(true)
+        setSaving(true)
+        setJustSaved(false)
+        setShowSaveBanner(false)
         setAutosaveStatus(null)
         setError('')
         persistUiErrorRef.current = ''
       })
       diarySaveLog('success', { reportId: saved.id })
-      saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
 
-      const shareHref = postSaveDiaryHref(projectId, saved.id)
-      if (shareHref) {
-        completingRef.current = true
-        if (saveNavTimerRef.current) clearTimeout(saveNavTimerRef.current)
-        saveNavTimerRef.current = setTimeout(() => {
-          saveNavTimerRef.current = null
-          finalSaveInProgressRef.current = false
-          router.replace(shareHref)
-        }, POST_SAVE_SHARE_DELAY_MS)
+      const prepared = await prepareSiteDiaryPdf({
+        projectId,
+        reportId: saved.id,
+      })
+      if (!prepared.ok) {
+        failSave(prepared.message || 'We couldn’t prepare the PDF. Check your connection and try again.')
+        return
+      }
+
+      let shared = false
+      if (canSharePdfFile(prepared.file)) {
+        const shareResult = await shareSiteDiaryPdfNative({
+          file: prepared.file,
+          title: prepared.title,
+          text: prepared.text,
+        })
+        if (shareResult.ok) {
+          shared = true
+        } else if (!shareResult.aborted) {
+          // User-activation can expire after async PDF work on Android — deliver
+          // the PDF in this same tap via Save rather than asking for a second tap.
+          const downloaded = await downloadSiteDiaryPdf({
+            blob: prepared.blob,
+            fileName: prepared.fileName,
+          })
+          if (!downloaded.ok && !downloaded.cancelled) {
+            failSave(shareResult.message || downloaded.message || 'We couldn’t share the PDF. Try again.')
+            return
+          }
+          shared = Boolean(downloaded.ok && !downloaded.cancelled)
+        } else {
+          shared = true
+        }
       } else {
-        finalSaveInProgressRef.current = false
+        const downloaded = await downloadSiteDiaryPdf({
+          blob: prepared.blob,
+          fileName: prepared.fileName,
+        })
+        if (!downloaded.ok && !downloaded.cancelled) {
+          failSave(downloaded.message || 'We couldn’t share the PDF. Try again.')
+          return
+        }
+        shared = Boolean(downloaded.ok && !downloaded.cancelled)
+      }
+
+      saveLockRef.current = false
+      completingRef.current = false
+      finalSaveInProgressRef.current = false
+      flushSync(() => {
+        setSaving(false)
+        setJustSaved(false)
+        setShowSaveBanner(false)
+      })
+      if (shared) {
+        saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
       }
     } catch (err) {
       const message =
         err instanceof DiarySaveError
           ? friendlyDiarySaveError(err)
-          : 'We couldn’t save your Site Diary. Check your connection and try again.'
+          : 'We couldn’t prepare the share. Check your connection and try again.'
       failSave(message)
     }
   }
@@ -2403,7 +2449,7 @@ export default function SiteDiaryPage() {
             <>
               {isDiaryViewMode ? 'You’re viewing the saved Site Diary for ' : 'You’re editing the saved Site Diary for '}
               <strong style={{ fontWeight: 700, color: 'var(--text)' }}>{project.name}</strong>
-              {isDiaryViewMode ? '.' : '. Make your changes, then tap Save / Share when you’re ready.'}
+              {isDiaryViewMode ? '.' : '. Make your changes, then tap Share when you’re ready.'}
             </>
           ) : (
             diaryModeBannerCopy.text
@@ -3066,7 +3112,7 @@ export default function SiteDiaryPage() {
             surface="workbench"
             loading={sessionExpired ? false : saving}
             onClick={sessionExpired ? goToSignInForSave : handleSave}
-            disabled={sessionExpired ? false : saving || justSaved}
+            disabled={sessionExpired ? false : saving}
           >
             <span
               style={{
@@ -3092,12 +3138,10 @@ export default function SiteDiaryPage() {
                       flexShrink: 0,
                     }}
                   />
-                  Saving…
+                  Preparing…
                 </>
-              ) : justSaved ? (
-                'Saved ✓'
               ) : (
-                'Save / Share'
+                'Share'
               )}
             </span>
           </PrimaryCTA>

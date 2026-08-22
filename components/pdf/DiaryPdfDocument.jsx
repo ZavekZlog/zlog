@@ -12,9 +12,10 @@ import {
 import {
   PDF_CONTENT_BOTTOM,
   PDF_CONTENT_H,
-  PDF_CONTENT_TOP,
   PDF_GRID_GAP,
   PDF_PAGE_H,
+  PDF_CONTENT_TOP,
+  PDF_PAGE_MARGIN_TOP,
   PDF_PAGE_PAD_X,
   PDF_PAGE_W,
   PDF_PHOTO_BAND_PAD_X,
@@ -178,7 +179,7 @@ const DECLARATION =
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: PDF_CONTENT_TOP,
+    paddingTop: PDF_PAGE_MARGIN_TOP,
     paddingHorizontal: PDF_PAGE_PAD_X,
     paddingBottom: PDF_CONTENT_BOTTOM,
     fontSize: 9.5,
@@ -200,7 +201,7 @@ const styles = StyleSheet.create({
   pageOne: {
     minHeight: PDF_PAGE_H,
     maxHeight: PDF_PAGE_H,
-    paddingTop: PAGE1_BODY_TOP,
+    paddingTop: PAGE1_FRAME_INSET,
     paddingLeft: PAGE1_GUTTER,
     paddingRight: PAGE1_GUTTER,
     paddingBottom: PDF_PAGE_H - PAGE1_FOOTER_TOP + 12,
@@ -901,16 +902,14 @@ function PageOne({
 
   return (
     <Page size="A4" style={styles.pageOne} wrap={false}>
+      <PageChrome
+        brandColor={brandColor}
+        logoUrl={logoUrl}
+        companyName={companyName}
+        reportTitle="DAILY SITE DIARY"
+        reportReference={cleanPdfValue(reportReference)}
+      />
       <View style={styles.pageOneFrame} />
-      <View style={[styles.pageOneBanner, { backgroundColor: accent }]}>
-        {logoUrl ? (
-          // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image
-          <Image src={logoUrl} style={styles.pageOneLogo} />
-        ) : (
-          <View style={styles.pageOneLogo} />
-        )}
-        <Text style={styles.pageOneTitle}>DAILY SITE DIARY</Text>
-      </View>
 
       <ProjectIdentity
         projectName={cleanPdfValue(projectName)}
@@ -932,8 +931,6 @@ function PageOne({
         <SectionHeading accent={accent}>PROJECT / REPORT DETAILS</SectionHeading>
       ) : null}
       <ScheduleGrid rows={scheduleRows} />
-
-      <PageOneFooter reportReference={cleanPdfValue(reportReference)} />
     </Page>
   )
 }
