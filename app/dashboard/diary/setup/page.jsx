@@ -13,6 +13,7 @@ import {
   inputStyle,
   DIARY_ACCENT,
   typeTokens,
+  sectionTitleStyle,
 } from '@/lib/premium-ui'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
 import { extractBrandColorFromFile } from '@/lib/extract-brand-color'
@@ -89,6 +90,14 @@ const setupLabelStyle = {
   letterSpacing: '0.08em',
   marginBottom: 10,
   color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
+}
+
+const logoControlButtonStyle = {
+  width: '100%',
+  height: '100%',
+  minHeight: 0,
+  padding: '8px 10px',
+  boxSizing: 'border-box',
 }
 
 const NEW_PROJECT_VALUE = NEW_PROJECT_SENTINEL
@@ -743,47 +752,89 @@ function SiteDiarySetupPage() {
         </div>
       )}
 
-      <GlassSection title="Reporting Company" accent={DIARY_ACCENT}>
-        <label style={setupLabelStyle}>Reporting Company Name</label>
-        <input
-          value={reportingCompany}
-          onChange={(e) => setReportingCompany(e.target.value)}
-          placeholder="Your company name"
-          autoComplete="organization"
-          style={setupInputStyle}
-          aria-label="Reporting Company Name"
-        />
+      <GlassSection accent={DIARY_ACCENT}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(7.5rem, 0.4fr) minmax(0, 0.6fr)',
+            gap: 12,
+            alignItems: 'center',
+            marginTop: 4,
+            marginBottom: 16,
+          }}
+        >
+          <h2
+            className="premium-section-title"
+            style={{ ...sectionTitleStyle, margin: 0, marginBottom: 0 }}
+          >
+            Reporting Company
+          </h2>
+          <input
+            value={reportingCompany}
+            onChange={(e) => setReportingCompany(e.target.value)}
+            placeholder="Your company name"
+            autoComplete="organization"
+            style={{ ...setupInputStyle, marginBottom: 0 }}
+            aria-label="Reporting Company Name"
+          />
+        </div>
 
-        <label style={setupLabelStyle}>Reporting Company Logo</label>
+        <label style={{ ...setupLabelStyle, marginBottom: 6 }}>LOGO</label>
         <p
           style={{
             ...typeTokens.helper,
-            margin: '0 0 12px',
+            margin: '0 0 8px',
             maxWidth: '36em',
           }}
         >
           Your logo helps Zlog create your report’s corporate branding, including colours and report styling.
         </p>
         {logoPreview ? (
-          <div style={{ marginBottom: 20 }}>
-            <img
-              src={logoPreview}
-              alt="Reporting company logo preview"
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 1.75fr) minmax(0, 0.85fr)',
+              gap: 10,
+              alignItems: 'stretch',
+              marginBottom: 14,
+            }}
+          >
+            <div
               style={{
-                display: 'block',
-                width: '100%',
-                maxHeight: 180,
-                objectFit: 'contain',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: 92,
+                padding: 8,
                 borderRadius: 12,
                 background: 'color-mix(in srgb, var(--plate) 70%, var(--ink))',
                 border: '1px solid var(--edge)',
-                marginBottom: 12,
-                padding: 12,
               }}
-            />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div style={{ position: 'relative' }}>
-                <SecondaryButton type="button" style={{ width: '100%', minHeight: 48 }}>
+            >
+              <img
+                src={logoPreview}
+                alt="Reporting company logo preview"
+                style={{
+                  display: 'block',
+                  maxHeight: '100%',
+                  maxWidth: '100%',
+                  width: 'auto',
+                  height: 'auto',
+                  objectFit: 'contain',
+                }}
+              />
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateRows: '1fr 1fr',
+                gap: 8,
+                height: 92,
+                minHeight: 92,
+              }}
+            >
+              <div style={{ position: 'relative', minHeight: 0 }}>
+                <SecondaryButton type="button" style={logoControlButtonStyle}>
                   Replace
                 </SecondaryButton>
                 <input
@@ -804,7 +855,7 @@ function SiteDiarySetupPage() {
                   }}
                 />
               </div>
-              <SecondaryButton type="button" onClick={removeLogo} style={{ width: '100%', minHeight: 48 }}>
+              <SecondaryButton type="button" onClick={removeLogo} style={logoControlButtonStyle}>
                 Remove
               </SecondaryButton>
             </div>
@@ -822,13 +873,13 @@ function SiteDiarySetupPage() {
       </GlassSection>
 
       <GlassSection title="Reporting On Behalf Of" accent={DIARY_ACCENT}>
-        <label style={setupLabelStyle}>Reporting On Behalf Of *</label>
         <input
           value={reportingOnBehalfOf}
           onChange={(e) => setReportingOnBehalfOf(e.target.value)}
           placeholder="Client, main contractor, or organisation"
           autoComplete="organization"
           style={{ ...setupInputStyle, marginBottom: 0 }}
+          aria-label="Reporting On Behalf Of"
           required
         />
       </GlassSection>
