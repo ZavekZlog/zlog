@@ -59,6 +59,11 @@ import {
 } from '@/lib/diary-draft'
 import { loadEditDiarySetupSources } from '@/lib/diary-edit-hydrate'
 import {
+  coverPhotoStateFromSaved,
+  resolveCoverPhotoPreviewUrl,
+  uploadCoverPhotoFile,
+} from '@/lib/diary-cover-photo'
+import {
   resolveSignedInAuthorProfile,
   persistSignedInAuthorProfile,
   isAccountDerivedAuthorName,
@@ -132,6 +137,9 @@ function SiteDiarySetupPage() {
   const [logoObjectUrl, setLogoObjectUrl] = useState(null)
   const [brandingId, setBrandingId] = useState(null)
   const [brandColor, setBrandColor] = useState(null)
+  // Cover photo lives on Project & Report Details (this setup stage), not Today's Site Diary.
+  const [coverPhoto, setCoverPhoto] = useState(null)
+  const [coverRemoved, setCoverRemoved] = useState(false)
 
   const existingProjects = useMemo(
     () => (projects || []).filter((p) => p?.id && p?.name),
@@ -255,6 +263,19 @@ function SiteDiarySetupPage() {
             if (!cancelled) setLogoPreview(preview)
           } else if (!cancelled) {
             setLogoPreview(null)
+          }
+
+          // Cover photo — same daily_reports.cover_photo_url as workbench/PDF/review.
+          const coverPath = loaded.hydration?.coverStoragePath || null
+          setCoverRemoved(false)
+          if (coverPath) {
+            setCoverPhoto(coverPhotoStateFromSaved(coverPath, null))
+            const coverPreview = await resolveCoverPhotoPreviewUrl(supabase, coverPath)
+            if (!cancelled) {
+              setCoverPhoto(coverPhotoStateFromSaved(coverPath, coverPreview))
+            }
+          } else {
+            setCoverPhoto(null)
           }
 
           setLoading(false)
@@ -466,6 +487,29 @@ function SiteDiarySetupPage() {
     setLogoStoragePath(null)
   }
 
+  const onCoverDrop = (files) => {
+    const file = files?.[0]
+    if (!file) return
+    setError('')
+    setCoverRemoved(false)
+    setCoverPhoto((prev) => {
+      if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
+      return {
+        file,
+        preview: URL.createObjectURL(file),
+        storagePath: null,
+      }
+    })
+  }
+
+  const removeCoverPhoto = () => {
+    setCoverPhoto((prev) => {
+      if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
+      return null
+    })
+    setCoverRemoved(true)
+  }
+
   const handleProjectDatesChange = ({ startDate, plannedCompletionDate }) => {
     setProjectStartDate(startDate)
     setProjectPlannedCompletionDate(plannedCompletionDate)
@@ -582,9 +626,8 @@ function SiteDiarySetupPage() {
         updateDraft: (args) => updateDiarySetupFields(supabase, args),
         writeExtras: writeReportSetupExtras,
         clearFormDraft: clearSetupFormDraft,
-        navigate: async (href) => {
-          router.push(href)
-        },
+        // Navigate after cover is persisted onto the new/updated report id.
+        navigate: async () => {},
       })
 
       if (!result.ok) {
@@ -595,6 +638,36 @@ function SiteDiarySetupPage() {
         return
       }
 
+      // Persist cover onto the diary row (same cover_photo_url path as workbench/PDF).
+      const coverReportId = result.reportId
+      const coverProjectId = result.projectId
+      if (coverReportId) {
+        if (coverRemoved) {
+          await updateDiarySetupFields(supabase, {
+            reportId: coverReportId,
+            projectId: coverProjectId,
+            fields: { coverPhotoUrl: null },
+          })
+        } else if (coverPhoto?.file) {
+          const { storagePath, error: coverUpErr } = await uploadCoverPhotoFile(supabase, {
+            userId: user.id,
+            reportId: coverReportId,
+            file: coverPhoto.file,
+          })
+          if (coverUpErr || !storagePath) {
+            throw new Error(
+              coverUpErr?.message
+                || 'We couldn’t upload the cover photo. Check your connection and try again.',
+            )
+          }
+          await updateDiarySetupFields(supabase, {
+            reportId: coverReportId,
+            projectId: coverProjectId,
+            fields: { coverPhotoUrl: storagePath },
+          })
+        }
+      }
+
       // Persist the explicit name confirmed on setup — never invent from email.
       try {
         await persistSignedInAuthorProfile(supabase, {
@@ -603,6 +676,10 @@ function SiteDiarySetupPage() {
         })
       } catch {
         // Profile persist is best-effort; diary continue already succeeded.
+      }
+
+      if (result.navigatedTo) {
+        router.push(result.navigatedTo)
       }
       // Keep saving=true until route change unmounts this screen.
     } catch (err) {
@@ -776,6 +853,66 @@ function SiteDiarySetupPage() {
           autoComplete="organization-title"
           style={{ ...setupInputStyle, marginBottom: 0 }}
         />
+      </GlassSection>
+
+      <GlassSection title="Cover photo" accent={DIARY_ACCENT}>
+        {coverPhoto?.preview ? (
+          <div style={{ marginBottom: 0 }}>
+            <img
+              src={coverPhoto.preview}
+              alt="Cover"
+              style={{
+                width: '100%',
+                maxHeight: 200,
+                objectFit: 'cover',
+                borderRadius: 10,
+                display: 'block',
+                marginBottom: 10,
+              }}
+            />
+            <button
+              type="button"
+              onClick={removeCoverPhoto}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'color-mix(in srgb, var(--danger) 72%, var(--text))',
+                fontSize: 14,
+                padding: 0,
+                cursor: 'pointer',
+              }}
+            >
+              Remove cover photo
+            </button>
+          </div>
+        ) : coverPhoto?.storagePath ? (
+          <div style={{ marginBottom: 0 }}>
+            <p style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-2)', lineHeight: 1.45 }}>
+              Cover photo is attached to this diary.
+            </p>
+            <button
+              type="button"
+              onClick={removeCoverPhoto}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'color-mix(in srgb, var(--danger) 72%, var(--text))',
+                fontSize: 14,
+                padding: 0,
+                cursor: 'pointer',
+              }}
+            >
+              Remove cover photo
+            </button>
+            <div style={{ marginTop: 10 }}>
+              <ImageSourceButtons onFiles={onCoverDrop} hint="Replace cover image" />
+            </div>
+          </div>
+        ) : (
+          <div style={{ marginBottom: 0 }}>
+            <ImageSourceButtons onFiles={onCoverDrop} hint="One cover image for this report" />
+          </div>
+        )}
       </GlassSection>
 
       <GlassSection title="Project Details" accent={DIARY_ACCENT}>

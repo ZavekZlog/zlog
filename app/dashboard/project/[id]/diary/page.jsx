@@ -77,9 +77,12 @@ import {
   coverPhotoStateFromSaved,
   resolveCoverPhotoPreviewUrl,
   planCoverPhotoPersistence,
-  coverPhotoStoragePath,
   applyCoverPhotoPatch,
   coverPhotoPersistedOnRow,
+  uploadCoverPhotoFile,
+  coverPhotoUrlForAutosave,
+  isCoverAutosavePendingToken,
+  coverPhotoStateAfterUpload,
 } from '@/lib/diary-cover-photo'
 import {
   diaryHubHref,
@@ -221,8 +224,8 @@ const addRowButtonStyle = {
   boxShadow: 'inset 0 1px 0 var(--edge-highlight)',
 }
 
-// Compact divider between the persistent Project & Report Details above
-// and today's variable diary content below. Presentation only.
+// Compact divider introducing Today's Site Diary content (cover lives on setup).
+// Presentation only.
 const todaysDiaryDividerStyle = {
   borderTop: '1px solid var(--edge)',
   paddingTop: 14,
@@ -233,6 +236,12 @@ const todaysDiaryDividerStyle = {
 const DIARY_SAVE_SHARE_ACTION_STYLE = {
   marginTop: 8,
 }
+
+/** Hold Saved ✓ visibly before navigating to Report Complete / Share. */
+const POST_SAVE_SHARE_DELAY_MS = 3200
+
+const COVER_UPLOAD_FAIL_MESSAGE =
+  'We couldn’t upload the cover photo. Check your connection and try Save / Share again.'
 
 const todaysDiaryDividerTitleStyle = {
   fontSize: 12,
@@ -539,6 +548,8 @@ export default function SiteDiaryPage() {
   const [coverPhoto, setCoverPhoto] = useState(null)
   const loadedCoverPathRef = useRef(null)
   const coverRemovedRef = useRef(false)
+  const coverPhotoRef = useRef(null)
+  coverPhotoRef.current = coverPhoto
   const [signature, setSignature] = useState(null)
   const [signatureMode, setSignatureMode] = useState('draw') // 'carried' | 'accepted' | 'draw'
   const [brandingSelection, setBrandingSelection] = useState(null)
@@ -981,6 +992,11 @@ export default function SiteDiaryPage() {
     variations,
     temporaryWorksApplicable,
     temporaryWorks,
+    coverPhotoUrl: coverPhotoUrlForAutosave({
+      coverPhoto,
+      loadedCoverPath: loadedCoverPathRef.current,
+      coverRemoved: coverRemovedRef.current,
+    }),
   }), [
     weather,
     siteSummary,
@@ -993,6 +1009,7 @@ export default function SiteDiaryPage() {
     variations,
     temporaryWorksApplicable,
     temporaryWorks,
+    coverPhoto,
   ])
   latestPayloadRef.current = autosavePayload
 
@@ -1007,6 +1024,15 @@ export default function SiteDiaryPage() {
     setHsIncidents(hsIncidentsFromDb(snapshot.hs_incidents))
     setRfis(rfisFromDb(snapshot.rfis))
     setVariations(variationsFromDb(snapshot.variations))
+    // Restore durable cover path from the live row so a stale recovery cannot
+    // leave the form empty and later autosave-null the saved cover.
+    if (Object.prototype.hasOwnProperty.call(snapshot, 'cover_photo_url') && !coverRemovedRef.current) {
+      const path = snapshot.cover_photo_url
+      if (path) {
+        loadedCoverPathRef.current = String(path)
+        setCoverPhoto((prev) => coverPhotoStateFromSaved(path, prev?.preview || null))
+      }
+    }
     // Temporary Works are not on live daily_reports yet — never wipe in-form values.
   }, [])
 
@@ -1018,9 +1044,22 @@ export default function SiteDiaryPage() {
     }
 
     const run = async () => {
-      const payload = latestPayloadRef.current
+      let payload = latestPayloadRef.current
       if (!payload || autosavePayloadsEqual(payload, ackedSnapshotRef.current)) {
         return { ok: true, reason: 'already-saved', wrote: false }
+      }
+
+      // Never autosave-null a cover that is still on the form / loaded path.
+      if (
+        (payload.cover_photo_url == null || payload.cover_photo_url === '')
+        && !coverRemovedRef.current
+      ) {
+        const keepPath =
+          coverPhotoRef.current?.storagePath || loadedCoverPathRef.current || null
+        if (keepPath) {
+          payload = { ...payload, cover_photo_url: String(keepPath) }
+          latestPayloadRef.current = payload
+        }
       }
 
       const paintAutosaveStatus = (kind) => {
@@ -1030,6 +1069,93 @@ export default function SiteDiaryPage() {
       }
 
       paintAutosaveStatus('saving')
+
+      // Cover photo: upload local File to canonical site-photos path before PATCH.
+      const liveCover = coverPhotoRef.current
+      if (
+        (liveCover?.file && !liveCover?.storagePath)
+        || isCoverAutosavePendingToken(payload.cover_photo_url)
+      ) {
+        try {
+          const { data: { user }, error: authError } = await supabase.auth.getUser()
+          if (authError || !user) {
+            paintAutosaveStatus('auth')
+            return {
+              ok: false,
+              reason: 'update-failed',
+              acked: ackedSnapshotRef.current,
+              wrote: false,
+              error: { message: authError?.message || 'not authenticated', code: '401' },
+            }
+          }
+          if (!liveCover?.file) {
+            paintAutosaveStatus('db')
+            return {
+              ok: false,
+              reason: 'update-failed',
+              acked: ackedSnapshotRef.current,
+              wrote: false,
+              error: { message: 'cover-file-missing', code: null },
+            }
+          }
+          const { storagePath, error: coverUploadError } = await uploadCoverPhotoFile(supabase, {
+            userId: user.id,
+            reportId: editingReportId,
+            file: liveCover.file,
+          })
+          if (coverUploadError || !storagePath) {
+            paintAutosaveStatus('db')
+            return {
+              ok: false,
+              reason: 'update-failed',
+              acked: ackedSnapshotRef.current,
+              wrote: false,
+              error: {
+                message: coverUploadError?.message || 'cover-upload-failed',
+                code: coverUploadError?.code || null,
+              },
+            }
+          }
+          loadedCoverPathRef.current = storagePath
+          coverRemovedRef.current = false
+          // Drop local File so Save / Share will not re-upload this object.
+          // Update ref immediately — do not wait for the next React render.
+          const nextCover = coverPhotoStateAfterUpload(storagePath, liveCover.preview)
+          coverPhotoRef.current = nextCover
+          setCoverPhoto(nextCover)
+          // Successful cover persistence must clear a stale red upload banner.
+          if (persistUiErrorRef.current === COVER_UPLOAD_FAIL_MESSAGE) {
+            persistUiErrorRef.current = ''
+            setError('')
+          }
+          payload = {
+            ...payload,
+            cover_photo_url: storagePath,
+          }
+          latestPayloadRef.current = payload
+        } catch (err) {
+          paintAutosaveStatus('network')
+          return {
+            ok: false,
+            reason: 'update-failed',
+            acked: ackedSnapshotRef.current,
+            wrote: false,
+            error: { message: err?.message || String(err), code: err?.code || null },
+          }
+        }
+      }
+
+      if (isCoverAutosavePendingToken(payload.cover_photo_url)) {
+        paintAutosaveStatus('db')
+        return {
+          ok: false,
+          reason: 'update-failed',
+          acked: ackedSnapshotRef.current,
+          wrote: false,
+          error: { message: 'cover-still-pending', code: null },
+        }
+      }
+
       let result
       try {
         result = await runDiaryAutosave(supabase, {
@@ -1209,6 +1335,11 @@ export default function SiteDiaryPage() {
     const file = accepted[0]
     if (!file) return
     coverRemovedRef.current = false
+    // New local cover replaces any previous failed upload banner.
+    if (persistUiErrorRef.current === COVER_UPLOAD_FAIL_MESSAGE) {
+      persistUiErrorRef.current = ''
+      setError('')
+    }
     setCoverPhoto((prev) => {
       if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
       return {
@@ -1383,8 +1514,6 @@ export default function SiteDiaryPage() {
 
   const photosRef = useRef(photos)
   photosRef.current = photos
-  const coverPhotoRef = useRef(coverPhoto)
-  coverPhotoRef.current = coverPhoto
   const signatureRef = useRef(signature)
   signatureRef.current = signature
   const scanSheetPreviewRef = useRef(scanSheetPreview)
@@ -1513,6 +1642,10 @@ export default function SiteDiaryPage() {
     if (coverPhoto?.file && coverPhoto.preview) URL.revokeObjectURL(coverPhoto.preview)
     coverRemovedRef.current = true
     loadedCoverPathRef.current = null
+    if (persistUiErrorRef.current === COVER_UPLOAD_FAIL_MESSAGE) {
+      persistUiErrorRef.current = ''
+      setError('')
+    }
     setCoverPhoto(null)
   }
 
@@ -1789,16 +1922,13 @@ export default function SiteDiaryPage() {
       let requiredCoverPath = null
 
       if (coverPlan.needsUpload && coverPlan.file) {
-        const ext = coverPlan.file.name?.split('.').pop()?.toLowerCase() || 'jpg'
-        const coverPath = coverPhotoStoragePath(user.id, editingReportId, ext)
-        const { error: coverUploadError } = await supabase.storage
-          .from('site-photos')
-          .upload(coverPath, coverPlan.file, {
-            contentType: coverPlan.file.type || 'image/jpeg',
-            upsert: true,
-          })
-        if (coverUploadError) {
-          failSave('We couldn’t upload the cover photo. Check your connection and try Save / Share again.')
+        const { storagePath: coverPath, error: coverUploadError } = await uploadCoverPhotoFile(supabase, {
+          userId: user.id,
+          reportId: editingReportId,
+          file: coverPlan.file,
+        })
+        if (coverUploadError || !coverPath) {
+          failSave(COVER_UPLOAD_FAIL_MESSAGE)
           return
         }
         coverPlan = planCoverPhotoPersistence({
@@ -1808,18 +1938,20 @@ export default function SiteDiaryPage() {
           uploadedPath: coverPath,
         })
         if (!coverPlan.patch?.cover_photo_url) {
-          failSave('We couldn’t upload the cover photo. Check your connection and try Save / Share again.')
+          failSave(COVER_UPLOAD_FAIL_MESSAGE)
           return
         }
         requiredCoverPath = coverPlan.patch.cover_photo_url
         loadedCoverPathRef.current = requiredCoverPath
         coverRemovedRef.current = false
-        // Keep the local File until the diary row is verified so a later failure can retry.
-        setCoverPhoto({
-          file: liveCover.file,
-          preview: liveCover.preview,
-          storagePath: requiredCoverPath,
-        })
+        // Drop local File after successful upload — planner must not request a second upload.
+        const nextCover = coverPhotoStateAfterUpload(requiredCoverPath, liveCover.preview)
+        coverPhotoRef.current = nextCover
+        setCoverPhoto(nextCover)
+        // Upload succeeded — never leave a prior cover-fail banner visible.
+        if (persistUiErrorRef.current === COVER_UPLOAD_FAIL_MESSAGE) {
+          persistUiErrorRef.current = ''
+        }
       } else if (coverPlan.patch?.cover_photo_url) {
         requiredCoverPath = coverPlan.patch.cover_photo_url
       }
@@ -1980,7 +2112,7 @@ export default function SiteDiaryPage() {
         return
       }
 
-      // Persist first, then hand off to existing Report Complete / Share flow.
+      // Persist first → Saved ✓ → then hand off to Report Complete / Share.
       if (requiredCoverPath) {
         const keepPreview = coverPhotoRef.current?.preview || null
         setCoverPhoto(coverPhotoStateFromSaved(requiredCoverPath, keepPreview))
@@ -1997,8 +2129,10 @@ export default function SiteDiaryPage() {
         setShowSaveBanner(true)
         setAutosaveStatus(null)
         setError('')
+        persistUiErrorRef.current = ''
       })
       diarySaveLog('success', { reportId: saved.id })
+      saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
 
       const shareHref = postSaveDiaryHref(projectId, saved.id)
       if (shareHref) {
@@ -2008,7 +2142,7 @@ export default function SiteDiaryPage() {
           saveNavTimerRef.current = null
           finalSaveInProgressRef.current = false
           router.replace(shareHref)
-        }, 3200)
+        }, POST_SAVE_SHARE_DELAY_MS)
       } else {
         finalSaveInProgressRef.current = false
       }
@@ -2241,7 +2375,7 @@ export default function SiteDiaryPage() {
             animation: 'zlog-save-banner 3s ease forwards',
           }}
         >
-          ✓ Your Site Diary has been saved.
+          Saved ✓
         </div>
       )}
       {justSaved && isDiaryViewMode && (
@@ -2398,39 +2532,6 @@ export default function SiteDiaryPage() {
             {'Record today’s site activity, attendance, permits, deliveries and photo evidence.'}
           </p>
         </div>
-
-        <GlassSection title="Cover photo" accent={DIARY_ACCENT}>
-          {coverPhoto?.preview ? (
-            <div style={{ marginBottom: 0 }}>
-              <img
-                src={coverPhoto.preview}
-                alt="Cover"
-                style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 10, display: 'block', marginBottom: 10 }}
-              />
-              <button type="button" onClick={removeCoverPhoto} style={removeRowStyle}>Remove cover photo</button>
-            </div>
-          ) : coverPhoto?.storagePath ? (
-            <div style={{ marginBottom: 0 }}>
-              <p style={{ margin: '0 0 10px', fontSize: 14, color: 'var(--text-2)', lineHeight: 1.45 }}>
-                Cover photo is attached to this diary.
-              </p>
-              <button type="button" onClick={removeCoverPhoto} style={removeRowStyle}>Remove cover photo</button>
-              <div style={{ marginTop: 10 }}>
-                <ImageSourceButtons
-                  onFiles={onCoverDrop}
-                  hint="Replace cover image"
-                />
-              </div>
-            </div>
-          ) : (
-            <div style={{ marginBottom: 0 }}>
-              <ImageSourceButtons
-                onFiles={onCoverDrop}
-                hint="One cover image for this report"
-              />
-            </div>
-          )}
-        </GlassSection>
 
         <GlassSection title="Weather" accent={DIARY_ACCENT}>
           <label style={labelStyle}>Weather</label>
@@ -2934,7 +3035,7 @@ export default function SiteDiaryPage() {
                 color: '#4ade80',
               }}
             >
-              ✓ Your Site Diary has been saved.
+              Saved ✓
             </div>
           ) : null}
           {shouldShowDiaryAutosaveStatus({
@@ -2994,7 +3095,7 @@ export default function SiteDiaryPage() {
                   Saving…
                 </>
               ) : justSaved ? (
-                '✓ Site Diary Saved'
+                'Saved ✓'
               ) : (
                 'Save / Share'
               )}

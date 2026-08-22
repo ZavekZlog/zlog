@@ -231,14 +231,17 @@
     },
     {
       "id": "DIARY-017",
-      "description": "Cover photo persistence — omit wipe unless explicit set/remove",
+      "description": "Cover photo persistence — autosave + final save write cover_photo_url; Cover capture/edit UI lives on Project & Report Details (setup) only — Today’s Site Diary must not duplicate it; omit wipe unless explicit remove; Use as Basis carries cover forward; successful cover persistence clears stale cover-upload error banners",
       "area": "site-diary",
       "tests": [
         "lib/diary-cover-photo.test.js",
-        "lib/diary-edit-hydrate.test.js"
+        "lib/diary-edit-hydrate.test.js",
+        "lib/diary-autosave.test.js",
+        "lib/diary-site-diary-contract.test.js",
+        "lib/diary-save.test.js"
       ],
       "manualQA": true,
-      "manualQANote": "Storage object presence after save remains manualQA."
+      "manualQANote": "Select cover → wait for Work saved → refresh/reopen + Saved Diaries + PDF must show the same cover; replacement must not leave a false red upload error."
     },
     {
       "id": "DIARY-018",
@@ -346,11 +349,12 @@
     },
     {
       "id": "DIARY-027",
-      "description": "Opening a saved diary from View Saved Diaries renders one continuous read-only document (project & report details, Current Phase, cover, all saved sections, photo evidence with captions, signature) with no compose/edit controls and no write",
+      "description": "Opening a saved diary from View Saved Diaries renders one continuous read-only document (Project & Report Details with Cover near the beginning, Current Phase, all saved sections, photo evidence with captions, signature); Edit This Diary opens full workbench editability only — never setup/details-only; no compose controls and no write on open",
       "area": "site-diary",
       "tests": [
         "lib/diary-saved-view.test.js",
-        "lib/diary-routing.test.js"
+        "lib/diary-routing.test.js",
+        "lib/diary-site-diary-contract.test.js"
       ],
       "manualQA": true,
       "manualQANote": "Authenticated open of a real saved diary and mobile visual review of the continuous document require manual QA; document order, Current Phase source, read-only surface, photo/caption visibility and no-write behaviour are automated."
@@ -404,14 +408,15 @@
     },
     {
       "id": "DIARY-032",
-      "description": "In-progress Site Diary workbench content autosaves onto the existing daily_reports row after a short pause so an interrupted session can be resumed; Save / Share still finalises; persist UI is mutually exclusive (idle|saving|saved|error) so a failed save never also shows Work saved",
+      "description": "In-progress Site Diary workbench content autosaves onto the existing daily_reports row after a short pause so an interrupted session can be resumed; Save / Share still finalises with Saving… then Saved ✓ only after persistence succeeds, then opens Share/complete — never Saved✓ or Share on failed save; persist UI is mutually exclusive (idle|saving|saved|error) so a failed save never also shows Work saved",
       "area": "site-diary",
       "tests": [
         "lib/diary-autosave.test.js",
-        "lib/diary-site-diary-contract.test.js"
+        "lib/diary-site-diary-contract.test.js",
+        "lib/diary-save.test.js"
       ],
       "manualQA": true,
-      "manualQANote": "Authenticated phone QA must confirm Weather / H&S survive a killed tab on the same report id, status copy stays honest when offline, and Save / Share still completes. Start a New Diary must still create a new diary."
+      "manualQANote": "Authenticated phone QA must confirm Weather / H&S survive a killed tab on the same report id, status copy stays honest when offline, Saving… → Saved ✓ appears before Share, and Save / Share still completes. Start a New Diary must still create a new diary."
     },
     {
       "id": "DIARY-033",

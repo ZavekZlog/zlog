@@ -704,28 +704,32 @@ function SavedDiaryViewer() {
         </GlassSection>
       </div>
 
-      <GlassSection title="Cover Photo" accent={DIARY_ACCENT}>
-        {view.coverPhotoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={view.coverPhotoUrl}
-            alt="Site Diary cover photo"
-            style={{
-              display: 'block',
-              width: '100%',
-              borderRadius: 12,
-              border: '1px solid var(--edge)',
-              background: '#0b0d12',
-            }}
-          />
-        ) : (
-          <EmptySection>No cover photo was saved on this diary.</EmptySection>
-        )}
-      </GlassSection>
-
       <GlassSection title="Project & Report Details" accent={DIARY_ACCENT}>
+        <div style={{ marginTop: 0 }}>
+          <p style={groupTitleStyle}>Cover Photo</p>
+          {view.coverPhotoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={view.coverPhotoUrl}
+              alt="Site Diary cover photo"
+              style={{
+                display: 'block',
+                width: '100%',
+                borderRadius: 12,
+                border: '1px solid var(--edge)',
+                background: '#0b0d12',
+              }}
+            />
+          ) : (
+            <EmptySection>
+              {view.coverPhotoPath
+                ? 'Cover photo is saved on this diary but could not be loaded. Open Edit This Diary or try again.'
+                : 'No cover photo was saved on this diary.'}
+            </EmptySection>
+          )}
+        </div>
         {view.detailGroups.map((group, groupIndex) => (
-          <div key={group.key} style={{ marginTop: groupIndex === 0 ? 0 : 18 }}>
+          <div key={group.key} style={{ marginTop: 18 }}>
             <p style={groupTitleStyle}>{group.title}</p>
             <div
               style={{
