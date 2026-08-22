@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "updated": "2026-08-14",
+  "version": "1.0.1",
+  "updated": "2026-08-22",
   "description": "Machine-readable protected-scope architecture. Future agents must declare ZLOG_TASK_SCOPE (or .zlog-task-scope.json) before release. Unrelated protected/high-risk edits HARD FAIL.",
   "canonicalReleaseCommand": "npm run test:release",
   "legacyReleaseCommand": "npm run test:release-gate",
@@ -378,6 +378,42 @@
       "allowsHighRisk": false,
       "requiresUserApproval": false
     },
+    "pdf-repeated-header": {
+      "description": "Checkpoint ab65437 — repeated coloured PDF header/banner (PageChrome + PdfHeader + diary-pdf-layout). Do not modify for orientation work.",
+      "allowedPathPrefixes": [
+        "components/pdf/PdfHeader.jsx",
+        "components/pdf/DiaryPdfDocument.jsx",
+        "lib/diary-pdf-layout.js",
+        "lib/diary-pdf-layout.test.js",
+        "lib/diary-checkpoint-ab65437-contract.test.js",
+        "docs/contracts/SITE_DIARY_PDF_CHECKPOINT_CONTRACT.md"
+      ],
+      "allowedGlobs": [
+        "lib/diary-pdf-layout*",
+        "lib/diary-checkpoint*"
+      ],
+      "maxProductFiles": 8,
+      "allowsHighRisk": false,
+      "requiresUserApproval": false,
+      "notes": "Orientation/debug work must declare pdf-photo-orientation instead — never edit this stack opportunistically."
+    },
+    "pdf-photo-orientation": {
+      "description": "PDF photo orientation rendering only (cover/work photos in generated PDF). Must NOT touch repeated-header stack or Save/Share behaviour.",
+      "allowedPathPrefixes": [
+        "lib/image-orientation.js",
+        "lib/diary-share.js",
+        "lib/diary-checkpoint-ab65437-contract.test.js",
+        "docs/contracts/SITE_DIARY_PDF_CHECKPOINT_CONTRACT.md"
+      ],
+      "allowedGlobs": [
+        "lib/image-orientation*",
+        "lib/diary-share*"
+      ],
+      "maxProductFiles": 10,
+      "allowsHighRisk": false,
+      "requiresUserApproval": false,
+      "notes": "Forbidden without separate approval: components/pdf/PdfHeader.jsx, lib/diary-pdf-layout.js, app/dashboard/project/[id]/diary/page.jsx Share handler."
+    },
     "test-docs": {
       "description": "Tests and documentation only (no product surface).",
       "allowedPathPrefixes": [
@@ -411,6 +447,9 @@
     "DIARY-028",
     "DIARY-029",
     "DIARY-030",
+    "DIARY-034",
+    "PDF-034",
+    "PDF-035",
     "AUTH-001",
     "AUTH-004",
     "UI-COPY-001"

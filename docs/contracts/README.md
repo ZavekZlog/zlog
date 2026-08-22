@@ -1,10 +1,10 @@
 # Contract hierarchy (commercial product)
 
-**Version:** 1.5.2  
-**Date Updated:** 2026-08-17  
-**Reason Updated:** Add REPORT_DELETION_CONTRACT for reusable saved-report deletion  
-**User Decision:** APPROVED — saved-report deletion behaviour plus minimum shared deletion infrastructure  
-**Previous Version:** 1.5.1  
+**Version:** 1.5.3  
+**Date Updated:** 2026-08-22  
+**Reason Updated:** Add SITE_DIARY_PDF_CHECKPOINT_CONTRACT (ab65437 restore point)  
+**User Decision:** APPROVED — anti-regression hardening from phone-verified checkpoint  
+**Previous Version:** 1.5.2  
 
 Zlog is a **commercial product**, not a prototype. Approved screens, flows, controls, wording, ordering, persistence and interactions are production contracts.
 
@@ -21,6 +21,7 @@ Zlog is a **commercial product**, not a prototype. Approved screens, flows, cont
 | **C. Feature** | `docs/contracts/REPORT_BRANDING_CONTRACT.md` | Report branding association |
 | **C. Feature** | `docs/contracts/PHOTO_WORKSPACE_CONTRACT.md` | Photo / location evidence (implemented freeze) |
 | **C. Feature** | `docs/contracts/REPORT_DELETION_CONTRACT.md` | Confirmed saved-report deletion, RPC, Storage reference safety |
+| **C. Feature** | **`docs/contracts/SITE_DIARY_PDF_CHECKPOINT_CONTRACT.md`** | **Checkpoint ab65437 — repeated PDF header + Share-first-tap recovery (phone-verified)** |
 | **Backlog** | **`docs/ZLOG_PRODUCT_BACKLOG.md`** | Living issue tracker |
 
 Related (do not weaken):

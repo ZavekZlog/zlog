@@ -35,6 +35,17 @@ This document is the operating procedure for the machine-checked guardrails in `
 7. **Canonical release** — `npm run test:release`  
    Aggregates all of the above + node suites + playwright behavioural + visual.
 
+## Checkpoint ab65437 (protected restore point)
+
+Phone-verified baseline: commit **`ab65437`** — repeated coloured PDF header on every page + Share-first-tap PDF recovery.
+
+- Contract: `docs/contracts/SITE_DIARY_PDF_CHECKPOINT_CONTRACT.md`
+- Executable tests: `lib/diary-checkpoint-ab65437-contract.test.js`, `lib/diary-pdf-layout.test.js`
+- Task scopes: `pdf-repeated-header`, `pdf-photo-orientation` in `docs/PROTECTED_SCOPE_MANIFEST.json`
+- Registry: **PDF-034**, **PDF-035**, **DIARY-034**
+
+Future PDF orientation work must declare `pdf-photo-orientation` and must **not** modify the repeated-header stack without explicit approval. Automated tests do not replace real Android phone acceptance.
+
 ## Agent checklist (mandatory)
 
 1. Read `docs/PROTECTED_SCOPE_MANIFEST.json` and this file before editing.

@@ -39,6 +39,8 @@ const NODE_TESTS = [
   'lib/premium-ui-layout-contract.test.js',
   'lib/premium-ui-back-contract.test.js',
   'lib/premium-ui-workbench-cta-contract.test.js',
+  'lib/diary-pdf-layout.test.js',
+  'lib/diary-checkpoint-ab65437-contract.test.js',
   'lib/cta-hierarchy-contract.test.js',
   'lib/zlog-text-wordmark-contract.test.js',
   'lib/golden-journeys/journey-b-new-diary.test.js',

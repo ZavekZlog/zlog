@@ -1,6 +1,6 @@
 {
-  "version": "1.1.11",
-  "updated": "2026-08-19",
+  "version": "1.1.12",
+  "updated": "2026-08-22",
   "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage. Source contracts are NOT screenshot visual tests.",
   "behaviours": [
     {
@@ -460,6 +460,40 @@
       ],
       "manualQA": true,
       "manualQANote": "Playwright compares committed PNGs for landing/login. Dashboard/Sign out/diary shells require manual confirmation before status flips to approved and baselines are created via test:visual:update."
+    },
+    {
+      "id": "PDF-034",
+      "description": "Checkpoint ab65437 — coloured PdfHeader banner repeats on every physical PDF page via in-flow PageChrome; orientation work must not regress this stack",
+      "area": "pdf",
+      "tests": [
+        "lib/diary-checkpoint-ab65437-contract.test.js",
+        "lib/diary-pdf-layout.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Real Android phone must confirm the coloured banner is visible on every printed page. Source contracts lock PageChrome-per-Page wiring and forbid orientation imports in PdfHeader/diary-pdf-layout."
+    },
+    {
+      "id": "PDF-035",
+      "description": "Checkpoint ab65437 — page-1 PDF appearance preserved; content clears the repeated header; PdfFooter behaviour intact",
+      "area": "pdf",
+      "tests": [
+        "lib/diary-checkpoint-ab65437-contract.test.js",
+        "lib/diary-pdf-layout.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Phone QA must confirm page-1 chrome matches the approved appearance and body content does not overlap the header. Automated tests cover layout constants and footer wiring only."
+    },
+    {
+      "id": "DIARY-034",
+      "description": "Checkpoint ab65437 — workbench Share persists then prepares/shares PDF on first tap; saved view falls through to download without a second tap; Report Complete PDF helpers remain wired",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-checkpoint-ab65437-contract.test.js",
+        "lib/premium-ui-workbench-cta-contract.test.js",
+        "lib/diary-saved-view.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Real Android phone must confirm Share prepares and delivers PDF in one gesture and Save/Share saving semantics remain honest. Source contracts lock prepare/share/download wiring — not share-sheet UX."
     }
   ]
 }
