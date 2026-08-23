@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -44,6 +44,7 @@ import {
   hydrateShift,
 } from '@/lib/diary-setup-shift'
 import {
+  buildDiarySetupContinueForm,
   persistSetupProject,
   runDiarySetupContinue,
   validateDiarySetupContinue,
@@ -149,6 +150,11 @@ function SiteDiarySetupPage() {
   // Cover photo lives on Project & Report Details (this setup stage), not Today's Site Diary.
   const [coverPhoto, setCoverPhoto] = useState(null)
   const [coverRemoved, setCoverRemoved] = useState(false)
+
+  const projectNameInputRef = useRef(null)
+  const authorInputRef = useRef(null)
+  const reportingOnBehalfOfInputRef = useRef(null)
+  const reportDateInputRef = useRef(null)
 
   const existingProjects = useMemo(
     () => (projects || []).filter((p) => p?.id && p?.name),
@@ -548,15 +554,14 @@ function SiteDiarySetupPage() {
   const handleContinue = async () => {
     if (saving) return
 
-    setSaving(true)
     setError('')
     setProjectDatesError('')
     setStickyFieldsError('')
 
-    try {
-      // Validate before uploading or persisting company branding. Invalid setup
-      // must not mutate the saved profile or create storage objects.
-      const formValidation = validateDiarySetupContinue({
+    // Canonical continue form — same source as rendered inputs (state + live input
+    // values when mobile preload/autofill has not yet synced into React state).
+    const continueForm = buildDiarySetupContinueForm(
+      {
         projectName,
         author,
         reportingOnBehalfOf,
@@ -564,14 +569,41 @@ function SiteDiarySetupPage() {
         startDate: projectStartDate,
         plannedCompletionDate: projectPlannedCompletionDate,
         workingDaysPerWeek,
-      })
+        authorRole,
+        shift,
+        currentPhase,
+        projectAddress,
+        projectManager,
+        projectReference,
+        brandLogoUrl: logoStoragePath,
+        brandingId,
+        brandColor,
+        reportingCompany,
+      },
+      {
+        existingProjects,
+        selectedProjectId,
+        dom: {
+          projectName: projectNameInputRef.current?.value,
+          author: authorInputRef.current?.value,
+          reportingOnBehalfOf: reportingOnBehalfOfInputRef.current?.value,
+          reportDate: reportDateInputRef.current?.value,
+        },
+      },
+    )
+
+    try {
+      // Validate before uploading or persisting company branding. Invalid setup
+      // must not mutate the saved profile or create storage objects.
+      const formValidation = validateDiarySetupContinue(continueForm)
       if (!formValidation.ok) {
         if (formValidation.field === 'dates') setProjectDatesError(formValidation.message)
         if (formValidation.field === 'workingDays') setStickyFieldsError(formValidation.message)
         setError(formValidation.message || 'Could not continue to Site Diary')
-        setSaving(false)
         return
       }
+
+      setSaving(true)
 
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('You must be signed in')
@@ -604,23 +636,13 @@ function SiteDiarySetupPage() {
       const result = await runDiarySetupContinue({
         alreadySaving: false,
         form: {
-          projectName,
-          author,
-          authorRole,
-          shift,
-          reportingOnBehalfOf,
-          reportDate,
-          startDate: projectStartDate,
-          plannedCompletionDate: projectPlannedCompletionDate,
-          projectAddress,
-          projectManager,
-          workingDaysPerWeek,
-          currentPhase,
-          projectReference,
+          ...continueForm,
+          authorRole: continueForm.authorRole,
+          shift: continueForm.shift || shift,
           brandLogoUrl: nextLogoUrl,
           brandingId: nextBrandingId,
           brandColor: nextBrandColor,
-          reportingCompany: companySnapshot.companyName || reportingCompany,
+          reportingCompany: companySnapshot.companyName || continueForm.reportingCompany || reportingCompany,
         },
         existingProjects,
         selectedProjectId,
@@ -680,8 +702,8 @@ function SiteDiarySetupPage() {
       // Persist the explicit name confirmed on setup — never invent from email.
       try {
         await persistSignedInAuthorProfile(supabase, {
-          authorName: author,
-          authorRole,
+          authorName: continueForm.author,
+          authorRole: continueForm.authorRole || authorRole,
         })
       } catch {
         // Profile persist is best-effort; diary continue already succeeded.
@@ -874,6 +896,7 @@ function SiteDiarySetupPage() {
 
       <GlassSection title="Reporting On Behalf Of" accent={DIARY_ACCENT}>
         <input
+          ref={reportingOnBehalfOfInputRef}
           value={reportingOnBehalfOf}
           onChange={(e) => setReportingOnBehalfOf(e.target.value)}
           placeholder="Client, main contractor, or organisation"
@@ -887,6 +910,7 @@ function SiteDiarySetupPage() {
       <GlassSection title="Author" accent={DIARY_ACCENT}>
         <label style={setupLabelStyle}>Author Name *</label>
         <input
+          ref={authorInputRef}
           value={author}
           onChange={(e) => setAuthor(e.target.value)}
           placeholder="Your name"
@@ -969,6 +993,7 @@ function SiteDiarySetupPage() {
       <GlassSection title="Project Details" accent={DIARY_ACCENT}>
         <label style={setupLabelStyle}>Project Name *</label>
         <input
+          ref={projectNameInputRef}
           value={projectName}
           onChange={handleProjectNameChange}
           list={existingProjects.length > 0 ? 'diary-setup-project-names' : undefined}
@@ -1040,6 +1065,7 @@ function SiteDiarySetupPage() {
 
         <label style={setupLabelStyle}>Report Date *</label>
         <input
+          ref={reportDateInputRef}
           type="date"
           value={reportDate}
           onChange={(e) => setReportDate(e.target.value)}
