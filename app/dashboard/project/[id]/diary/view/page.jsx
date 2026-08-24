@@ -41,6 +41,10 @@ import {
 } from '@/lib/diary-share'
 import { emitShareDiag } from '@/lib/share-diag-beacon'
 import { runShareCapabilityProbe } from '@/lib/share-capability-probe'
+import {
+  fingerprintFromSavedDiaryView,
+  loadShareReadyPdf,
+} from '@/lib/diary-pdf-cache'
 
 const DIARY_ACCENT = REPORT_THEMES.diary.accent
 
@@ -391,72 +395,67 @@ function SavedDiaryViewer() {
     runShareCapabilityProbe({ surface: 'saved-diary-view' })
   }, [view?.projectId, view?.reportId])
 
-  // Pre-cache PDF while the user reads the diary so Share Report can call navigator.share
-  // inside a fresh user gesture (Android Chrome expires activation during long prepare).
+  // Hydrate durable share-ready PDF only — never regenerate on open (Android gesture + UX).
+  // PDF is produced at save/finalise and reused when the fingerprint still matches.
   useEffect(() => {
     if (!view?.projectId || !view?.reportId) return
 
     let cancelled = false
     const gen = ++pdfCacheGenRef.current
     pdfReadyRef.current = null
-    setPdfCacheState('preparing')
+    setPdfCacheState('idle')
     setPdfStatus('')
     const startedAt = Date.now()
+    const fingerprint = fingerprintFromSavedDiaryView(view)
 
-    emitShareDiag('pdf-precache-start', {
+    emitShareDiag('pdf-cache-hydrate-start', {
       surface: 'saved-diary-view',
       reportId: view.reportId,
       projectId: view.projectId,
+      fingerprint,
     })
 
     ;(async () => {
       try {
-        const prepared = await prepareSiteDiaryPdf({
-          projectId: view.projectId,
-          reportId: view.reportId,
-        })
+        const cached = await loadShareReadyPdf(view.reportId, fingerprint)
         if (cancelled || gen !== pdfCacheGenRef.current) return
-        if (!prepared.ok) {
+        if (!cached.ok || !cached.file) {
           pdfReadyRef.current = null
-          setPdfCacheState('error')
-          setPdfStatus(prepared.message || 'We couldn’t prepare the PDF.')
-          emitShareDiag('pdf-precache-failed', {
+          setPdfCacheState('missing')
+          emitShareDiag('pdf-cache-hydrate-miss', {
             surface: 'saved-diary-view',
-            message: prepared.message || null,
+            reason: cached.reason || 'miss',
             elapsedMs: Date.now() - startedAt,
           })
           return
         }
-        const pdfFile = prepared.file instanceof File
-          ? prepared.file
-          : new File(
-            [prepared.blob],
-            prepared.fileName || 'Zlog-Site-Diary.pdf',
-            { type: 'application/pdf' },
-          )
         pdfReadyRef.current = {
-          ...prepared,
-          file: pdfFile,
+          ok: true,
+          blob: cached.blob,
+          file: cached.file,
+          fileName: cached.fileName,
+          title: cached.title,
+          text: cached.text,
+          fingerprint: cached.fingerprint,
+          fromDurableCache: true,
           projectId: view.projectId,
           reportId: view.reportId,
         }
         setPdfCacheState('ready')
-        emitShareDiag('pdf-precache-ready', {
+        emitShareDiag('pdf-cache-hydrate-ready', {
           surface: 'saved-diary-view',
           elapsedMs: Date.now() - startedAt,
-          fileReady: Boolean(pdfFile?.size > 0),
-          fileName: pdfFile?.name || prepared.fileName || null,
-          fileSize: pdfFile?.size ?? null,
-          fileType: pdfFile?.type || null,
-          instanceofFile: pdfFile instanceof File,
-          canShareFiles: canSharePdfFile(pdfFile),
+          fileReady: Boolean(cached.file?.size > 0),
+          fileName: cached.fileName || null,
+          fileSize: cached.file?.size ?? null,
+          fromDurableCache: true,
+          canShareFiles: canSharePdfFile(cached.file),
         })
       } catch (err) {
         if (cancelled || gen !== pdfCacheGenRef.current) return
         pdfReadyRef.current = null
-        setPdfCacheState('error')
-        setPdfStatus(err?.message || 'We couldn’t prepare the PDF.')
-        emitShareDiag('pdf-precache-failed', {
+        setPdfCacheState('missing')
+        emitShareDiag('pdf-cache-hydrate-error', {
           surface: 'saved-diary-view',
           errorName: err?.name || null,
           errorMessage: err?.message || String(err),
@@ -468,7 +467,7 @@ function SavedDiaryViewer() {
     return () => {
       cancelled = true
     }
-  }, [view?.projectId, view?.reportId])
+  }, [view])
 
   if (loading) {
     return (
@@ -517,14 +516,20 @@ function SavedDiaryViewer() {
   })
 
   const handleGeneratePdf = async () => {
-    if (generatingPdf || pdfCacheState === 'preparing' || pdfCacheState === 'idle') return
+    if (generatingPdf || pdfCacheState === 'preparing') return
 
-    // Cache failed earlier — rebuild in the background; do not share in this gesture.
-    if (pdfCacheState === 'error') {
+    // Missing/stale/error/idle — prepare now (busy state), then require a fresh Share tap.
+    if (pdfCacheState === 'missing' || pdfCacheState === 'error' || pdfCacheState === 'idle') {
       setPdfCacheState('preparing')
-      setPdfStatus('')
+      setPdfStatus('Preparing report…')
       const gen = ++pdfCacheGenRef.current
       const startedAt = Date.now()
+      emitShareDiag('pdf-prepare-on-demand-start', {
+        surface: 'saved-diary-view',
+        reason: pdfCacheState,
+        reportId: view.reportId,
+        projectId: view.projectId,
+      })
       try {
         const prepared = await prepareSiteDiaryPdf({
           projectId: view.projectId,
@@ -534,7 +539,7 @@ function SavedDiaryViewer() {
         if (!prepared.ok) {
           pdfReadyRef.current = null
           setPdfCacheState('error')
-          setPdfStatus(prepared.message || 'We couldn’t prepare the PDF.')
+          setPdfStatus(prepared.message || 'We couldn’t prepare the report.')
           return
         }
         const pdfFile = prepared.file instanceof File
@@ -551,10 +556,9 @@ function SavedDiaryViewer() {
           reportId: view.reportId,
         }
         setPdfCacheState('ready')
-        setPdfStatus('PDF ready — tap Share Report to open the share sheet.')
-        emitShareDiag('pdf-precache-ready', {
+        setPdfStatus('Report ready — tap Report Ready — Share Now to open the share sheet.')
+        emitShareDiag('pdf-prepare-on-demand-ready', {
           surface: 'saved-diary-view',
-          retry: true,
           elapsedMs: Date.now() - startedAt,
           fileName: pdfFile?.name || null,
           fileSize: pdfFile?.size ?? null,
@@ -563,13 +567,13 @@ function SavedDiaryViewer() {
       } catch (err) {
         if (gen !== pdfCacheGenRef.current) return
         setPdfCacheState('error')
-        setPdfStatus(err?.message || 'We couldn’t prepare the PDF.')
+        setPdfStatus(err?.message || 'We couldn’t prepare the report.')
       }
       return
     }
 
     if (pdfCacheState !== 'ready' || !pdfReadyRef.current?.ok) {
-      setPdfStatus('Still preparing the PDF. Wait until Share Report is ready, then tap once.')
+      setPdfStatus('Still preparing the report. Wait until Share Report is ready, then tap once.')
       return
     }
 
@@ -649,7 +653,6 @@ function SavedDiaryViewer() {
           setPdfStatus('')
           return
         }
-        // Native share is available — do NOT silent-download after a failed share.
         emitShareDiag('share-failed-no-download', {
           surface: 'saved-diary-view',
           shareErrorName: diag.errorName ?? null,
@@ -658,13 +661,12 @@ function SavedDiaryViewer() {
         })
         setPdfStatus(
           diag.errorName === 'NotAllowedError'
-            ? 'Sharing was blocked because the share gesture expired. Wait for Preparing PDF to finish, then tap Share Report once.'
+            ? 'Sharing was blocked because the share gesture expired. If the report was still preparing, wait until it is ready, then tap Share Report once.'
             : (shareResult.message || 'We couldn’t open the share sheet. Try again.'),
         )
         return
       }
 
-      // No file Web Share (typical desktop / insecure HTTP) — Save As / download only.
       emitShareDiag('download-fallback', {
         surface: 'saved-diary-view',
         reason: 'canSharePdfFile returned false',
@@ -678,7 +680,9 @@ function SavedDiaryViewer() {
         setPdfStatus(result.message || 'Could not save the PDF.')
         return
       }
-      if (result.cancelled) return
+      if (result.cancelled) {
+        return
+      }
       const insecure = typeof window !== 'undefined' && window.isSecureContext === false
       setPdfStatus(
         insecure
@@ -733,14 +737,16 @@ function SavedDiaryViewer() {
   }
 
   const actionsBusy = generatingPdf || deleting || basisBusy
-  const sharePreparing = pdfCacheState === 'preparing' || pdfCacheState === 'idle'
+  const sharePreparing = pdfCacheState === 'preparing'
   const shareLabel = sharePreparing
-    ? 'Preparing PDF…'
+    ? 'Preparing report…'
     : generatingPdf
       ? 'Sharing…'
       : pdfCacheState === 'error'
-        ? 'Prepare PDF Again'
-        : 'Share Report'
+        ? 'Prepare report again'
+        : pdfCacheState === 'ready'
+          ? 'Report Ready — Share Now'
+          : 'Share Report'
   const reportGroup = view.detailGroups.find((group) => group.key === 'report') || null
 
   return (
