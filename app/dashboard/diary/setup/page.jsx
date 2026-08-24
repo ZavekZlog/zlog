@@ -699,19 +699,17 @@ function SiteDiarySetupPage() {
         }
       }
 
-      // Persist the explicit name confirmed on setup — never invent from email.
-      try {
-        await persistSignedInAuthorProfile(supabase, {
-          authorName: continueForm.author,
-          authorRole: continueForm.authorRole || authorRole,
-        })
-      } catch {
-        // Profile persist is best-effort; diary continue already succeeded.
-      }
-
+      // Cover must be durable on the report before navigation (above). Author
+      // profile persist is best-effort and must not delay router.push.
       if (result.navigatedTo) {
         router.push(result.navigatedTo)
       }
+      void persistSignedInAuthorProfile(supabase, {
+        authorName: continueForm.author,
+        authorRole: continueForm.authorRole || authorRole,
+      }).catch(() => {
+        // Best-effort only; diary continue and navigation already succeeded.
+      })
       // Keep saving=true until route change unmounts this screen.
     } catch (err) {
       setError(err?.message || 'Could not continue to Site Diary')
