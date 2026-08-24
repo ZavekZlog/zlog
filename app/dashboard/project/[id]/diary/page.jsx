@@ -428,6 +428,8 @@ export default function SiteDiaryPage() {
   const saveNavTimerRef = useRef(null)
   const saveLockRef = useRef(false)
   const completingRef = useRef(false)
+  const shareReadyPdfRef = useRef(null)
+  const [shareReady, setShareReady] = useState(false)
   const [hydrateComplete, setHydrateComplete] = useState(false)
   const [autosaveStatus, setAutosaveStatus] = useState(null)
   const persistUiErrorRef = useRef('')
@@ -443,6 +445,8 @@ export default function SiteDiaryPage() {
   useEffect(() => {
     saveLockRef.current = false
     completingRef.current = false
+    shareReadyPdfRef.current = null
+    setShareReady(false)
     setSaving(false)
     setJustSaved(false)
     setShowSaveBanner(false)
@@ -1989,6 +1993,7 @@ export default function SiteDiaryPage() {
       projectId,
       saveLocked: saveLockRef.current,
       completing: completingRef.current,
+      shareReady: Boolean(shareReadyPdfRef.current?.file),
     })
 
     // Clear stale locks so Save is never silently no-op.
@@ -1997,7 +2002,7 @@ export default function SiteDiaryPage() {
       completingRef.current = false
     }
 
-    if (saveLockRef.current || justSaved || completingRef.current) {
+    if (!shareReadyPdfRef.current?.file && (saveLockRef.current || justSaved || completingRef.current)) {
       const blockMsg = justSaved || completingRef.current
         ? 'Save already completed for this attempt. Change a field or reopen the report.'
         : 'Save is already in progress.'
@@ -2007,6 +2012,124 @@ export default function SiteDiaryPage() {
         setError(blockMsg)
       })
       saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+      return
+    }
+
+    const failSave = (message) => {
+      diarySaveLog('fail', { message })
+      saveLockRef.current = false
+      completingRef.current = false
+      finalSaveInProgressRef.current = false
+      flushSync(() => {
+        setSaving(false)
+        setJustSaved(false)
+        setShowSaveBanner(false)
+        persistUiErrorRef.current = message
+        setAutosaveStatus(null)
+        setError(message)
+      })
+      saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+    }
+
+    const finishAfterSuccessfulShare = () => {
+      saveLockRef.current = false
+      completingRef.current = false
+      finalSaveInProgressRef.current = false
+      shareReadyPdfRef.current = null
+      setShareReady(false)
+      flushSync(() => {
+        setSaving(false)
+        setAutosaveStatus(null)
+        setError('')
+        persistUiErrorRef.current = ''
+      })
+      if (saveNavTimerRef.current) clearTimeout(saveNavTimerRef.current)
+      flushSync(() => {
+        setJustSaved(true)
+        setShowSaveBanner(false)
+      })
+      saveNavTimerRef.current = setTimeout(() => {
+        setJustSaved(false)
+        saveNavTimerRef.current = null
+      }, POST_SAVE_SHARE_DELAY_MS)
+      saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+    }
+
+    const sharePreparedFile = async (prepared) => {
+      const pdfFile = prepared.file instanceof File
+        ? prepared.file
+        : new File(
+          [prepared.blob],
+          prepared.fileName || 'Zlog-Site-Diary.pdf',
+          { type: 'application/pdf' },
+        )
+      const tapUserActivation = snapshotUserActivation()
+      const tapStartedAt = Date.now()
+      saveLockRef.current = true
+      flushSync(() => {
+        setSaving(true)
+        setError('')
+        persistUiErrorRef.current = ''
+      })
+      try {
+        // Do NOT silent-download. Second tap only — gesture still active.
+        if (canNativeShare()) {
+          const shareResult = await shareSiteDiaryPdfNative({
+            file: pdfFile,
+            title: prepared.title,
+            text: prepared.text,
+          })
+          const diag = shareResult.diagnostics || {}
+          emitShareDiag('share-run-summary', {
+            surface: 'live-diary',
+            fromCache: true,
+            tapUserActivationIsActive: tapUserActivation.isActive,
+            tapUserActivationHasBeenActive: tapUserActivation.hasBeenActive,
+            shareErrorName: diag.errorName ?? null,
+            fileReady: Boolean(pdfFile?.size > 0),
+            elapsedMsToShareAttempt: Date.now() - tapStartedAt,
+            shareOk: shareResult.ok,
+            shareAborted: Boolean(shareResult.aborted),
+          })
+          if (shareResult.ok) {
+            finishAfterSuccessfulShare()
+            return
+          }
+          failSave(
+            diag.errorName === 'NotAllowedError'
+              ? 'Sharing was blocked because the share gesture expired. Tap Report Ready — Share Now once.'
+              : (shareResult.message || 'We couldn’t open the share sheet. Try again.'),
+          )
+          return
+        }
+        const downloaded = await downloadSiteDiaryPdf({
+          blob: prepared.blob,
+          fileName: prepared.fileName,
+        })
+        if (!downloaded.ok && !downloaded.cancelled) {
+          failSave(downloaded.message || 'We couldn’t share the PDF. Try again.')
+          return
+        }
+        if (downloaded.cancelled) {
+          saveLockRef.current = false
+          completingRef.current = false
+          finalSaveInProgressRef.current = false
+          flushSync(() => {
+            setSaving(false)
+            setJustSaved(false)
+            setShowSaveBanner(false)
+          })
+          return
+        }
+        finishAfterSuccessfulShare()
+      } catch (err) {
+        failSave(err?.message || 'We couldn’t share the PDF. Try again.')
+      }
+    }
+
+    // Second tap — native share from the already-prepared file only (no PDF prepare).
+    if (shareReadyPdfRef.current?.file && !saving) {
+      await sharePreparedFile(shareReadyPdfRef.current)
       return
     }
 
@@ -2030,7 +2153,9 @@ export default function SiteDiaryPage() {
       projectId,
       userActivation: tapUserActivation,
     })
+    shareReadyPdfRef.current = null
     flushSync(() => {
+      setShareReady(false)
       setSaving(true)
       setJustSaved(false)
       setShowSaveBanner(false)
@@ -2038,44 +2163,6 @@ export default function SiteDiaryPage() {
       setAutosaveStatus(null)
       setError('')
     })
-
-    const failSave = (message) => {
-      diarySaveLog('fail', { message })
-      saveLockRef.current = false
-      completingRef.current = false
-      finalSaveInProgressRef.current = false
-      flushSync(() => {
-        setSaving(false)
-        setJustSaved(false)
-        setShowSaveBanner(false)
-        persistUiErrorRef.current = message
-        setAutosaveStatus(null)
-        setError(message)
-      })
-      saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
-    }
-
-    const finishAfterSuccessfulShare = () => {
-      saveLockRef.current = false
-      completingRef.current = false
-      finalSaveInProgressRef.current = false
-      flushSync(() => {
-        setSaving(false)
-        setAutosaveStatus(null)
-        setError('')
-        persistUiErrorRef.current = ''
-      })
-      if (saveNavTimerRef.current) clearTimeout(saveNavTimerRef.current)
-      flushSync(() => {
-        setJustSaved(true)
-        setShowSaveBanner(false)
-      })
-      saveNavTimerRef.current = setTimeout(() => {
-        setJustSaved(false)
-        saveNavTimerRef.current = null
-      }, POST_SAVE_SHARE_DELAY_MS)
-      saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
-    }
 
     try {
       if (!editingReportId) {
@@ -2296,8 +2383,8 @@ export default function SiteDiaryPage() {
         return
       }
 
-      // Persist first, then build PDF and open native share on THIS tap.
-      // Do not navigate to a second screen that requires another tap.
+      // Persist first, then prepare the PDF on this tap. Native share waits for
+      // a fresh second tap so Android user activation stays live.
       if (requiredCoverPath) {
         const keepPreview = coverPhotoRef.current?.preview || null
         setCoverPhoto(coverPhotoStateFromSaved(requiredCoverPath, keepPreview))
@@ -2338,93 +2425,26 @@ export default function SiteDiaryPage() {
         fileSize: prepared.file?.size ?? prepared.blob?.size ?? null,
         hasShareApi: canNativeShare(),
       })
-
-      // Diagnostic path: always attempt native share when the API exists.
-      // Do NOT silent-download. Do NOT prompt for a second tap yet — prove activation first.
-      if (canNativeShare()) {
-        const shareResult = await shareSiteDiaryPdfNative({
-          file: prepared.file,
-          title: prepared.title,
-          text: prepared.text,
-        })
-        console.info('[zlog:share-diag] share attempt result', {
-          ok: shareResult.ok,
-          aborted: Boolean(shareResult.aborted),
-          reason: shareResult.reason || null,
-          diagnostics: shareResult.diagnostics || null,
-          elapsedMsSinceTap: Date.now() - tapStartedAt,
-          tapUserActivation,
-        })
-        const diag = shareResult.diagnostics || {}
-        const elapsedMsToShareAttempt = Date.now() - tapStartedAt
-        emitShareDiag('share-run-summary', {
-          tapUserActivationIsActive: tapUserActivation.isActive,
-          tapUserActivationHasBeenActive: tapUserActivation.hasBeenActive,
-          elapsedMsToPdfReady,
-          preShareUserActivationIsActive: diag.userActivation?.isActive ?? preShareUserActivation.isActive,
-          preShareUserActivationHasBeenActive:
-            diag.userActivation?.hasBeenActive ?? preShareUserActivation.hasBeenActive,
-          canShareFiles: diag.canShareFiles ?? null,
-          shareErrorName: diag.errorName ?? null,
-          shareErrorMessage: diag.errorMessage ?? null,
-          fileReady: Boolean(prepared.file?.size > 0),
-          fileName: prepared.file?.name || prepared.fileName || null,
-          fileSize: prepared.file?.size ?? prepared.blob?.size ?? null,
-          elapsedMsToShareAttempt,
-          shareOk: shareResult.ok,
-          shareAborted: Boolean(shareResult.aborted),
-          shareReason: shareResult.reason || null,
-        })
-        if (shareResult.ok) {
-          finishAfterSuccessfulShare()
-          return
-        }
-        failSave(
-          [
-            'Native share did not open after PDF preparation.',
-            diag.errorName ? `Error: ${diag.errorName}.` : null,
-            diag.userActivation?.isActive === false
-              ? 'User activation was inactive when share ran (likely expired during PDF prep).'
-              : null,
-            'Diagnostics were sent to the Cursor terminal (ZLOG SHARE DIAG).',
-          ]
-            .filter(Boolean)
-            .join(' '),
+      const pdfFile = prepared.file instanceof File
+        ? prepared.file
+        : new File(
+          [prepared.blob],
+          prepared.fileName || 'Zlog-Site-Diary.pdf',
+          { type: 'application/pdf' },
         )
-        return
+      shareReadyPdfRef.current = {
+        ...prepared,
+        file: pdfFile,
       }
-
-      // Devices with no Web Share API (typical desktop) — Save As / download only.
-      emitShareDiag('download-fallback', {
-        tapUserActivationIsActive: tapUserActivation.isActive,
-        tapUserActivationHasBeenActive: tapUserActivation.hasBeenActive,
-        elapsedMsToPdfReady,
-        fileReady: Boolean(prepared.file?.size > 0),
-        fileName: prepared.file?.name || prepared.fileName || null,
-        fileSize: prepared.file?.size ?? prepared.blob?.size ?? null,
-        elapsedMsToShareAttempt: Date.now() - tapStartedAt,
-        reason: 'canNativeShare() returned false',
+      saveLockRef.current = false
+      completingRef.current = false
+      finalSaveInProgressRef.current = false
+      flushSync(() => {
+        setSaving(false)
+        setShareReady(true)
+        setError('Report ready — tap Report Ready — Share Now to open the share sheet.')
       })
-      const downloaded = await downloadSiteDiaryPdf({
-        blob: prepared.blob,
-        fileName: prepared.fileName,
-      })
-      if (!downloaded.ok && !downloaded.cancelled) {
-        failSave(downloaded.message || 'We couldn’t share the PDF. Try again.')
-        return
-      }
-      if (downloaded.cancelled) {
-        saveLockRef.current = false
-        completingRef.current = false
-        finalSaveInProgressRef.current = false
-        flushSync(() => {
-          setSaving(false)
-          setJustSaved(false)
-          setShowSaveBanner(false)
-        })
-        return
-      }
-      finishAfterSuccessfulShare()
+      return
     } catch (err) {
       const message =
         err instanceof DiarySaveError
@@ -3371,10 +3391,10 @@ export default function SiteDiaryPage() {
                       flexShrink: 0,
                     }}
                   />
-                  Preparing PDF…
+                  Preparing report…
                 </>
               ) : (
-                'Save & Share'
+                shareReady ? 'Report Ready — Share Now' : 'Save & Share'
               )}
             </span>
           </PrimaryCTA>
