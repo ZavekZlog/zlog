@@ -2442,7 +2442,8 @@ export default function SiteDiaryPage() {
       flushSync(() => {
         setSaving(false)
         setShareReady(true)
-        setError('Report ready — tap Report Ready — Share Now to open the share sheet.')
+        setError('')
+        persistUiErrorRef.current = ''
       })
       return
     } catch (err) {
@@ -3358,6 +3359,21 @@ export default function SiteDiaryPage() {
               }}
             >
               {autosaveStatusMessage(autosaveStatus)}
+            </p>
+          ) : null}
+          {shareReady && !saving && !error ? (
+            <p
+              role="status"
+              aria-live="polite"
+              style={{
+                margin: '0 0 10px',
+                fontSize: 13,
+                lineHeight: 1.45,
+                fontWeight: 600,
+                color: '#4ade80',
+              }}
+            >
+              ✓ Report ready
             </p>
           ) : null}
           <PrimaryCTA
