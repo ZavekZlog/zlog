@@ -691,14 +691,40 @@ export default function SiteDiaryPage() {
       }, DIARY_WORKBENCH_LOAD_TIMEOUT_MS)
 
       try {
+        // Continue landings (`?compose=1`) paint the diary once report + project +
+        // form fields are applied. Selector lists and signed-URL previews finish after.
+        const composeFlag = String(composeQuery || '').toLowerCase()
+        const progressiveCompose =
+          composeFlag === '1' || composeFlag === 'true' || composeFlag === 'compose'
+
         const proj = await fetchProjectRowForEditHydrate(supabase, projectId)
-        const { data: allProjects } = await supabase
-          .from('projects')
-          .select(diaryProjectSelectorSelectColumns())
-          .order('name')
+
+        const allProjectsPromise = progressiveCompose
+          ? supabase
+            .from('projects')
+            .select(diaryProjectSelectorSelectColumns())
+            .order('name')
+          : null
+        const recentDiariesPromise = progressiveCompose
+          ? supabase
+            .from('daily_reports')
+            .select('id, report_date')
+            .eq('project_id', projectId)
+            .order('report_date', { ascending: false })
+            .limit(5)
+            .eq('is_draft', false)
+          : null
+
+        if (!progressiveCompose) {
+          const { data: allProjects } = await supabase
+            .from('projects')
+            .select(diaryProjectSelectorSelectColumns())
+            .order('name')
+          if (cancelled) return
+          setProjects(allProjects || [])
+        }
         if (cancelled) return
         setProject(proj)
-        setProjects(allProjects || [])
 
         const today = todayIsoDate()
         setReportDate(today)
@@ -745,6 +771,17 @@ export default function SiteDiaryPage() {
           setCoverPhoto(coverPhotoStateFromSaved(storagePath, preview))
         }
 
+        const applyCoverPathOnly = (storagePath) => {
+          if (!storagePath) {
+            loadedCoverPathRef.current = null
+            setCoverPhoto(null)
+            return
+          }
+          loadedCoverPathRef.current = storagePath
+          coverRemovedRef.current = false
+          setCoverPhoto(coverPhotoStateFromSaved(storagePath, null))
+        }
+
         const applySignature = async (storagePath) => {
           if (!storagePath) {
             setSignature(null)
@@ -761,6 +798,46 @@ export default function SiteDiaryPage() {
           setSignature({ file: null, preview, storagePath })
           setSignatureMode('carried')
         }
+
+        const applySignaturePathOnly = (storagePath) => {
+          if (!storagePath) {
+            setSignature(null)
+            setSignatureMode('draw')
+            return
+          }
+          setSignature({ file: null, preview: null, storagePath })
+          setSignatureMode('carried')
+        }
+
+        const mapPhotoRowWithoutPreview = (p, index) => ({
+          key: makeUuid(),
+          file: null,
+          preview: null,
+          storagePath: p.url,
+          caption: p.caption || '',
+          sequence_number: p.sequence ?? index + 1,
+          layout: p.layout || 'grid4',
+          location: p.location || '',
+          category: p.category || null,
+          annotations: p.annotations || null,
+          overlayPath: p.overlay_path || null,
+          overlayPreview: null,
+          overlayDirty: false,
+          rotationDegrees: p.rotation_degrees ?? 0,
+          assignedTo: p.assigned_to || '',
+        })
+
+        const signReportPhotoRows = async (rows) => Promise.all((rows || []).map(async (p, index) => {
+          const preview = await signedUrlForPath(supabase, p.url)
+          const overlayPreview = p.overlay_path
+            ? await signedUrlForPath(supabase, p.overlay_path)
+            : null
+          return {
+            ...mapPhotoRowWithoutPreview(p, index),
+            preview,
+            overlayPreview,
+          }
+        }))
 
         const { data: existing, error: existingError } = await withTimeout(
           supabase
@@ -801,9 +878,13 @@ export default function SiteDiaryPage() {
           reportExtras: extras,
         })
         setProjectReference(editHydration.projectReference)
-        // Apply cover before optional logo/photos awaits so edit mode always has path.
-        await applyCover(editHydration.coverStoragePath)
-        if (cancelled) return
+        // Path first so compose can paint; signed preview can finish after first paint.
+        if (progressiveCompose) {
+          applyCoverPathOnly(editHydration.coverStoragePath)
+        } else {
+          await applyCover(editHydration.coverStoragePath)
+          if (cancelled) return
+        }
 
         let labour
         let plant
@@ -869,7 +950,7 @@ export default function SiteDiaryPage() {
         setCompanyReportingFor(existing.company_reporting_for || '')
         setCreatorName(hydrateAuthorName(existing))
         setCreatorRole(hydrateAuthorRole(existing))
-        {
+        if (!progressiveCompose) {
           const logoPath = existing.brand_logo_url || null
           if (logoPath) {
             const preview = await signedUrlForPath(supabase, logoPath)
@@ -877,6 +958,8 @@ export default function SiteDiaryPage() {
           } else {
             setSetupLogoPreview(null)
           }
+        } else {
+          setSetupLogoPreview(null)
         }
         setEquipmentHireRows(equipmentHireFromDb(existing.equipment_hire))
         setHsIncidents(hsIncidentsFromDb(existing.hs_incidents))
@@ -900,8 +983,12 @@ export default function SiteDiaryPage() {
           // Do not invent a wipe payload — null means omit branding keys on save.
           setBrandingSelection(null)
         }
-        await applySignature(existing.signature_url)
-        if (cancelled) return
+        if (progressiveCompose) {
+          applySignaturePathOnly(existing.signature_url)
+        } else {
+          await applySignature(existing.signature_url)
+          if (cancelled) return
+        }
 
         if (labour?.length) {
           setLabourRows(labour.map((row) => ({
@@ -917,30 +1004,16 @@ export default function SiteDiaryPage() {
         }
         // Always replace plant rows from this report only (never merge prior diary state).
         setPlantRows(hydratePlantFormRows(plant, makeUuid))
-        if (reportPhotos?.length) {
-          const withPreview = await Promise.all(reportPhotos.map(async (p, index) => {
-            const preview = await signedUrlForPath(supabase, p.url)
-            const overlayPreview = p.overlay_path
-              ? await signedUrlForPath(supabase, p.overlay_path)
-              : null
-            return {
-              key: makeUuid(),
-              file: null,
-              preview,
-              storagePath: p.url,
-              caption: p.caption || '',
-              sequence_number: p.sequence ?? index + 1,
-              layout: p.layout || 'grid4',
-              location: p.location || '',
-              category: p.category || null,
-              annotations: p.annotations || null,
-              overlayPath: p.overlay_path || null,
-              overlayPreview,
-              overlayDirty: false,
-              rotationDegrees: p.rotation_degrees ?? 0,
-              assignedTo: p.assigned_to || '',
-            }
-          }))
+        if (progressiveCompose) {
+          if (reportPhotos?.length) {
+            const withoutPreview = reportPhotos.map(mapPhotoRowWithoutPreview)
+            setPhotos(withoutPreview)
+            setLocationWalk(groupPhotosByArea(withoutPreview))
+          } else {
+            setLocationWalk([])
+          }
+        } else if (reportPhotos?.length) {
+          const withPreview = await signReportPhotoRows(reportPhotos)
           if (cancelled) return
           setPhotos(withPreview)
           setLocationWalk(groupPhotosByArea(withPreview))
@@ -948,23 +1021,6 @@ export default function SiteDiaryPage() {
           setLocationWalk([])
         }
 
-        let logsQuery = supabase
-          .from('daily_reports')
-          .select('id, report_date')
-          .eq('project_id', projectId)
-          .order('report_date', { ascending: false })
-          .limit(5)
-        let { data: logs, error: logsError } = await logsQuery.eq('is_draft', false)
-        if (logsError && /is_draft/i.test(logsError.message || '')) {
-          const fallback = await supabase
-            .from('daily_reports')
-            .select('id, report_date')
-            .eq('project_id', projectId)
-            .order('report_date', { ascending: false })
-            .limit(5)
-          logs = fallback.data
-        }
-        if (!cancelled) setRecentDiaries(logs || [])
         try {
           ackedSnapshotRef.current = snapshotFromLiveRow(existing)
         } catch (snapErr) {
@@ -972,9 +1028,90 @@ export default function SiteDiaryPage() {
           ackedSnapshotRef.current = null
         }
         suppressAutosaveRef.current = true
-        if (commit()) {
-          setLoadDiagnostic('')
-          setHydrateComplete(true)
+
+        if (progressiveCompose) {
+          // First usable paint — secondary media/selector work continues below.
+          if (commit()) {
+            setLoadDiagnostic('')
+            setLoading(false)
+          }
+
+          if (allProjectsPromise) {
+            const { data: allProjects } = await allProjectsPromise
+            if (!cancelled && commit()) setProjects(allProjects || [])
+          }
+
+          if (editHydration.coverStoragePath) {
+            const preview = await resolveCoverPhotoPreviewUrl(
+              supabase,
+              editHydration.coverStoragePath,
+            )
+            if (!cancelled && commit()) {
+              setCoverPhoto(coverPhotoStateFromSaved(editHydration.coverStoragePath, preview))
+            }
+          }
+
+          {
+            const logoPath = existing.brand_logo_url || null
+            if (logoPath) {
+              const preview = await signedUrlForPath(supabase, logoPath)
+              if (!cancelled && commit()) setSetupLogoPreview(preview)
+            }
+          }
+
+          await applySignature(existing.signature_url)
+          if (cancelled) return
+
+          if (reportPhotos?.length) {
+            const withPreview = await signReportPhotoRows(reportPhotos)
+            if (!cancelled && commit()) {
+              setPhotos(withPreview)
+              setLocationWalk(groupPhotosByArea(withPreview))
+            }
+          }
+
+          let logs = null
+          if (recentDiariesPromise) {
+            const primary = await recentDiariesPromise
+            logs = primary.data
+            if (primary.error && /is_draft/i.test(primary.error.message || '')) {
+              const fallback = await supabase
+                .from('daily_reports')
+                .select('id, report_date')
+                .eq('project_id', projectId)
+                .order('report_date', { ascending: false })
+                .limit(5)
+              logs = fallback.data
+            }
+          }
+          if (!cancelled && commit()) setRecentDiaries(logs || [])
+
+          if (commit()) {
+            setLoadDiagnostic('')
+            setHydrateComplete(true)
+          }
+        } else {
+          let logsQuery = supabase
+            .from('daily_reports')
+            .select('id, report_date')
+            .eq('project_id', projectId)
+            .order('report_date', { ascending: false })
+            .limit(5)
+          let { data: logs, error: logsError } = await logsQuery.eq('is_draft', false)
+          if (logsError && /is_draft/i.test(logsError.message || '')) {
+            const fallback = await supabase
+              .from('daily_reports')
+              .select('id, report_date')
+              .eq('project_id', projectId)
+              .order('report_date', { ascending: false })
+              .limit(5)
+            logs = fallback.data
+          }
+          if (!cancelled) setRecentDiaries(logs || [])
+          if (commit()) {
+            setLoadDiagnostic('')
+            setHydrateComplete(true)
+          }
         }
       } catch (err) {
         failLoad('exception', err)
@@ -985,7 +1122,7 @@ export default function SiteDiaryPage() {
     }
     load()
     return () => { cancelled = true }
-  }, [projectId, editingReportId, formReloadToken, supabase])
+  }, [projectId, editingReportId, formReloadToken, composeQuery, supabase])
 
   const autosavePayload = useMemo(() => buildDiaryAutosavePayload({
     weather,
