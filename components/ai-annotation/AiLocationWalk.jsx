@@ -28,14 +28,15 @@ import {
 } from '@/lib/premium-ui'
 import {
   collectRecentAreaNames,
-  createAreaGroup,
   createAreaPhoto,
   firstIncompletePhoto,
   flattenAreaGroups,
   layoutToPerPage,
   moveItem,
+  openSavedAreaForEdit,
   perPageToLayout,
 } from '@/lib/ai-annotation/area-groups'
+import { commitUnsavedPhotoAreaToWalk } from '@/lib/photo-workspace/commit-unsaved-area'
 import { normalizeRotationDegrees } from '@/lib/diary-pdf-layout'
 
 /** @typedef {'create' | 'after_save' | 'review'} WalkPhase */
@@ -174,6 +175,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   const [viewer, setViewer] = useState(null)
   const [walkError, setWalkError] = useState('')
   const sectionRef = useRef(null)
+  const editorRef = useRef(null)
 
   // Suggestions come from this diary's own saved areas only. A previous diary must
   // never seed the Work Area Name field or its shortcuts.
@@ -269,69 +271,88 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     setCapturing(false)
   }
 
-  const saveArea = () => {
-    if (!validateSave()) return
-    const name = nameDraft.trim()
-    const description = descriptionDraft.trim()
-    const layout = perPageToLayout(perPageDraft)
-
-    const withGroupSaveState = (photos) => (photos || []).map((photo) => ({
-      ...photo,
-      saveState: 'linked_to_group',
-    }))
-
-    let saved
-    if (isEditing && editingGroupId) {
-      updateWalk((prev) => prev.map((g) => (
-        g.id === editingGroupId
-          ? {
-              ...g,
-              areaName: name,
-              description,
-              layout,
-              completionState: 'saved',
-              photos: withGroupSaveState(g.photos),
-            }
-          : g
-      )))
-      saved = walkRef.current.find((g) => g.id === editingGroupId)
-    } else {
-      const group = {
-        ...createAreaGroup(name, perPageDraft),
-        layout,
-        description,
-        completionState: 'saved',
-        photos: withGroupSaveState(draftPhotos),
-      }
-      updateWalk((prev) => [...prev, group])
-      saved = group
-      setDraftPhotos([])
-    }
-
-    if (!saved) return
-
+  const applyCommittedArea = useCallback((result) => {
+    if (!result?.ok || !result.committed || !result.saved) return false
+    walkRef.current = result.locationWalk
+    onChange(result.locationWalk)
+    if (result.clearedDraft) setDraftPhotos([])
     setLastSaved({
-      name: saved.areaName,
-      count: (saved.photos || []).length,
-      perPage: layoutToPerPage(saved.layout),
+      name: result.saved.areaName,
+      count: (result.saved.photos || []).length,
+      perPage: layoutToPerPage(result.saved.layout),
     })
     setEditingGroupId(null)
     setDescriptionDraft('')
     clearFieldErrors()
     setPhase('after_save')
-    onAreaSaved?.(saved)
+    onAreaSaved?.(result.saved)
+    return true
+  }, [onAreaSaved, onChange])
+
+  const buildCommitInput = useCallback(() => ({
+    phase,
+    locationWalk: walkRef.current,
+    draftPhotos,
+    nameDraft,
+    descriptionDraft,
+    perPageDraft,
+    editingGroupId,
+    editingGroupPhotos: editingGroup?.photos || null,
+  }), [
+    phase,
+    draftPhotos,
+    nameDraft,
+    descriptionDraft,
+    perPageDraft,
+    editingGroupId,
+    editingGroup,
+  ])
+
+  const saveArea = () => {
+    if (!validateSave()) return
+    const result = commitUnsavedPhotoAreaToWalk(buildCommitInput())
+    if (!result.ok) {
+      if (result.reason === 'missing-name') setNameError(copy.enterNameError)
+      if (result.reason === 'missing-layout') setLayoutError('Choose a photo layout')
+      if (result.reason === 'missing-photos') setPhotoError('Add at least one photo')
+      return
+    }
+    if (result.committed) applyCommittedArea(result)
   }
 
+  /**
+   * Save & Share entry: commit the current unsaved area with the same Save Area
+   * logic, or block when the draft is incomplete. Returns the walk Share must use.
+   */
+  const commitUnsavedAreaForShare = useCallback(() => {
+    const result = commitUnsavedPhotoAreaToWalk(buildCommitInput())
+    if (!result.ok) {
+      if (result.reason === 'missing-name') setNameError(copy.enterNameError)
+      if (result.reason === 'missing-layout') setLayoutError('Choose a photo layout')
+      if (result.reason === 'missing-photos') setPhotoError('Add at least one photo')
+      setPhase('create')
+      return result
+    }
+    if (result.committed) applyCommittedArea(result)
+    return result
+  }, [applyCommittedArea, buildCommitInput, copy.enterNameError])
+
   const editGroup = (groupId) => {
-    const group = locationWalk.find((g) => g.id === groupId)
-    if (!group) return
-    setEditingGroupId(groupId)
-    setNameDraft(group.areaName)
-    setDescriptionDraft(group.description || '')
-    setPerPageDraft(layoutToPerPage(group.layout))
+    // Prefer walkRef so Edit resolves against the latest hydrated groups
+    // (progressive sign can replace value between tap and handler).
+    const opened = openSavedAreaForEdit(walkRef.current, groupId)
+      || openSavedAreaForEdit(locationWalk, groupId)
+    if (!opened) return
+    setEditingGroupId(opened.groupId)
+    setNameDraft(opened.nameDraft)
+    setDescriptionDraft(opened.descriptionDraft)
+    setPerPageDraft(opened.perPageDraft)
     setDraftPhotos([])
     clearFieldErrors()
     setPhase('create')
+    requestAnimationFrame(() => {
+      editorRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    })
   }
 
   // Warn before leave/refresh when create-flow has unsaved local work (online-first; no IndexedDB).
@@ -373,7 +394,8 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
 
   useImperativeHandle(ref, () => ({
     openFirstIncompletePhoto,
-  }), [openFirstIncompletePhoto])
+    commitUnsavedAreaForShare,
+  }), [openFirstIncompletePhoto, commitUnsavedAreaForShare])
 
   const closeViewer = () => {
     const scrollY = viewer?.scrollY || 0
@@ -533,23 +555,10 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
           <style>{`@keyframes zlog-spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       ) : null}
-      {/* Saved areas always visible — never hide stored data behind confirmation */}
-      {locationWalk.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-          {locationWalk.map((group) => (
-            <SavedAreaCard
-              key={group.id}
-              group={group}
-              globalOffset={areaOffset(group.id)}
-              onEdit={() => editGroup(group.id)}
-              onOpenPhoto={(pi) => openViewer(group.id, pi)}
-            />
-          ))}
-        </div>
-      )}
 
-      {phase === 'create' && (
-        <div>
+      {/* While editing a saved area, open the composer first and hide that card. */}
+      {phase === 'create' && isEditing ? (
+        <div ref={editorRef} data-area-editor="saved">
           <div style={{ ...labelStyle, marginBottom: 8 }}>{copy.groupNameLabel}</div>
           <input
             type="text"
@@ -608,17 +617,17 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
           {activePhotos.length > 0 ? (
             <CaptureThumbnailGrid
               photos={activePhotos}
-              numberOffset={isEditing ? areaOffset(editingGroupId) : draftPhotoOffset}
-              onOpen={(pi) => openViewer(isEditing ? editingGroupId : '__draft__', pi)}
-              onDelete={(photoId) => removePhoto(isEditing ? editingGroupId : '__draft__', photoId)}
-              onRotate={(photoId) => rotatePhoto(isEditing ? editingGroupId : '__draft__', photoId)}
+              numberOffset={areaOffset(editingGroupId)}
+              onOpen={(pi) => openViewer(editingGroupId, pi)}
+              onDelete={(photoId) => removePhoto(editingGroupId, photoId)}
+              onRotate={(photoId) => rotatePhoto(editingGroupId, photoId)}
               onCaptionChange={(photoId, text) =>
-                patchPhoto(isEditing ? editingGroupId : '__draft__', photoId, {
+                patchPhoto(editingGroupId, photoId, {
                   acceptedDescription: text,
                 })
               }
               onAssignedToChange={(photoId, text) =>
-                patchPhoto(isEditing ? editingGroupId : '__draft__', photoId, {
+                patchPhoto(editingGroupId, photoId, {
                   assignedTo: text,
                 })
               }
@@ -626,38 +635,161 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
           ) : null}
           {photoError ? <p style={fieldErrorStyle}>{photoError}</p> : null}
 
-          {isEditing ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
-              <SecondaryButton
-                type="button"
-                disabled={editingGroupIndex <= 0}
-                onClick={() => updateWalk((prev) => moveItem(prev, editingGroupIndex, editingGroupIndex - 1))}
-              >
-                Move area up
-              </SecondaryButton>
-              <SecondaryButton
-                type="button"
-                disabled={editingGroupIndex < 0 || editingGroupIndex >= locationWalk.length - 1}
-                onClick={() => updateWalk((prev) => moveItem(prev, editingGroupIndex, editingGroupIndex + 1))}
-              >
-                Move area down
-              </SecondaryButton>
-              <SecondaryButton
-                type="button"
-                onClick={() => {
-                  updateWalk((prev) => prev.filter((g) => g.id !== editingGroupId))
-                  setEditingGroupId(null)
-                  setNameDraft('')
-                  setDescriptionDraft('')
-                  setDraftPhotos([])
-                  clearFieldErrors()
-                  setPhase('review')
-                }}
-              >
-                Delete area
-              </SecondaryButton>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+            <SecondaryButton
+              type="button"
+              disabled={editingGroupIndex <= 0}
+              onClick={() => updateWalk((prev) => moveItem(prev, editingGroupIndex, editingGroupIndex - 1))}
+            >
+              Move area up
+            </SecondaryButton>
+            <SecondaryButton
+              type="button"
+              disabled={editingGroupIndex < 0 || editingGroupIndex >= locationWalk.length - 1}
+              onClick={() => updateWalk((prev) => moveItem(prev, editingGroupIndex, editingGroupIndex + 1))}
+            >
+              Move area down
+            </SecondaryButton>
+            <SecondaryButton
+              type="button"
+              onClick={() => {
+                updateWalk((prev) => prev.filter((g) => g.id !== editingGroupId))
+                setEditingGroupId(null)
+                setNameDraft('')
+                setDescriptionDraft('')
+                setDraftPhotos([])
+                clearFieldErrors()
+                setPhase('review')
+              }}
+            >
+              Delete area
+            </SecondaryButton>
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <PrimaryCTA
+              type="button"
+              surface="workbench"
+              accent={accent}
+              disabled={capturing}
+              onClick={saveArea}
+              style={primaryTap}
+            >
+              {copy.saveGroup}
+            </PrimaryCTA>
+          </div>
+
+          <div style={{ marginTop: 10, marginBottom: 16 }}>
+            <SecondaryButton
+              type="button"
+              onClick={() => {
+                setEditingGroupId(null)
+                setDraftPhotos([])
+                setDescriptionDraft('')
+                clearFieldErrors()
+                setPhase('review')
+              }}
+            >
+              {copy.cancelGroup}
+            </SecondaryButton>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Saved areas always visible — never hide stored data behind confirmation */}
+      {locationWalk.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+          {locationWalk
+            .filter((group) => !(isEditing && group.id === editingGroupId))
+            .map((group) => (
+            <SavedAreaCard
+              key={group.id}
+              group={group}
+              globalOffset={areaOffset(group.id)}
+              onEdit={() => editGroup(group.id)}
+              onOpenPhoto={(pi) => openViewer(group.id, pi)}
+            />
+          ))}
+        </div>
+      )}
+
+      {phase === 'create' && !isEditing && (
+        <div ref={editorRef} data-area-editor="new">
+          <div style={{ ...labelStyle, marginBottom: 8 }}>{copy.groupNameLabel}</div>
+          <input
+            type="text"
+            value={nameDraft}
+            onChange={(e) => {
+              setNameDraft(e.target.value)
+              if (e.target.value.trim()) setNameError('')
+            }}
+            placeholder={copy.groupNamePlaceholder}
+            style={{ ...inputStyle, marginBottom: nameError ? 0 : 14, minHeight: 48 }}
+            autoComplete="off"
+          />
+          {nameError ? <p style={{ ...fieldErrorStyle, marginBottom: 12 }}>{nameError}</p> : null}
+
+          {recentAreas.length > 0 ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+              {recentAreas.map((name) => (
+                <SecondaryButton key={name} type="button" onClick={() => { setNameDraft(name); setNameError('') }}>
+                  {name}
+                </SecondaryButton>
+              ))}
             </div>
           ) : null}
+
+          <div style={{ ...labelStyle, marginBottom: 8 }}>{copy.groupDescriptionLabel}</div>
+          <textarea
+            value={descriptionDraft}
+            onChange={(e) => setDescriptionDraft(e.target.value)}
+            placeholder={copy.groupDescriptionPlaceholder}
+            rows={3}
+            style={{ ...inputStyle, marginBottom: 14, minHeight: 72, resize: 'vertical' }}
+          />
+
+          <div style={{ ...labelStyle, marginBottom: 8 }}>Photos per page</div>
+          <PhotosPerPagePicker
+            layout={perPageToLayout(perPageDraft)}
+            onChange={(n) => {
+              setPerPageDraft(n)
+              setLayoutError('')
+            }}
+            disabled={capturing}
+          />
+          {layoutError ? <p style={fieldErrorStyle}>{layoutError}</p> : null}
+
+          <div style={{ marginTop: 16 }}>
+            <ImageSourceButtons
+              onFiles={(files) => handleFiles(files, null)}
+              multiple
+              disabled={capturing}
+              stacked
+              cameraLabel="Take Photo"
+              galleryLabel="Upload 1 or More Photos"
+            />
+          </div>
+
+          {activePhotos.length > 0 ? (
+            <CaptureThumbnailGrid
+              photos={activePhotos}
+              numberOffset={draftPhotoOffset}
+              onOpen={(pi) => openViewer('__draft__', pi)}
+              onDelete={(photoId) => removePhoto('__draft__', photoId)}
+              onRotate={(photoId) => rotatePhoto('__draft__', photoId)}
+              onCaptionChange={(photoId, text) =>
+                patchPhoto('__draft__', photoId, {
+                  acceptedDescription: text,
+                })
+              }
+              onAssignedToChange={(photoId, text) =>
+                patchPhoto('__draft__', photoId, {
+                  assignedTo: text,
+                })
+              }
+            />
+          ) : null}
+          {photoError ? <p style={fieldErrorStyle}>{photoError}</p> : null}
 
           <div style={{ marginTop: 18 }}>
             <PrimaryCTA

@@ -4,7 +4,8 @@ import { Document, Page, Text, View, Image, Link, Font, StyleSheet } from '@reac
 import { PdfHeader, PdfFooter } from '@/components/pdf/PdfHeader'
 import { computeProjectDay, formatProjectDateDisplay } from '@/lib/project-day'
 import {
-  buildPhotoSchedule,
+  buildPhotoAreaSchedule,
+  photographicRecordAreaTitle,
   photoReferenceLabel,
   photoTileAssignedToLine,
   photoTileCaption,
@@ -28,6 +29,7 @@ import {
   computePhotoFrameGeometry,
   paginatePdfPhotos,
   photoGridForTier,
+  photoPageGridContentHeight,
   photoRowBandHeight,
   resolvePdfAccent,
 } from '@/lib/diary-pdf-layout'
@@ -416,6 +418,17 @@ const styles = StyleSheet.create({
   sectionBanner: {
     width: '100%',
     marginTop: 14,
+    paddingVertical: 4.5,
+    paddingHorizontal: TABLE_PAD_X,
+    justifyContent: 'center',
+  },
+  // Photo-area pages are already a fresh sheet below chrome — no prior
+  // section to separate from. Drop the record-stream top margin so the
+  // banner + fixed photo grid stay inside one page (no blank overflow page).
+  areaPhotoSectionBanner: {
+    width: '100%',
+    marginTop: 0,
+    marginBottom: 8,
     paddingVertical: 4.5,
     paddingHorizontal: TABLE_PAD_X,
     justifyContent: 'center',
@@ -998,8 +1011,8 @@ function photoSrc(photo) {
  * column count, so a short page keeps the same cells and simply leaves the
  * trailing ones empty.
  */
-function PhotoGrid({ photos, cols, rows, brandColor }) {
-  const { frameW, frameH } = computePhotoFrameGeometry({ cols, rows })
+function PhotoGrid({ photos, cols, rows, brandColor, contentH = PDF_CONTENT_H }) {
+  const { frameW, frameH } = computePhotoFrameGeometry({ cols, rows, contentH })
   const chunks = []
   for (let index = 0; index < photos.length; index += cols) {
     chunks.push(photos.slice(index, index + cols))
@@ -1044,31 +1057,96 @@ function PhotoGrid({ photos, cols, rows, brandColor }) {
   )
 }
 
+/**
+ * In-page area name on a dedicated photographic page.
+ *
+ * Never use record-stream minPresenceAhead, and never wrap={false}: both can
+ * leave an explicit photo page empty while React-PDF advances again.
+ */
+function AreaPhotoSectionBanner({ children, accent }) {
+  const color = resolvePdfAccent(accent)
+  return (
+    <View style={[styles.areaPhotoSectionBanner, { backgroundColor: color }]}>
+      <Text style={styles.sectionBannerText}>
+        {typeof children === 'string' ? children.toUpperCase() : children}
+      </Text>
+    </View>
+  )
+}
+
+/**
+ * One named work-photo area: visible area heading, then only that area's photos
+ * at the area's own 1 / 4 / 6 layout. Chrome title is the area name.
+ * One scheduled chunk → one physical page (grid height always leaves slack).
+ */
+function AreaPhotographicSection({
+  areaName,
+  photos,
+  layout = 'grid4',
+  brandColor,
+  logoUrl,
+  companyName,
+  reportReference = '',
+}) {
+  const perPage = layout === 'full' ? 1 : layout === 'grid6' ? 6 : 4
+  const { cols, rows } = photoGridForTier(perPage)
+  const pages = paginatePdfPhotos(photos, perPage).filter(
+    (chunk) => Array.isArray(chunk) && chunk.length > 0,
+  )
+  const heading = photographicRecordAreaTitle(areaName)
+
+  return pages.map((pagePhotos, pageIndex) => {
+    const isFirst = pageIndex === 0
+    const contentH = photoPageGridContentHeight({ isAreaStart: isFirst })
+    return (
+      <Page
+        key={`area-${heading}-${pageIndex}`}
+        size="A4"
+        style={styles.page}
+      >
+        <PageChrome
+          brandColor={brandColor}
+          logoUrl={logoUrl}
+          companyName={companyName}
+          reportTitle={heading}
+          reportReference={reportReference}
+        />
+        {isFirst ? (
+          <AreaPhotoSectionBanner accent={brandColor}>{heading}</AreaPhotoSectionBanner>
+        ) : null}
+        <View style={styles.photoStage}>
+          <PhotoGrid
+            photos={pagePhotos}
+            cols={cols}
+            rows={rows}
+            brandColor={brandColor}
+            contentH={contentH}
+          />
+        </View>
+      </Page>
+    )
+  })
+}
+
 function FullPagePhotos({
   photos,
   brandColor,
   logoUrl,
   companyName,
   reportReference = '',
-  trailing = null,
+  title = 'Photographic record',
 }) {
-  const { cols, rows } = photoGridForTier(1)
-
-  return photos.map((photo, i) => (
-    <Page key={`full-${photo.key || photo.reportPhotoNumber || i}`} size="A4" style={styles.page}>
-      <PageChrome
-        brandColor={brandColor}
-        logoUrl={logoUrl}
-        companyName={companyName}
-        reportTitle="Photographic record"
-        reportReference={reportReference}
-      />
-      <View style={styles.photoStage}>
-        <PhotoGrid photos={[photo]} cols={cols} rows={rows} brandColor={brandColor} />
-      </View>
-      {i === photos.length - 1 ? trailing : null}
-    </Page>
-  ))
+  return (
+    <AreaPhotographicSection
+      areaName={title}
+      photos={photos}
+      layout="full"
+      brandColor={brandColor}
+      logoUrl={logoUrl}
+      companyName={companyName}
+      reportReference={reportReference}
+    />
+  )
 }
 
 function GridPages({
@@ -1079,28 +1157,19 @@ function GridPages({
   companyName,
   title,
   reportReference = '',
-  trailing = null,
 }) {
-  const pages = paginatePdfPhotos(photos, perPage)
-  // The grid is a property of the tier, not of how many photographs a page
-  // happens to hold, so every page of the report uses identical cells.
-  const { cols, rows } = photoGridForTier(perPage)
-
-  return pages.map((pagePhotos, pageIndex) => (
-    <Page key={`grid-${perPage}-${pageIndex}`} size="A4" style={styles.page}>
-      <PageChrome
-        brandColor={brandColor}
-        logoUrl={logoUrl}
-        companyName={companyName}
-        reportTitle={title}
-        reportReference={reportReference}
-      />
-      <View style={styles.photoStage}>
-        <PhotoGrid photos={pagePhotos} cols={cols} rows={rows} brandColor={brandColor} />
-      </View>
-      {pageIndex === pages.length - 1 ? trailing : null}
-    </Page>
-  ))
+  const layout = Number(perPage) === 6 ? 'grid6' : Number(perPage) === 1 ? 'full' : 'grid4'
+  return (
+    <AreaPhotographicSection
+      areaName={title}
+      photos={photos}
+      layout={layout}
+      brandColor={brandColor}
+      logoUrl={logoUrl}
+      companyName={companyName}
+      reportReference={reportReference}
+    />
+  )
 }
 
 function LabourTable({ items = [], brandColor = null }) {
@@ -1195,14 +1264,18 @@ function EquipmentHireTable({ items = [], brandColor = null }) {
  * Full-width divider that opens every section of the ordinary diary record.
  * The banner, the column header beneath it and the first data row are kept
  * together so a section never opens at the very foot of a page.
+ *
+ * `presenceAhead` is for the continuous record stream only. Dedicated pages
+ * (photo areas, declaration after photos) must pass false — the guard reserves
+ * space after the banner and forces an empty auto-continuation.
  */
-function SectionBanner({ children, accent }) {
+function SectionBanner({ children, accent, presenceAhead = true }) {
   const color = resolvePdfAccent(accent)
   return (
     <View
       style={[styles.sectionBanner, { backgroundColor: color }]}
-      minPresenceAhead={SECTION_PRESENCE_AHEAD}
-      wrap={false}
+      minPresenceAhead={presenceAhead ? SECTION_PRESENCE_AHEAD : undefined}
+      wrap={presenceAhead ? false : undefined}
     >
       <Text style={styles.sectionBannerText}>
         {typeof children === 'string' ? children.toUpperCase() : children}
@@ -1331,17 +1404,27 @@ function ReportContentPage({
 }
 
 /**
- * Compact end-of-report certification block, not a ceremonial full page. It is
- * the last element in the flow of whichever page ends the report, so it sits
- * directly beneath that content when it fits and moves whole to the next page
- * when it does not. `wrap={false}` keeps it from ever splitting.
+ * Compact end-of-report certification block, not a ceremonial full page.
+ *
+ * When nested in the record stream, `presenceAhead` keeps the banner with its
+ * body. When hosted on a dedicated page after photo areas, pass
+ * presenceAhead={false} so React-PDF does not insert a blank page first.
  */
-function DeclarationBlock({ brandColor, authorName, authorRole, reportDate, signatureSrc }) {
+function DeclarationBlock({
+  brandColor,
+  authorName,
+  authorRole,
+  reportDate,
+  signatureSrc,
+  presenceAhead = true,
+}) {
   const accent = resolvePdfAccent(brandColor)
 
   return (
-    <View wrap={false}>
-      <SectionBanner accent={accent}>Declaration &amp; signature</SectionBanner>
+    <View wrap={presenceAhead ? false : undefined}>
+      <SectionBanner accent={accent} presenceAhead={presenceAhead}>
+        Declaration &amp; signature
+      </SectionBanner>
       <Text style={[styles.signDeclaration, styles.body]}>{DECLARATION}</Text>
       <View style={styles.signRow} wrap={false}>
         <View style={styles.signMeta}>
@@ -1374,15 +1457,52 @@ function DeclarationBlock({ brandColor, authorName, authorRole, reportDate, sign
 }
 
 /**
- * Diary PDF with a report summary page, photographic record pages by layout
- * tier (full 1/page, grid4, grid6), then the declaration/signature page.
+ * Declaration on its own explicit page after the final photo page — never
+ * nested inside a full photo grid page (that nesting produced blank pages).
+ */
+function DeclarationPage({
+  brandColor,
+  logoUrl,
+  companyName,
+  reportReference = '',
+  authorName,
+  authorRole,
+  reportDate,
+  signatureSrc,
+}) {
+  return (
+    <Page size="A4" style={styles.page}>
+      <PageChrome
+        brandColor={brandColor}
+        logoUrl={logoUrl}
+        companyName={companyName}
+        reportTitle="Declaration & signature"
+        reportReference={reportReference}
+      />
+      <DeclarationBlock
+        brandColor={brandColor}
+        authorName={authorName}
+        authorRole={authorRole}
+        reportDate={reportDate}
+        signatureSrc={signatureSrc}
+        presenceAhead={false}
+      />
+    </Page>
+  )
+}
+
+/**
+ * Diary PDF with a report summary page, photographic record pages by work area
+ * (area title + that area’s photos-per-page layout), then the declaration.
  *
  * Photo schedule rules:
  * - contain-fit only inside fixed plates (no crop / stretch)
  * - continuous Photo 1..N across the whole report (recalculated at generation)
+ * - area titles from persisted photo.location (Location Walk / report_photos)
+ * - each area begins with a visible section heading, then only that area's photos
  * - caption band is fixed height; long captions clamp rather than move the plate
  *
- * photos: [{ key?, src|preview|url, caption, layout: 'full'|'grid4'|'grid6', sequence_number? }]
+ * photos: [{ key?, src|preview|url, caption, location?, layout: 'full'|'grid4'|'grid6', sequence_number? }]
  * labour: [{ trade, company, headcount|count, hours }]
  * equipmentHire: [{ description, supplier, quantity, status }]
  */
@@ -1417,11 +1537,11 @@ export function DiaryPdfDocument({
   authorRole = '',
   signatureSrc = null,
 }) {
-  const schedule = buildPhotoSchedule(photos)
+  const schedule = buildPhotoAreaSchedule(photos)
 
-  // The declaration trails the last page the report actually produces, so it
-  // follows the final photographic layout when there is room and only takes a
-  // fresh page when there is not.
+  // The declaration trails the last page the report actually produces.
+  // After photo areas it is its own explicit page (never nested in a full
+  // photo grid page — that nesting left blank auto-continuations).
   const declaration = (
     <DeclarationBlock
       brandColor={brandColor}
@@ -1431,13 +1551,7 @@ export function DiaryPdfDocument({
       signatureSrc={signatureSrc}
     />
   )
-  const lastHost = schedule.grid6.length
-    ? 'grid6'
-    : schedule.grid4.length
-      ? 'grid4'
-      : schedule.full.length
-        ? 'full'
-        : 'records'
+  const lastHost = schedule.areas.length ? 'photos' : 'records'
 
   return (
     <Document>
@@ -1479,36 +1593,31 @@ export function DiaryPdfDocument({
         trailing={lastHost === 'records' ? declaration : null}
       />
 
-      <FullPagePhotos
-        photos={schedule.full}
-        brandColor={brandColor}
-        logoUrl={logoUrl}
-        companyName={companyName}
-        reportReference={reportReference}
-        trailing={lastHost === 'full' ? declaration : null}
-      />
+      {schedule.areas.map((area, areaIndex) => (
+        <AreaPhotographicSection
+          key={`area-${areaIndex}-${area.areaName}`}
+          areaName={area.areaName}
+          photos={area.photos}
+          layout={area.layout || 'grid4'}
+          brandColor={brandColor}
+          logoUrl={logoUrl}
+          companyName={companyName}
+          reportReference={reportReference}
+        />
+      ))}
 
-      <GridPages
-        photos={schedule.grid4}
-        perPage={4}
-        brandColor={brandColor}
-        logoUrl={logoUrl}
-        companyName={companyName}
-        title="Photographic record — progress"
-        reportReference={reportReference}
-        trailing={lastHost === 'grid4' ? declaration : null}
-      />
-
-      <GridPages
-        photos={schedule.grid6}
-        perPage={6}
-        brandColor={brandColor}
-        logoUrl={logoUrl}
-        companyName={companyName}
-        title="Photographic record — site checks"
-        reportReference={reportReference}
-        trailing={lastHost === 'grid6' ? declaration : null}
-      />
+      {lastHost === 'photos' ? (
+        <DeclarationPage
+          brandColor={brandColor}
+          logoUrl={logoUrl}
+          companyName={companyName}
+          reportReference={reportReference}
+          authorName={authorName}
+          authorRole={authorRole}
+          reportDate={reportDate}
+          signatureSrc={signatureSrc}
+        />
+      ) : null}
     </Document>
   )
 }

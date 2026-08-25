@@ -115,6 +115,7 @@ import {
   snapshotUserActivation,
 } from '@/lib/diary-share'
 import { emitShareDiag } from '@/lib/share-diag-beacon'
+import { mapWithConcurrency } from '@/lib/diary-pdf-photos'
 import { readReportSetupExtras, reportDateInputValue, todayIsoDate } from '@/lib/report-setup'
 import {
   describeDiaryWorkbenchLoadFailure,
@@ -373,6 +374,9 @@ function dataUrlToBlob(dataUrl) {
   for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
   return new Blob([bytes], { type: mime })
 }
+
+/** Android-safe bound — never unbounded parallel storage uploads on Share. */
+const SHARE_PHOTO_UPLOAD_CONCURRENCY = 2
 
 /** Upload transparent overlay PNG; returns storage path or null. */
 async function uploadOverlayPng(supabase, { userId, reportId, sequence, dataUrl }) {
@@ -814,7 +818,10 @@ export default function SiteDiaryPage() {
         }
 
         const mapPhotoRowWithoutPreview = (p, index) => ({
-          key: makeUuid(),
+          // Prefer durable identity (db id / storage path) so Edit + delete keep
+          // the same photo across progressive hydrate. Never mint a fresh UUID
+          // when a persisted key already exists.
+          key: p.id || p.url || makeUuid(),
           file: null,
           preview: null,
           storagePath: p.url,
@@ -897,7 +904,7 @@ export default function SiteDiaryPage() {
           const results = await Promise.all([
             supabase.from('report_labour').select('trade, company, count, hours, notes').eq('report_id', existing.id).order('sequence'),
             supabase.from('report_plant').select('item, ref, status, notes').eq('report_id', existing.id).order('sequence'),
-            supabase.from('report_photos').select('url, caption, sequence, layout, location, category, annotations, overlay_path, rotation_degrees, assigned_to').eq('report_id', existing.id).order('sequence'),
+            supabase.from('report_photos').select('id, url, caption, sequence, layout, location, category, annotations, overlay_path, rotation_degrees, assigned_to').eq('report_id', existing.id).order('sequence'),
           ])
           labour = results[0].data
           plant = results[1].error ? [] : results[1].data
@@ -2172,6 +2179,31 @@ export default function SiteDiaryPage() {
 
       await flushPendingAutosave()
 
+      // Commit the active unsaved work area (same as Save Area) before persist.
+      // Draft photos outside locationWalk must never be silently omitted from Share.
+      let walkForPersist = locationWalk
+      const areaFlush = locationWalkRef.current?.commitUnsavedAreaForShare?.()
+      if (areaFlush && areaFlush.ok === false) {
+        failSave(
+          areaFlush.message
+            || 'Finish this work area (name and photos), or clear it, before Save & Share.',
+        )
+        document.querySelector('[data-photo-workspace]')?.scrollIntoView?.({
+          behavior: 'smooth',
+          block: 'center',
+        })
+        return
+      }
+      if (areaFlush?.locationWalk) {
+        walkForPersist = areaFlush.locationWalk
+        if (areaFlush.committed) {
+          flushSync(() => {
+            setLocationWalk(walkForPersist)
+            setPhotos(flattenAreaGroups(walkForPersist))
+          })
+        }
+      }
+
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       diarySaveLog('auth check', {
         userId: user?.id || null,
@@ -2288,7 +2320,7 @@ export default function SiteDiaryPage() {
           sequence: index,
         }))
 
-      const sequenced = flattenAreaGroups(locationWalk)
+      const sequenced = flattenAreaGroups(walkForPersist)
       const keptStoragePaths = sequenced
         .filter((p) => !p.file && p.storagePath)
         .map((p) => p.storagePath)
@@ -2296,69 +2328,103 @@ export default function SiteDiaryPage() {
       const photoRecords = []
       const updateExistingPhotos = []
 
-      for (const photo of sequenced) {
-        let overlayPath = photo.overlayPath || null
-        if (photo.overlayDirty) {
-          try {
-            if (hasAnnotations(photo.annotations) && photo.overlayPreview) {
-              overlayPath = await uploadOverlayPng(supabase, {
-                userId: user.id,
-                reportId: editingReportId,
-                sequence: photo.sequence_number,
-                dataUrl: photo.overlayPreview,
-              })
-            } else {
-              overlayPath = null
+      let photoPersistResults
+      try {
+        photoPersistResults = await mapWithConcurrency(
+          sequenced,
+          SHARE_PHOTO_UPLOAD_CONCURRENCY,
+          async (photo) => {
+            let overlayPath = photo.overlayPath || null
+            if (photo.overlayDirty) {
+              try {
+                if (hasAnnotations(photo.annotations) && photo.overlayPreview) {
+                  overlayPath = await uploadOverlayPng(supabase, {
+                    userId: user.id,
+                    reportId: editingReportId,
+                    sequence: photo.sequence_number,
+                    dataUrl: photo.overlayPreview,
+                  })
+                } else {
+                  overlayPath = null
+                }
+              } catch {
+                const overlayErr = new Error('overlay-upload-failed')
+                overlayErr.persistStage = 'overlay'
+                throw overlayErr
+              }
             }
-          } catch (overlayErr) {
-            failSave('We couldn’t upload photo mark-ups. Check your connection and try Share again.')
-            return
-          }
+
+            const annotationPayload = hasAnnotations(photo.annotations) ? photo.annotations : null
+
+            if (photo.file) {
+              const ext = photo.file.name.split('.').pop()?.toLowerCase() || 'jpg'
+              const storagePath = `${user.id}/${editingReportId}/${photo.sequence_number}-${Date.now()}.${ext}`
+
+              const { error: uploadError } = await supabase.storage
+                .from('site-photos')
+                .upload(storagePath, photo.file, { contentType: photo.file.type, upsert: false })
+
+              if (uploadError) {
+                const photoErr = new Error('photo-upload-failed')
+                photoErr.persistStage = 'photo'
+                throw photoErr
+              }
+
+              return {
+                kind: 'new',
+                record: {
+                  report_id: editingReportId,
+                  url: storagePath,
+                  caption: (photo.caption || '').trim() || null,
+                  sequence: photo.sequence_number,
+                  layout: photo.layout || 'grid4',
+                  location: photo.location || photo.area || null,
+                  category: photo.category || null,
+                  annotations: annotationPayload,
+                  overlay_path: overlayPath,
+                  rotation_degrees: Number(photo.rotationDegrees) || 0,
+                  assigned_to: (photo.assignedTo || photo.assigned_to || '').trim() || null,
+                },
+              }
+            }
+
+            if (photo.storagePath) {
+              return {
+                kind: 'update',
+                patch: {
+                  url: photo.storagePath,
+                  fields: {
+                    caption: (photo.caption || '').trim() || null,
+                    sequence: photo.sequence_number,
+                    layout: photo.layout || 'grid4',
+                    location: photo.location || photo.area || null,
+                    category: photo.category || null,
+                    annotations: annotationPayload,
+                    overlay_path: overlayPath,
+                    rotation_degrees: Number(photo.rotationDegrees) || 0,
+                    assigned_to: (photo.assignedTo || photo.assigned_to || '').trim() || null,
+                  },
+                },
+              }
+            }
+
+            return { kind: 'skip' }
+          },
+        )
+      } catch (persistErr) {
+        if (persistErr?.persistStage === 'photo') {
+          failSave('We couldn’t upload a photo. Check your connection and try Share again.')
+          return
         }
+        failSave('We couldn’t upload photo mark-ups. Check your connection and try Share again.')
+        return
+      }
 
-        const annotationPayload = hasAnnotations(photo.annotations) ? photo.annotations : null
-
-        if (photo.file) {
-          const ext = photo.file.name.split('.').pop()?.toLowerCase() || 'jpg'
-          const storagePath = `${user.id}/${editingReportId}/${photo.sequence_number}-${Date.now()}.${ext}`
-
-          const { error: uploadError } = await supabase.storage
-            .from('site-photos')
-            .upload(storagePath, photo.file, { contentType: photo.file.type, upsert: false })
-
-          if (uploadError) {
-            failSave('We couldn’t upload a photo. Check your connection and try Share again.')
-            return
-          }
-
-          photoRecords.push({
-            report_id: editingReportId,
-            url: storagePath,
-            caption: (photo.caption || '').trim() || null,
-            sequence: photo.sequence_number,
-            layout: photo.layout || 'grid4',
-            location: photo.location || photo.area || null,
-            category: photo.category || null,
-            annotations: annotationPayload,
-            overlay_path: overlayPath,
-            rotation_degrees: Number(photo.rotationDegrees) || 0,
-            assigned_to: (photo.assignedTo || photo.assigned_to || '').trim() || null,
-          })
-        } else if (photo.storagePath) {
-          updateExistingPhotos.push({
-            url: photo.storagePath,
-            fields: {
-              caption: (photo.caption || '').trim() || null,
-              sequence: photo.sequence_number,
-              layout: photo.layout || 'grid4',
-              location: photo.location || photo.area || null,
-              category: photo.category || null,
-              annotations: annotationPayload,
-              overlay_path: overlayPath,
-              rotation_degrees: Number(photo.rotationDegrees) || 0,
-              assigned_to: (photo.assignedTo || photo.assigned_to || '').trim() || null,
-            },
-          })
+      for (const result of photoPersistResults) {
+        if (result?.kind === 'new') {
+          photoRecords.push(result.record)
+        } else if (result?.kind === 'update') {
+          updateExistingPhotos.push(result.patch)
         }
       }
 
