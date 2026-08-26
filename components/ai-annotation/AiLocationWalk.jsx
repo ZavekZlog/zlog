@@ -60,6 +60,16 @@ const primaryTap = {
   width: '100%',
 }
 
+/** Temporary existing-area strip heading — Add/Edit only; subordinate to the draft panel title. */
+const savedAreaStripHeadingStyle = {
+  fontSize: 15,
+  fontWeight: 600,
+  letterSpacing: '0.01em',
+  textTransform: 'none',
+  color: 'var(--text)',
+  marginBottom: 6,
+}
+
 function SavedAreaCard({
   group,
   onEdit,
@@ -152,7 +162,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     sectionIntro: '',
     addGroup: 'Add Work Area',
     createGroup: 'Add Work Area',
-    groupNameLabel: 'Work area name',
+    groupNameLabel: 'Area name',
     groupNamePlaceholder: 'e.g. Ground Floor Reception',
     groupDescriptionLabel: 'Notes for this area',
     groupDescriptionPlaceholder: 'Work carried out, materials used, or other site notes',
@@ -211,6 +221,10 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
 
   const activePhotos = editingGroup ? editingGroup.photos : draftPhotos
   const isEditing = Boolean(editingGroupId)
+  const visibleSavedGroups = useMemo(
+    () => locationWalk.filter((group) => !(isEditing && group.id === editingGroupId)),
+    [locationWalk, isEditing, editingGroupId],
+  )
 
   const updateWalk = useCallback((updater) => {
     const prev = walkRef.current
@@ -562,6 +576,28 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     onContinueToSignature?.()
   }
 
+  const recentAreaReferenceStrip = (phase === 'create' && recentAreas.length > 0) ? (
+    <div data-recent-area-reference-strip="true" style={{ marginBottom: 16 }}>
+      <div
+        data-saved-photo-areas-heading="true"
+        style={savedAreaStripHeadingStyle}
+      >
+        Photo areas recorded so far
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {recentAreas.map((name) => (
+          <SecondaryButton
+            key={name}
+            type="button"
+            onClick={() => { setNameDraft(name); setNameError('') }}
+          >
+            {name}
+          </SecondaryButton>
+        ))}
+      </div>
+    </div>
+  ) : null
+
   return (
     <GlassSection title={sectionTitle} accent={accent}>
       {copy.sectionIntro ? (
@@ -614,10 +650,12 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
         </div>
       ) : null}
 
+      {isEditing ? recentAreaReferenceStrip : null}
+
       {/* While editing a saved area, open the composer first and hide that card. */}
       {phase === 'create' && isEditing ? (
         <div ref={editorRef} data-area-editor="saved">
-          <div style={{ ...labelStyle, marginBottom: 8 }}>{copy.groupNameLabel}</div>
+          <div style={{ ...labelStyle, marginBottom: 8 }}>Area name</div>
           <input
             type="text"
             value={nameDraft}
@@ -630,25 +668,6 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
             autoComplete="off"
           />
           {nameError ? <p style={{ ...fieldErrorStyle, marginBottom: 12 }}>{nameError}</p> : null}
-
-          {recentAreas.length > 0 ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-              {recentAreas.map((name) => (
-                <SecondaryButton key={name} type="button" onClick={() => { setNameDraft(name); setNameError('') }}>
-                  {name}
-                </SecondaryButton>
-              ))}
-            </div>
-          ) : null}
-
-          <div style={{ ...labelStyle, marginBottom: 8 }}>{copy.groupDescriptionLabel}</div>
-          <textarea
-            value={descriptionDraft}
-            onChange={(e) => setDescriptionDraft(e.target.value)}
-            placeholder={copy.groupDescriptionPlaceholder}
-            rows={3}
-            style={{ ...inputStyle, marginBottom: 14, minHeight: 72, resize: 'vertical' }}
-          />
 
           <div style={{ ...labelStyle, marginBottom: 8 }}>Photos per page</div>
           <PhotosPerPagePicker
@@ -757,10 +776,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
       {/* Saved areas always visible — never hide stored data behind confirmation */}
       {locationWalk.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-          <div style={{ ...labelStyle, marginBottom: 0 }}>Saved Photo Areas</div>
-          {locationWalk
-            .filter((group) => !(isEditing && group.id === editingGroupId))
-            .map((group) => (
+          {visibleSavedGroups.map((group) => (
             <SavedAreaCard
               key={group.id}
               group={group}
@@ -773,9 +789,35 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
         </div>
       )}
 
+      {!isEditing ? recentAreaReferenceStrip : null}
+
       {phase === 'create' && !isEditing && (
-        <div ref={editorRef} data-area-editor="new">
-          <div style={{ ...labelStyle, marginBottom: 8 }}>{copy.groupNameLabel}</div>
+        <div
+          ref={editorRef}
+          data-area-editor="new"
+          data-new-photo-area="draft"
+          style={{
+            marginTop: locationWalk.length > 0 ? 18 : 0,
+            padding: '14px 14px 16px',
+            borderRadius: 14,
+            border: '1px solid color-mix(in srgb, var(--action, #FF5000) 42%, var(--edge))',
+            background: 'color-mix(in srgb, var(--plate) 92%, var(--action, #FF5000) 8%)',
+            boxShadow: 'inset 0 3px 0 var(--action, #FF5000)',
+          }}
+        >
+          <div
+            data-new-photo-area-heading="true"
+            style={{
+              fontWeight: 700,
+              fontSize: 16,
+              color: 'var(--text)',
+              marginBottom: 12,
+              letterSpacing: '-0.01em',
+            }}
+          >
+            New Photo Area
+          </div>
+          <div style={{ ...labelStyle, marginBottom: 8 }}>Area name</div>
           <input
             type="text"
             value={nameDraft}
@@ -788,25 +830,6 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
             autoComplete="off"
           />
           {nameError ? <p style={{ ...fieldErrorStyle, marginBottom: 12 }}>{nameError}</p> : null}
-
-          {recentAreas.length > 0 ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-              {recentAreas.map((name) => (
-                <SecondaryButton key={name} type="button" onClick={() => { setNameDraft(name); setNameError('') }}>
-                  {name}
-                </SecondaryButton>
-              ))}
-            </div>
-          ) : null}
-
-          <div style={{ ...labelStyle, marginBottom: 8 }}>{copy.groupDescriptionLabel}</div>
-          <textarea
-            value={descriptionDraft}
-            onChange={(e) => setDescriptionDraft(e.target.value)}
-            placeholder={copy.groupDescriptionPlaceholder}
-            rows={3}
-            style={{ ...inputStyle, marginBottom: 14, minHeight: 72, resize: 'vertical' }}
-          />
 
           <div style={{ ...labelStyle, marginBottom: 8 }}>Photos per page</div>
           <PhotosPerPagePicker
