@@ -65,6 +65,7 @@ function SavedAreaCard({
   onEdit,
   onOpenPhoto,
   globalOffset,
+  totalPhotoCount = 0,
 }) {
   const perPage = layoutToPerPage(group.layout)
 
@@ -124,6 +125,7 @@ function SavedAreaCard({
           <CaptureThumbnailGrid
             photos={group.photos}
             numberOffset={globalOffset}
+            totalPhotoCount={totalPhotoCount}
             onOpen={onOpenPhoto}
             readOnly
             perPage={perPage}
@@ -143,6 +145,8 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   onAreaSaved,
   /** Optional Photo Workspace labels (P2A). Falls back to diary-friendly defaults. */
   labels = null,
+  /** Phase D: resolve canonical report signed URL when the full viewer opens. */
+  ensureReportPreview = null,
 }, ref) {
   const copy = {
     sectionIntro: '',
@@ -761,6 +765,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
               key={group.id}
               group={group}
               globalOffset={areaOffset(group.id)}
+              totalPhotoCount={flattenAreaGroups(locationWalk).length}
               onEdit={() => editGroup(group.id)}
               onOpenPhoto={(pi) => openViewer(group.id, pi)}
             />
@@ -966,6 +971,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
           onCaptionChange={(photoId, text) => patchPhoto(viewer.groupId, photoId, { acceptedDescription: text })}
           onRotate={(photoId) => rotatePhoto(viewer.groupId, photoId)}
           onDelete={(photoId) => removePhoto(viewer.groupId, photoId)}
+          ensureReportPreview={ensureReportPreview}
         />
       )}
       </div>

@@ -15,6 +15,10 @@ import {
 } from '@/components/photo-workspace/user-photo-img-protection'
 import { PhotoDeleteConfirmDialog } from '@/components/photo-workspace/PhotoDeleteConfirmDialog'
 import { resolvePhotoDeleteConfirm } from '@/components/photo-workspace/photo-delete-confirm'
+import {
+  isBrowserDisplaySrc,
+  viewerImageSrc,
+} from '@/lib/photo-workspace/thumbnail-display'
 
 const iconBtn = {
   display: 'inline-flex',
@@ -57,11 +61,13 @@ export function CapturePhotoPreview({
   onDelete,
   onRotate,
   onCaptionChange,
+  ensureReportPreview = null,
 }) {
   const list = Array.isArray(photos) ? photos : []
   const maxIndex = Math.max(0, list.length - 1)
   const [index, setIndex] = useState(() => Math.min(Math.max(0, startIndex), maxIndex))
   const [pendingDelete, setPendingDelete] = useState(null)
+  const [resolvedSrc, setResolvedSrc] = useState('')
 
   useEffect(() => {
     setIndex(Math.min(Math.max(0, startIndex), maxIndex))
@@ -70,7 +76,6 @@ export function CapturePhotoPreview({
   const safeIndex = Math.min(Math.max(0, index), maxIndex)
   const photo = list[safeIndex] || null
   const photoNumber = globalNumbers[safeIndex] ?? safeIndex + 1
-  const src = photo?.preview || photo?.imageUrl || ''
   const degrees = Number(photo?.rotationDegrees) || 0
   const [draft, setDraft] = useState(() => photo?.acceptedDescription || '')
 
@@ -78,7 +83,33 @@ export function CapturePhotoPreview({
     setDraft(photo?.acceptedDescription || '')
   }, [photo?.id])
 
+  // Phase D: use cached report preview, or sign canonical report path on demand.
+  // Never use the 512px thumbnail in the full viewer.
+  useEffect(() => {
+    let cancelled = false
+    const immediate = viewerImageSrc(photo)
+    if (immediate) {
+      setResolvedSrc(immediate)
+      return undefined
+    }
+    setResolvedSrc('')
+    if (!photo || typeof ensureReportPreview !== 'function') return undefined
+    void (async () => {
+      try {
+        const url = await ensureReportPreview(photo)
+        if (!cancelled && isBrowserDisplaySrc(url)) setResolvedSrc(String(url).trim())
+      } catch {
+        if (!cancelled) setResolvedSrc('')
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [photo, photo?.id, photo?.preview, photo?.imageUrl, ensureReportPreview])
+
   if (!photo) return null
+
+  const src = resolvedSrc || viewerImageSrc(photo)
 
   const closeDeleteConfirm = () => {
     setPendingDelete(resolvePhotoDeleteConfirm(pendingDelete, 'cancel', onDelete))

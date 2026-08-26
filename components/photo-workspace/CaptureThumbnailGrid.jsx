@@ -13,6 +13,10 @@ import {
 } from '@/components/photo-workspace/user-photo-img-protection'
 import { PhotoDeleteConfirmDialog } from '@/components/photo-workspace/PhotoDeleteConfirmDialog'
 import { resolvePhotoDeleteConfirm } from '@/components/photo-workspace/photo-delete-confirm'
+import {
+  gridImageSrc,
+  shouldEagerLoadSavedReviewThumb,
+} from '@/lib/photo-workspace/thumbnail-display'
 
 const thumbBtn = {
   display: 'inline-flex',
@@ -71,6 +75,7 @@ const assignedInputStyle = {
 export function CaptureThumbnailGrid({
   photos = [],
   numberOffset = 0,
+  totalPhotoCount = 0,
   onOpen,
   onDelete,
   onRotate,
@@ -83,6 +88,9 @@ export function CaptureThumbnailGrid({
   const [pendingDelete, setPendingDelete] = useState(null)
   if (!list.length) return null
   const reviewColumns = Number(perPage) === 1 ? 1 : Number(perPage) === 6 ? 3 : 2
+  const diaryCount = Number(totalPhotoCount) > 0
+    ? Number(totalPhotoCount)
+    : numberOffset + list.length
 
   const closeDeleteConfirm = () => {
     setPendingDelete(resolvePhotoDeleteConfirm(pendingDelete, 'cancel', onDelete))
@@ -107,10 +115,17 @@ export function CaptureThumbnailGrid({
     >
       {list.map((photo, index) => {
         const photoNumber = numberOffset + index + 1
-        const src = photo.preview || photo.imageUrl || ''
+        // Phase D: saved review prefers durable thumbnailPreview; never bare storage paths.
+        const src = gridImageSrc(photo)
         const degrees = Number(photo.rotationDegrees) || 0
         const caption = photo.acceptedDescription || photo.caption || ''
         const assignedTo = photo.assignedTo || photo.assigned_to || ''
+        const loading = readOnly
+          && shouldEagerLoadSavedReviewThumb(photo, numberOffset + index, {
+            photoCount: diaryCount,
+          })
+          ? 'eager'
+          : 'lazy'
         return (
           <div
             key={photo.id}
@@ -155,7 +170,7 @@ export function CaptureThumbnailGrid({
                   <img
                     src={src}
                     alt=""
-                    loading="lazy"
+                    loading={loading}
                     decoding="async"
                     {...userPhotoImgProtectionProps()}
                     style={{
@@ -168,7 +183,17 @@ export function CaptureThumbnailGrid({
                       ...userPhotoImgProtectionStyle,
                     }}
                   />
-                ) : null}
+                ) : (
+                  <div
+                    aria-hidden
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      background:
+                        'color-mix(in srgb, #0b0d12 88%, var(--plate))',
+                    }}
+                  />
+                )}
               </div>
             </button>
 

@@ -26,6 +26,10 @@ import { ReportDeletionDialog } from '@/components/report-management/ReportDelet
 import { REPORT_THEMES } from '@/lib/report-theme'
 import { NOT_RECORDED, loadSavedDiaryView } from '@/lib/diary-saved-view'
 import {
+  gridImageSrc,
+  shouldEagerLoadSavedReviewThumb,
+} from '@/lib/photo-workspace/thumbnail-display'
+import {
   temporaryWorkInspectionStatus,
   temporaryWorkNotesDisplay,
 } from '@/lib/diary-daily-records'
@@ -235,8 +239,11 @@ function RecordList({ rows, columns }) {
  * Saved photos for one work area — always visible, never clickable.
  * Density follows the area's own saved 1 / 4 / 6 per-page value.
  */
-function SavedPhotoGrid({ photos, perPage, numberOffset }) {
+function SavedPhotoGrid({ photos, perPage, numberOffset, totalPhotoCount = 0 }) {
   const columns = perPage === 1 ? 1 : perPage === 6 ? 3 : 2
+  const diaryCount = Number(totalPhotoCount) > 0
+    ? Number(totalPhotoCount)
+    : numberOffset + (photos?.length || 0)
   return (
     <div
       role="list"
@@ -252,6 +259,12 @@ function SavedPhotoGrid({ photos, perPage, numberOffset }) {
         const caption = photo.acceptedDescription || photo.caption || ''
         const assignedTo = photo.assignedTo || ''
         const degrees = Number(photo.rotationDegrees) || 0
+        const src = gridImageSrc(photo)
+        const loading = shouldEagerLoadSavedReviewThumb(photo, numberOffset + index, {
+          photoCount: diaryCount,
+        })
+          ? 'eager'
+          : 'lazy'
         return (
           <div
             key={photo.id}
@@ -276,12 +289,12 @@ function SavedPhotoGrid({ photos, perPage, numberOffset }) {
                 background: '#0b0d12',
               }}
             >
-              {photo.preview ? (
+              {src ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={photo.preview}
+                  src={src}
                   alt={caption || `Photo ${numberOffset + index + 1}`}
-                  loading="lazy"
+                  loading={loading}
                   decoding="async"
                   style={{
                     width: '100%',
@@ -291,7 +304,16 @@ function SavedPhotoGrid({ photos, perPage, numberOffset }) {
                     transform: degrees ? `rotate(${degrees}deg)` : undefined,
                   }}
                 />
-              ) : null}
+              ) : (
+                <div
+                  aria-hidden
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    background: 'color-mix(in srgb, #0b0d12 88%, var(--plate))',
+                  }}
+                />
+              )}
             </div>
             <div
               style={{
@@ -1147,6 +1169,7 @@ function SavedDiaryViewer() {
                   photos={area.photos}
                   perPage={area.perPage}
                   numberOffset={area.numberOffset}
+                  totalPhotoCount={view.photoCount || 0}
                 />
               </div>
             ))}

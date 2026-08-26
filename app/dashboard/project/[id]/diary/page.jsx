@@ -138,6 +138,10 @@ import {
   buildPreparedPhotoRecordFields,
 } from '@/lib/photo-workspace/persist-prepared-photo'
 import {
+  createPhotoDisplaySignSession,
+  signSavedPhotoGridRows,
+} from '@/lib/photo-workspace/thumbnail-display'
+import {
   loginUrlWithReturn,
   SESSION_EXPIRED_SAVE_MESSAGE,
 } from '@/lib/auth/return-path'
@@ -560,6 +564,8 @@ export default function SiteDiaryPage() {
   const [locationWalk, setLocationWalk] = useState([])
   const signatureSectionRef = useRef(null)
   const locationWalkRef = useRef(null)
+  /** Phase D: session memo for grid batch + on-demand viewer report signing. */
+  const photoDisplaySignRef = useRef(null)
   const [prefilledFromLast, setPrefilledFromLast] = useState(false)
   const [duplicatedFromReport, setDuplicatedFromReport] = useState(false)
   const [companyReportingFor, setCompanyReportingFor] = useState('')
@@ -841,8 +847,9 @@ export default function SiteDiaryPage() {
           overlayDirty: false,
           rotationDegrees: p.rotation_degrees ?? 0,
           assignedTo: p.assigned_to || '',
-          // Phase C prepared-asset metadata (nullable; unused by grid until Phase D).
+          // Phase C/D prepared-asset metadata — thumbnailPath drives grid when signed.
           thumbnailPath: p.thumbnail_path || null,
+          thumbnailPreview: null,
           reportWidth: p.report_width ?? null,
           reportHeight: p.report_height ?? null,
           thumbnailWidth: p.thumbnail_width ?? null,
@@ -852,17 +859,27 @@ export default function SiteDiaryPage() {
           processingVersion: p.processing_version || null,
         })
 
-        const signReportPhotoRows = async (rows) => Promise.all((rows || []).map(async (p, index) => {
-          const preview = await signedUrlForPath(supabase, p.url)
-          const overlayPreview = p.overlay_path
-            ? await signedUrlForPath(supabase, p.overlay_path)
-            : null
-          return {
+        // Phase D: thumb-first batch grid hydrate — do NOT sign Phase C report.jpg here.
+        photoDisplaySignRef.current = createPhotoDisplaySignSession({
+          expiresIn: 3600,
+          batchSignPaths: async (paths, expiresIn = 3600) => {
+            const { data, error } = await supabase.storage
+              .from('site-photos')
+              .createSignedUrls(paths, expiresIn)
+            if (error) throw error
+            return data || []
+          },
+          singleSignPath: (path) => signedUrlForPath(supabase, path),
+        })
+        const signReportPhotoRows = async (rows) => signSavedPhotoGridRows(rows || [], {
+          session: photoDisplaySignRef.current,
+          mapRow: (p, index, signed) => ({
             ...mapPhotoRowWithoutPreview(p, index),
-            preview,
-            overlayPreview,
-          }
-        }))
+            preview: signed.preview,
+            thumbnailPreview: signed.thumbnailPreview,
+            overlayPreview: signed.overlayPreview,
+          }),
+        })
 
         const { data: existing, error: existingError } = await withTimeout(
           supabase
@@ -1492,6 +1509,44 @@ export default function SiteDiaryPage() {
     setLocationWalk(next)
     setPhotos(flattenAreaGroups(next))
   }, [])
+
+  /** Phase D: sign canonical report path only when the full viewer needs it. */
+  const ensureReportPreviewForViewer = useCallback(async (photo) => {
+    const session = photoDisplaySignRef.current
+    if (!photo) return null
+    const existing = String(photo.preview || '').trim()
+    if (/^https?:\/\//i.test(existing) || existing.startsWith('blob:') || existing.startsWith('data:')) {
+      return existing
+    }
+    // Local capture File still has blob preview via imageUrl/preview during compose.
+    if (/^https?:\/\//i.test(String(photo.imageUrl || '')) || String(photo.imageUrl || '').startsWith('blob:')) {
+      return photo.imageUrl
+    }
+    if (!session) {
+      // Session may not exist yet on a brand-new blank diary; fall back to single sign.
+      const path = String(photo.imageUrl || photo.storagePath || '').trim()
+      if (!path || /^https?:\/\//i.test(path) || path.startsWith('blob:')) return null
+      return signedUrlForPath(supabase, path)
+    }
+    const path = String(photo.imageUrl || photo.storagePath || '').trim()
+    if (!path) return null
+    const url = await session.resolveOne(path)
+    if (!url) return null
+    const photoId = photo.id
+    if (photoId) {
+      setLocationWalk((prev) => {
+        const next = (prev || []).map((group) => ({
+          ...group,
+          photos: (group.photos || []).map((p) => (
+            p.id === photoId ? { ...p, preview: url } : p
+          )),
+        }))
+        setPhotos(flattenAreaGroups(next))
+        return next
+      })
+    }
+    return url
+  }, [supabase])
 
   const continueToSignature = useCallback(() => {
     const el = signatureSectionRef.current
@@ -3352,6 +3407,7 @@ export default function SiteDiaryPage() {
           value={locationWalk}
           onChange={handleLocationWalkChange}
           onContinue={continueToSignature}
+          ensureReportPreview={ensureReportPreviewForViewer}
         />
 
         <div

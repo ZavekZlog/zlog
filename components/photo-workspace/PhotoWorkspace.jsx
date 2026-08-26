@@ -26,6 +26,7 @@ export const PhotoWorkspace = forwardRef(function PhotoWorkspace({
   onContinue,
   onAreaSaved,
   title = null,
+  ensureReportPreview = null,
 }, ref) {
   const labels = getPhotoWorkspaceLabels(reportType)
   const adapter = getPhotoWorkspaceAdapter(reportType)
@@ -53,6 +54,7 @@ export const PhotoWorkspace = forwardRef(function PhotoWorkspace({
         labels={labels}
         onContinueToSignature={onContinue}
         onAreaSaved={handleAreaSaved}
+        ensureReportPreview={ensureReportPreview}
       />
     </div>
   )
