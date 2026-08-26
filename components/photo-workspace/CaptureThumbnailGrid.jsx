@@ -5,7 +5,14 @@
  * Preview + optional caption + delete + rotate. No annotation / AI / upload chrome.
  */
 
+import { useState } from 'react'
 import { RotateCw, Trash2 } from 'lucide-react'
+import {
+  userPhotoImgProtectionProps,
+  userPhotoImgProtectionStyle,
+} from '@/components/photo-workspace/user-photo-img-protection'
+import { PhotoDeleteConfirmDialog } from '@/components/photo-workspace/PhotoDeleteConfirmDialog'
+import { resolvePhotoDeleteConfirm } from '@/components/photo-workspace/photo-delete-confirm'
 
 const thumbBtn = {
   display: 'inline-flex',
@@ -73,10 +80,19 @@ export function CaptureThumbnailGrid({
   perPage = 4,
 }) {
   const list = Array.isArray(photos) ? photos : []
+  const [pendingDelete, setPendingDelete] = useState(null)
   if (!list.length) return null
   const reviewColumns = Number(perPage) === 1 ? 1 : Number(perPage) === 6 ? 3 : 2
 
+  const closeDeleteConfirm = () => {
+    setPendingDelete(resolvePhotoDeleteConfirm(pendingDelete, 'cancel', onDelete))
+  }
+  const confirmDelete = () => {
+    setPendingDelete(resolvePhotoDeleteConfirm(pendingDelete, 'confirm', onDelete))
+  }
+
   return (
+    <>
     <div
       role="list"
       aria-label="Photos in this area"
@@ -141,6 +157,7 @@ export function CaptureThumbnailGrid({
                     alt=""
                     loading="lazy"
                     decoding="async"
+                    {...userPhotoImgProtectionProps()}
                     style={{
                       width: '100%',
                       height: '100%',
@@ -148,6 +165,7 @@ export function CaptureThumbnailGrid({
                       display: 'block',
                       transform: degrees ? `rotate(${degrees}deg)` : undefined,
                       transition: 'transform 120ms ease',
+                      ...userPhotoImgProtectionStyle,
                     }}
                   />
                 ) : null}
@@ -239,11 +257,7 @@ export function CaptureThumbnailGrid({
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (typeof window === 'undefined' || window.confirm(`Delete Photo ${photoNumber}?`)) {
-                      onDelete?.(photo.id)
-                    }
-                  }}
+                  onClick={() => setPendingDelete({ photoId: photo.id, photoNumber })}
                   aria-label={`Delete Photo ${photoNumber}`}
                   title="Delete"
                   style={{
@@ -260,5 +274,12 @@ export function CaptureThumbnailGrid({
         )
       })}
     </div>
+    <PhotoDeleteConfirmDialog
+      open={Boolean(pendingDelete?.photoId)}
+      photoNumber={pendingDelete?.photoNumber}
+      onCancel={closeDeleteConfirm}
+      onConfirm={confirmDelete}
+    />
+    </>
   )
 }

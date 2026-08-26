@@ -9,6 +9,12 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight, RotateCw, Trash2, X } from 'lucide-react'
 import { PrimaryCTA, SecondaryButton, inputStyle, labelStyle } from '@/lib/premium-ui'
+import {
+  userPhotoImgProtectionProps,
+  userPhotoImgProtectionStyle,
+} from '@/components/photo-workspace/user-photo-img-protection'
+import { PhotoDeleteConfirmDialog } from '@/components/photo-workspace/PhotoDeleteConfirmDialog'
+import { resolvePhotoDeleteConfirm } from '@/components/photo-workspace/photo-delete-confirm'
 
 const iconBtn = {
   display: 'inline-flex',
@@ -55,6 +61,7 @@ export function CapturePhotoPreview({
   const list = Array.isArray(photos) ? photos : []
   const maxIndex = Math.max(0, list.length - 1)
   const [index, setIndex] = useState(() => Math.min(Math.max(0, startIndex), maxIndex))
+  const [pendingDelete, setPendingDelete] = useState(null)
 
   useEffect(() => {
     setIndex(Math.min(Math.max(0, startIndex), maxIndex))
@@ -72,6 +79,13 @@ export function CapturePhotoPreview({
   }, [photo?.id])
 
   if (!photo) return null
+
+  const closeDeleteConfirm = () => {
+    setPendingDelete(resolvePhotoDeleteConfirm(pendingDelete, 'cancel', onDelete))
+  }
+  const confirmDelete = () => {
+    setPendingDelete(resolvePhotoDeleteConfirm(pendingDelete, 'confirm', onDelete))
+  }
 
   const flush = () => {
     if (!photo?.id) return
@@ -163,12 +177,14 @@ export function CapturePhotoPreview({
           <img
             src={src}
             alt={`Photo ${photoNumber}`}
+            {...userPhotoImgProtectionProps()}
             style={{
               maxWidth: '100%',
               maxHeight: '100%',
               objectFit: 'contain',
               transform: degrees ? `rotate(${degrees}deg)` : undefined,
               transition: 'transform 120ms ease',
+              ...userPhotoImgProtectionStyle,
             }}
           />
         ) : null}
@@ -238,11 +254,7 @@ export function CapturePhotoPreview({
           </SecondaryButton>
           <SecondaryButton
             type="button"
-            onClick={() => {
-              if (typeof window === 'undefined' || window.confirm(`Delete Photo ${photoNumber}?`)) {
-                onDelete?.(photo.id)
-              }
-            }}
+            onClick={() => setPendingDelete({ photoId: photo.id, photoNumber })}
             style={{ minHeight: 48, flex: '1 1 120px', color: '#ff6b6b' }}
           >
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
@@ -260,6 +272,12 @@ export function CapturePhotoPreview({
           Done
         </PrimaryCTA>
       </div>
+      <PhotoDeleteConfirmDialog
+        open={Boolean(pendingDelete?.photoId)}
+        photoNumber={pendingDelete?.photoNumber}
+        onCancel={closeDeleteConfirm}
+        onConfirm={confirmDelete}
+      />
     </div>
   )
 }

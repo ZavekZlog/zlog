@@ -699,6 +699,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
       {/* Saved areas always visible — never hide stored data behind confirmation */}
       {locationWalk.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+          <div style={{ ...labelStyle, marginBottom: 0 }}>Saved Photo Areas</div>
           {locationWalk
             .filter((group) => !(isEditing && group.id === editingGroupId))
             .map((group) => (
