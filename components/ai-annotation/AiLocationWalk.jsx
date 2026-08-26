@@ -37,6 +37,13 @@ import {
   perPageToLayout,
 } from '@/lib/ai-annotation/area-groups'
 import { commitUnsavedPhotoAreaToWalk } from '@/lib/photo-workspace/commit-unsaved-area'
+import {
+  applyShadowPrepareToPhotos,
+  collectShadowPrepareJobs,
+  findPhotoShadowTarget,
+  runShadowPrepareJobs,
+  withShadowPreparePending,
+} from '@/lib/photo-workspace/shadow-ingest'
 import { normalizeRotationDegrees } from '@/lib/diary-pdf-layout'
 
 /** @typedef {'create' | 'after_save' | 'review'} WalkPhase */
@@ -176,6 +183,11 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   const [walkError, setWalkError] = useState('')
   const sectionRef = useRef(null)
   const editorRef = useRef(null)
+  /** Phase B: photo ids already handed to shadow prepare (dedupe Strict Mode / re-select). */
+  const shadowStartedIdsRef = useRef(new Set())
+  /** Latest draft list for late shadow results after Save Area may have cleared state. */
+  const draftPhotosRef = useRef(draftPhotos)
+  draftPhotosRef.current = draftPhotos
 
   // Suggestions come from this diary's own saved areas only. A previous diary must
   // never seed the Work Area Name field or its shortcuts.
@@ -202,6 +214,34 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     walkRef.current = next
     onChange(next)
   }, [onChange])
+
+  /**
+   * Phase B: attach shadowPrepare by stable photo id.
+   * Prefer committed locationWalk over draft so late results follow Save Area
+   * even if draft has not cleared yet. Deleted photos are ignored (no recreate).
+   */
+  const applyShadowPrepareResult = useCallback((photoId, shadowPrepare) => {
+    const walkTarget = findPhotoShadowTarget(photoId, {
+      draftPhotos: [],
+      locationWalk: walkRef.current,
+    })
+    if (walkTarget?.container === 'group') {
+      updateWalk((prev) => prev.map((group) => {
+        if (!group || String(group.id) !== String(walkTarget.groupId)) return group
+        return {
+          ...group,
+          photos: applyShadowPrepareToPhotos(group.photos || [], photoId, shadowPrepare),
+        }
+      }))
+      return
+    }
+    const draftTarget = findPhotoShadowTarget(photoId, {
+      draftPhotos: draftPhotosRef.current,
+      locationWalk: [],
+    })
+    if (!draftTarget) return
+    setDraftPhotos((prev) => applyShadowPrepareToPhotos(prev, photoId, shadowPrepare))
+  }, [updateWalk])
 
   const clearFieldErrors = () => {
     setNameError('')
@@ -253,22 +293,36 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     const nextPhotos = []
     for (const file of list) {
       const preview = URL.createObjectURL(file)
-      nextPhotos.push({
+      // Live production fields unchanged — shadowPrepare is transient Phase B only.
+      nextPhotos.push(withShadowPreparePending({
         ...createAreaPhoto({ file, preview, description: '', rotationDegrees: 0 }),
         uploadState: 'local_only',
         saveState: 'unsaved',
-      })
+      }))
     }
 
+    const targetId = (groupId || isEditing) ? (groupId || editingGroupId) : '__draft__'
     if (groupId || isEditing) {
-      const targetId = groupId || editingGroupId
       updateWalk((prev) => prev.map((g) => (
         g.id === targetId ? { ...g, photos: [...g.photos, ...nextPhotos] } : g
       )))
     } else {
       setDraftPhotos((prev) => [...prev, ...nextPhotos])
     }
+    // Immediate local preview is already on screen — do not await pipeline.
     setCapturing(false)
+
+    // Phase B shadow ingest: prepare report+thumb in memory only. Never replaces
+    // file/preview/imageUrl or touches upload/PDF paths.
+    const jobs = collectShadowPrepareJobs(nextPhotos, shadowStartedIdsRef.current)
+    if (jobs.length) {
+      void runShadowPrepareJobs(jobs, {
+        onResult: (photoId, shadowPrepare) => {
+          // Resolve by photo id at completion time — not the selection-time container.
+          applyShadowPrepareResult(photoId, shadowPrepare)
+        },
+      })
+    }
   }
 
   const applyCommittedArea = useCallback((result) => {
