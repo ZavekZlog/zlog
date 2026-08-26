@@ -273,6 +273,28 @@
       "allowsHighRisk": false,
       "requiresUserApproval": false
     },
+    "site-diary-prepared-photos": {
+      "description": "Phase C — durable prepared report + thumbnail persistence (Save & Share, report_photos migration, hydrate metadata, delete cleanup). Requires explicit Phase C approval.",
+      "allowedPathPrefixes": [
+        "app/dashboard/project/[id]/diary/",
+        "lib/diary-save.js",
+        "lib/live-diary-schema.js",
+        "lib/ai-annotation/",
+        "lib/photo-workspace/",
+        "supabase/migrations/",
+        "docs/contracts/PHOTO_WORKSPACE_CONTRACT.md"
+      ],
+      "allowedGlobs": [
+        "lib/diary-save*",
+        "lib/live-diary-schema*",
+        "lib/ai-annotation/**",
+        "lib/photo-workspace/**",
+        "supabase/migrations/**"
+      ],
+      "maxProductFiles": 20,
+      "allowsHighRisk": true,
+      "requiresUserApproval": true
+    },
     "dashboard-shell": {
       "description": "Dashboard home + Sign out masthead only.",
       "allowedPathPrefixes": [

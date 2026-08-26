@@ -133,6 +133,11 @@ import {
   programmeDatesForProjectDetails,
 } from '@/lib/diary-project-details'
 import {
+  ensurePreparedPhotoAssets,
+  uploadPreparedPhotoAssets,
+  buildPreparedPhotoRecordFields,
+} from '@/lib/photo-workspace/persist-prepared-photo'
+import {
   loginUrlWithReturn,
   SESSION_EXPIRED_SAVE_MESSAGE,
 } from '@/lib/auth/return-path'
@@ -836,6 +841,15 @@ export default function SiteDiaryPage() {
           overlayDirty: false,
           rotationDegrees: p.rotation_degrees ?? 0,
           assignedTo: p.assigned_to || '',
+          // Phase C prepared-asset metadata (nullable; unused by grid until Phase D).
+          thumbnailPath: p.thumbnail_path || null,
+          reportWidth: p.report_width ?? null,
+          reportHeight: p.report_height ?? null,
+          thumbnailWidth: p.thumbnail_width ?? null,
+          thumbnailHeight: p.thumbnail_height ?? null,
+          reportByteSize: p.report_byte_size ?? null,
+          thumbnailByteSize: p.thumbnail_byte_size ?? null,
+          processingVersion: p.processing_version || null,
         })
 
         const signReportPhotoRows = async (rows) => Promise.all((rows || []).map(async (p, index) => {
@@ -904,11 +918,20 @@ export default function SiteDiaryPage() {
           const results = await Promise.all([
             supabase.from('report_labour').select('trade, company, count, hours, notes').eq('report_id', existing.id).order('sequence'),
             supabase.from('report_plant').select('item, ref, status, notes').eq('report_id', existing.id).order('sequence'),
-            supabase.from('report_photos').select('id, url, caption, sequence, layout, location, category, annotations, overlay_path, rotation_degrees, assigned_to').eq('report_id', existing.id).order('sequence'),
+            supabase.from('report_photos').select('id, url, caption, sequence, layout, location, category, annotations, overlay_path, rotation_degrees, assigned_to, thumbnail_path, report_width, report_height, thumbnail_width, thumbnail_height, report_byte_size, thumbnail_byte_size, processing_version').eq('report_id', existing.id).order('sequence'),
           ])
           labour = results[0].data
           plant = results[1].error ? [] : results[1].data
           reportPhotos = results[2].data
+          if (results[2].error && /thumbnail_path|processing_version|report_width|report_height|thumbnail_width|thumbnail_height|report_byte_size|thumbnail_byte_size/i.test(results[2].error.message || '')) {
+            const withoutPrepared = await supabase
+              .from('report_photos')
+              .select('id, url, caption, sequence, layout, location, category, annotations, overlay_path, rotation_degrees, assigned_to')
+              .eq('report_id', existing.id)
+              .order('sequence')
+            reportPhotos = withoutPrepared.data
+            results[2] = withoutPrepared
+          }
           if (results[2].error && /assigned_to/i.test(results[2].error.message || '')) {
             const fallback = await supabase
               .from('report_photos')
@@ -2357,24 +2380,47 @@ export default function SiteDiaryPage() {
             const annotationPayload = hasAnnotations(photo.annotations) ? photo.annotations : null
 
             if (photo.file) {
-              const ext = photo.file.name.split('.').pop()?.toLowerCase() || 'jpg'
-              const storagePath = `${user.id}/${editingReportId}/${photo.sequence_number}-${Date.now()}.${ext}`
-
-              const { error: uploadError } = await supabase.storage
-                .from('site-photos')
-                .upload(storagePath, photo.file, { contentType: photo.file.type, upsert: false })
-
-              if (uploadError) {
+              // Phase C: upload prepared report + thumbnail; never store raw phone original
+              // as the canonical report asset when the pipeline can produce a report JPEG.
+              const prepared = await ensurePreparedPhotoAssets(photo)
+              if (!prepared.ok) {
                 const photoErr = new Error('photo-upload-failed')
                 photoErr.persistStage = 'photo'
+                photoErr.cause = prepared.error || prepared.reason
                 throw photoErr
+              }
+
+              let uploaded
+              try {
+                uploaded = await uploadPreparedPhotoAssets(supabase, {
+                  userId: user.id,
+                  reportId: editingReportId,
+                  photoId: photo.key,
+                  reportBlob: prepared.report.blob,
+                  thumbnailBlob: prepared.thumbnail?.blob || null,
+                  reportMeta: prepared.report,
+                  thumbnailMeta: prepared.thumbnail || {},
+                  pipelineId: prepared.pipelineId,
+                })
+              } catch (uploadErr) {
+                const photoErr = new Error('photo-upload-failed')
+                photoErr.persistStage = 'photo'
+                photoErr.cause = uploadErr
+                throw photoErr
+              }
+
+              if (uploaded.thumbFailed) {
+                console.warn('[zlog:photo-persist] thumbnail upload failed; report asset kept', {
+                  photoId: photo.key,
+                  reportPath: uploaded.reportPath,
+                })
               }
 
               return {
                 kind: 'new',
                 record: {
                   report_id: editingReportId,
-                  url: storagePath,
+                  ...buildPreparedPhotoRecordFields(uploaded),
                   caption: (photo.caption || '').trim() || null,
                   sequence: photo.sequence_number,
                   layout: photo.layout || 'grid4',
