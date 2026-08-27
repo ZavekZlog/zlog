@@ -41,6 +41,7 @@ import {
   flattenAreaGroups,
   groupPhotosByArea,
 } from '@/lib/ai-annotation/area-groups'
+import { isMissingWorkAreaNamePageError } from '@/lib/photo-workspace/commit-unsaved-area'
 import { hasAnnotations } from '@/lib/photo-annotations'
 import {
   createBlankDiaryDraft,
@@ -1512,6 +1513,14 @@ export default function SiteDiaryPage() {
   const handleLocationWalkChange = useCallback((next) => {
     setLocationWalk(next)
     setPhotos(flattenAreaGroups(next))
+  }, [])
+
+  const handleAreaNameValidationResolved = useCallback(() => {
+    const refMsg = persistUiErrorRef.current
+    if (isMissingWorkAreaNamePageError(refMsg)) {
+      persistUiErrorRef.current = ''
+    }
+    setError((prev) => (isMissingWorkAreaNamePageError(prev) ? '' : prev))
   }, [])
 
   /** Phase D: sign canonical report path only when the full viewer needs it. */
@@ -3448,6 +3457,7 @@ export default function SiteDiaryPage() {
           onAreaSaved={handleAreaSaved}
           onContinue={continueToSignature}
           ensureReportPreview={ensureReportPreviewForViewer}
+          onAreaNameValidationResolved={handleAreaNameValidationResolved}
         />
 
         <div

@@ -9,6 +9,7 @@ import {
   forwardRef,
   useCallback,
   useEffect,
+  useId,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -157,6 +158,8 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   labels = null,
   /** Phase D: resolve canonical report signed URL when the full viewer opens. */
   ensureReportPreview = null,
+  /** Clears diary page missing-name Share error when Area name becomes valid. */
+  onAreaNameValidationResolved = null,
 }, ref) {
   const copy = {
     sectionIntro: '',
@@ -198,6 +201,8 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   const [walkError, setWalkError] = useState('')
   const sectionRef = useRef(null)
   const editorRef = useRef(null)
+  const nameInputRef = useRef(null)
+  const areaNameErrorId = useId()
   /** Synchronous Save Area lock — blocks double-tap before React re-renders. */
   const persistingAreaRef = useRef(false)
   /** Phase B: photo ids already handed to shadow prepare (dedupe Strict Mode / re-select). */
@@ -269,6 +274,25 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     setLayoutError('')
     setPhotoError('')
   }
+
+  const notifyAreaNameValid = useCallback(() => {
+    onAreaNameValidationResolved?.()
+  }, [onAreaNameValidationResolved])
+
+  const focusAreaNameField = useCallback(() => {
+    requestAnimationFrame(() => {
+      nameInputRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+      nameInputRef.current?.focus?.({ preventScroll: true })
+    })
+  }, [])
+
+  const handleAreaNameChange = useCallback((nextValue) => {
+    setNameDraft(nextValue)
+    if (String(nextValue || '').trim()) {
+      setNameError('')
+      notifyAreaNameValid()
+    }
+  }, [notifyAreaNameValid])
 
   const beginCreate = useCallback(() => {
     setNameDraft('')
@@ -429,7 +453,12 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
 
   const saveArea = async () => {
     if (persistingAreaRef.current) return
-    if (!validateSave()) return
+    if (!validateSave()) {
+      if (!nameDraft.trim()) {
+        focusAreaNameField()
+      }
+      return
+    }
 
     persistingAreaRef.current = true
     setPersistingArea(true)
@@ -656,7 +685,9 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
           <SecondaryButton
             key={name}
             type="button"
-            onClick={() => { setNameDraft(name); setNameError('') }}
+            onClick={() => {
+              handleAreaNameChange(name)
+            }}
           >
             {name}
           </SecondaryButton>
@@ -724,17 +755,19 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
         <div ref={editorRef} data-area-editor="saved">
           <div style={{ ...labelStyle, marginBottom: 8 }}>Area name</div>
           <input
+            ref={nameInputRef}
             type="text"
             value={nameDraft}
-            onChange={(e) => {
-              setNameDraft(e.target.value)
-              if (e.target.value.trim()) setNameError('')
-            }}
+            onChange={(e) => handleAreaNameChange(e.target.value)}
             placeholder={copy.groupNamePlaceholder}
             style={{ ...inputStyle, marginBottom: nameError ? 0 : 14, minHeight: 48 }}
             autoComplete="off"
+            aria-invalid={nameError ? true : undefined}
+            aria-describedby={nameError ? areaNameErrorId : undefined}
           />
-          {nameError ? <p style={{ ...fieldErrorStyle, marginBottom: 12 }}>{nameError}</p> : null}
+          {nameError ? (
+            <p id={areaNameErrorId} style={{ ...fieldErrorStyle, marginBottom: 12 }}>{nameError}</p>
+          ) : null}
 
           <div style={{ ...labelStyle, marginBottom: 8 }}>Photos per page</div>
           <PhotosPerPagePicker
@@ -886,17 +919,19 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
           </div>
           <div style={{ ...labelStyle, marginBottom: 8 }}>Area name</div>
           <input
+            ref={nameInputRef}
             type="text"
             value={nameDraft}
-            onChange={(e) => {
-              setNameDraft(e.target.value)
-              if (e.target.value.trim()) setNameError('')
-            }}
+            onChange={(e) => handleAreaNameChange(e.target.value)}
             placeholder={copy.groupNamePlaceholder}
             style={{ ...inputStyle, marginBottom: nameError ? 0 : 14, minHeight: 48 }}
             autoComplete="off"
+            aria-invalid={nameError ? true : undefined}
+            aria-describedby={nameError ? areaNameErrorId : undefined}
           />
-          {nameError ? <p style={{ ...fieldErrorStyle, marginBottom: 12 }}>{nameError}</p> : null}
+          {nameError ? (
+            <p id={areaNameErrorId} style={{ ...fieldErrorStyle, marginBottom: 12 }}>{nameError}</p>
+          ) : null}
 
           <div style={{ ...labelStyle, marginBottom: 8 }}>Photos per page</div>
           <PhotosPerPagePicker
