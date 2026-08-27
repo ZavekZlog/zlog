@@ -192,11 +192,14 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   const [layoutError, setLayoutError] = useState('')
   const [photoError, setPhotoError] = useState('')
   const [capturing, setCapturing] = useState(false)
+  const [persistingArea, setPersistingArea] = useState(false)
   const [lastSaved, setLastSaved] = useState(null)
   const [viewer, setViewer] = useState(null)
   const [walkError, setWalkError] = useState('')
   const sectionRef = useRef(null)
   const editorRef = useRef(null)
+  /** Synchronous Save Area lock — blocks double-tap before React re-renders. */
+  const persistingAreaRef = useRef(false)
   /** Phase B: photo ids already handed to shadow prepare (dedupe Strict Mode / re-select). */
   const shadowStartedIdsRef = useRef(new Set())
   /** Latest draft list for late shadow results after Save Area may have cleared state. */
@@ -345,8 +348,6 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
 
   const applyCommittedArea = useCallback((result) => {
     if (!result?.ok || !result.committed || !result.saved) return false
-    walkRef.current = result.locationWalk
-    onChange(result.locationWalk)
     if (result.clearedDraft) setDraftPhotos([])
     setLastSaved({
       name: result.saved.areaName,
@@ -357,9 +358,55 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     setDescriptionDraft('')
     clearFieldErrors()
     setPhase('after_save')
-    onAreaSaved?.(result.saved)
     return true
+  }, [])
+
+  const releasePersistingBusy = useCallback(() => {
+    persistingAreaRef.current = false
+    setPersistingArea(false)
+  }, [])
+
+  /** Yield one frame so “Saving area…” can paint before prepare/upload work. */
+  const yieldForSaveAreaPaint = () => {
+    if (typeof requestAnimationFrame === 'function') {
+      return new Promise((resolve) => {
+        requestAnimationFrame(() => resolve())
+      })
+    }
+    return Promise.resolve()
+  }
+
+  const persistCommittedArea = useCallback(async (result) => {
+    if (!result?.ok || !result.committed || !result.saved) {
+      return { ok: false, reason: 'not-committed' }
+    }
+    let walkToCommit = result.locationWalk
+    if (onAreaSaved) {
+      const persistResult = await onAreaSaved(result.saved, {
+        locationWalk: result.locationWalk,
+      })
+      if (persistResult && persistResult.ok === false) {
+        setPhotoError(
+          persistResult.message
+            || 'We couldn’t save this photo area yet. Check your connection and tap Save Area again.',
+        )
+        return { ok: false, reason: persistResult.reason || 'persist-failed' }
+      }
+      if (persistResult?.locationWalk) {
+        walkToCommit = persistResult.locationWalk
+      }
+    }
+    walkRef.current = walkToCommit
+    onChange(walkToCommit)
+    const saved = walkToCommit.find((g) => g.id === result.saved.id) || result.saved
+    return { ok: true, locationWalk: walkToCommit, saved, clearedDraft: result.clearedDraft }
   }, [onAreaSaved, onChange])
+
+  const finalizeAreaSave = useCallback(async (result) => {
+    const persisted = await persistCommittedArea(result)
+    if (!persisted.ok) return false
+    return applyCommittedArea({ ...result, ...persisted })
+  }, [applyCommittedArea, persistCommittedArea])
 
   const buildCommitInput = useCallback(() => ({
     phase,
@@ -380,23 +427,34 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     editingGroup,
   ])
 
-  const saveArea = () => {
+  const saveArea = async () => {
+    if (persistingAreaRef.current) return
     if (!validateSave()) return
-    const result = commitUnsavedPhotoAreaToWalk(buildCommitInput())
-    if (!result.ok) {
-      if (result.reason === 'missing-name') setNameError(copy.enterNameError)
-      if (result.reason === 'missing-layout') setLayoutError('Choose a photo layout')
-      if (result.reason === 'missing-photos') setPhotoError('Add at least one photo')
-      return
+
+    persistingAreaRef.current = true
+    setPersistingArea(true)
+    try {
+      await yieldForSaveAreaPaint()
+      const result = commitUnsavedPhotoAreaToWalk(buildCommitInput())
+      if (!result.ok) {
+        if (result.reason === 'missing-name') setNameError(copy.enterNameError)
+        if (result.reason === 'missing-layout') setLayoutError('Choose a photo layout')
+        if (result.reason === 'missing-photos') setPhotoError('Add at least one photo')
+        return
+      }
+      if (result.committed) {
+        await finalizeAreaSave(result)
+      }
+    } finally {
+      releasePersistingBusy()
     }
-    if (result.committed) applyCommittedArea(result)
   }
 
   /**
    * Save & Share entry: commit the current unsaved area with the same Save Area
    * logic, or block when the draft is incomplete. Returns the walk Share must use.
    */
-  const commitUnsavedAreaForShare = useCallback(() => {
+  const commitUnsavedAreaForShare = useCallback(async () => {
     const result = commitUnsavedPhotoAreaToWalk(buildCommitInput())
     if (!result.ok) {
       if (result.reason === 'missing-name') setNameError(copy.enterNameError)
@@ -405,9 +463,18 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
       setPhase('create')
       return result
     }
-    if (result.committed) applyCommittedArea(result)
+    if (result.committed) {
+      const persisted = await persistCommittedArea(result)
+      if (!persisted.ok) {
+        return { ...result, ok: false, blocked: true, reason: persisted.reason || 'persist-failed' }
+      }
+      return {
+        ...result,
+        locationWalk: persisted.locationWalk,
+      }
+    }
     return result
-  }, [applyCommittedArea, buildCommitInput, copy.enterNameError])
+  }, [buildCommitInput, copy.enterNameError, persistCommittedArea])
 
   const editGroup = (groupId) => {
     // Prefer walkRef so Edit resolves against the latest hydrated groups
@@ -748,11 +815,11 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
               type="button"
               surface="workbench"
               accent={accent}
-              disabled={capturing}
+              disabled={capturing || persistingArea}
               onClick={saveArea}
               style={primaryTap}
             >
-              {copy.saveGroup}
+              {persistingArea ? 'Saving area…' : copy.saveGroup}
             </PrimaryCTA>
           </div>
 
@@ -879,11 +946,11 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
               type="button"
               surface="workbench"
               accent={accent}
-              disabled={capturing}
+              disabled={capturing || persistingArea}
               onClick={saveArea}
               style={primaryTap}
             >
-              {copy.saveGroup}
+              {persistingArea ? 'Saving area…' : copy.saveGroup}
             </PrimaryCTA>
           </div>
 

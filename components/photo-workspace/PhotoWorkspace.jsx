@@ -31,12 +31,11 @@ export const PhotoWorkspace = forwardRef(function PhotoWorkspace({
   const labels = getPhotoWorkspaceLabels(reportType)
   const adapter = getPhotoWorkspaceAdapter(reportType)
 
-  const handleAreaSaved = (group) => {
-    onAreaSaved?.(group, {
-      adapter: adapter.reportType,
-      reportId,
-    })
-  }
+  const handleAreaSaved = (group, meta) => onAreaSaved?.(group, {
+    adapter: adapter.reportType,
+    reportId,
+    ...meta,
+  })
 
   return (
     <div data-photo-workspace={reportType} data-report-id={reportId || undefined}>

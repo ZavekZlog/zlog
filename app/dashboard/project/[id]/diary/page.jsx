@@ -133,6 +133,10 @@ import {
   programmeDatesForProjectDetails,
 } from '@/lib/diary-project-details'
 import {
+  persistSaveAreaGroup,
+  SAVE_AREA_PERSIST_FAIL_MESSAGE,
+} from '@/lib/photo-workspace/persist-save-area'
+import {
   ensurePreparedPhotoAssets,
   uploadPreparedPhotoAssets,
   buildPreparedPhotoRecordFields,
@@ -2064,6 +2068,41 @@ export default function SiteDiaryPage() {
     saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
   }
 
+  const handleAreaSaved = useCallback(async (savedGroup, meta = {}) => {
+    if (!editingReportId) {
+      return { ok: false, reason: 'missing-report', message: SAVE_AREA_PERSIST_FAIL_MESSAGE }
+    }
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      markSessionExpired()
+      return { ok: false, reason: 'auth', message: SESSION_EXPIRED_SAVE_MESSAGE }
+    }
+    const walk = meta.locationWalk || locationWalk
+    try {
+      const result = await persistSaveAreaGroup(supabase, {
+        userId: user.id,
+        reportId: editingReportId,
+        savedGroup,
+        locationWalk: walk,
+      })
+      if (!result.ok) {
+        return {
+          ok: false,
+          reason: result.reason || 'persist-failed',
+          message: SAVE_AREA_PERSIST_FAIL_MESSAGE,
+        }
+      }
+      return result
+    } catch (err) {
+      console.warn('[zlog:save-area-persist]', err)
+      return {
+        ok: false,
+        reason: 'persist-failed',
+        message: SAVE_AREA_PERSIST_FAIL_MESSAGE,
+      }
+    }
+  }, [editingReportId, locationWalk, markSessionExpired, supabase])
+
   const handleSave = async (e) => {
     e?.preventDefault?.()
     e?.stopPropagation?.()
@@ -2260,7 +2299,7 @@ export default function SiteDiaryPage() {
       // Commit the active unsaved work area (same as Save Area) before persist.
       // Draft photos outside locationWalk must never be silently omitted from Share.
       let walkForPersist = locationWalk
-      const areaFlush = locationWalkRef.current?.commitUnsavedAreaForShare?.()
+      const areaFlush = await locationWalkRef.current?.commitUnsavedAreaForShare?.()
       if (areaFlush && areaFlush.ok === false) {
         failSave(
           areaFlush.message
@@ -3406,6 +3445,7 @@ export default function SiteDiaryPage() {
           projectId={projectId}
           value={locationWalk}
           onChange={handleLocationWalkChange}
+          onAreaSaved={handleAreaSaved}
           onContinue={continueToSignature}
           ensureReportPreview={ensureReportPreviewForViewer}
         />
