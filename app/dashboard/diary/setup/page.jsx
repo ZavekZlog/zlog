@@ -65,6 +65,7 @@ import {
   resolveCoverPhotoPreviewUrl,
   uploadCoverPhotoFile,
 } from '@/lib/diary-cover-photo'
+import { diaryHubHref } from '@/lib/diary-routing'
 import {
   resolveSignedInAuthorProfile,
   persistSignedInAuthorProfile,
@@ -117,6 +118,10 @@ function SiteDiarySetupPage() {
   const editingProjectId = searchParams.get('project') || null
   const supabase = createClient()
   const setupTitle = editingReportId ? 'Project & Report Details' : 'New Site Diary'
+  const setupBackHref = useMemo(
+    () => (editingProjectId ? diaryHubHref({ projectId: editingProjectId }) : '/dashboard/diary'),
+    [editingProjectId],
+  )
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -717,17 +722,9 @@ function SiteDiarySetupPage() {
     }
   }
 
-  const handleBack = () => {
-    if (editingReportId && editingProjectId) {
-      router.push(`/dashboard/project/${editingProjectId}/diary?report=${editingReportId}`)
-      return
-    }
-    router.push('/dashboard/diary')
-  }
-
   if (loading) {
     return (
-      <PremiumShell title={setupTitle} backHref="/dashboard/diary" accent={DIARY_ACCENT} maxWidth={520}>
+      <PremiumShell title={setupTitle} backHref={setupBackHref} accent={DIARY_ACCENT} maxWidth={520}>
         <p style={{ color: 'var(--text-2)', fontSize: 16 }}>Loading…</p>
       </PremiumShell>
     )
@@ -736,8 +733,7 @@ function SiteDiarySetupPage() {
   return (
     <PremiumShell
       title={setupTitle}
-      onBack={handleBack}
-      backHref="/dashboard/diary"
+      backHref={setupBackHref}
       accent={DIARY_ACCENT}
       maxWidth={520}
     >
@@ -1105,7 +1101,7 @@ function SiteDiarySetupPage() {
       ) : null}
 
       <ZlogBackControl
-        onClick={handleBack}
+        href={setupBackHref}
         disabled={saving}
         style={{ marginBottom: 32 }}
       />
