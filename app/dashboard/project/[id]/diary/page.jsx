@@ -2840,10 +2840,16 @@ export default function SiteDiaryPage() {
     )
   }
 
+  // Contextual Back → same-diary Project Details (not hub). Hub only if report id missing.
+  const workbenchBackHref =
+    projectAndReportDetailsHref(projectId, editingReportId)
+    || diaryHubHref({ projectId })
+    || '/dashboard/diary'
+
   return (
     <PremiumShell
       title="Site Diary"
-      backHref={`/dashboard/project/${projectId}/diary`}
+      backHref={workbenchBackHref}
       accent={REPORT_THEMES.diary.accent}
       maxWidth={720}
     >
