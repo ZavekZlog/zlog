@@ -65,6 +65,7 @@ import {
   resolveCoverPhotoPreviewUrl,
   uploadCoverPhotoFile,
 } from '@/lib/diary-cover-photo'
+import { putPendingCover } from '@/lib/diary-cover-pending'
 import { diaryHubHref } from '@/lib/diary-routing'
 import {
   resolveSignedInAuthorProfile,
@@ -675,6 +676,7 @@ function SiteDiarySetupPage() {
       }
 
       // Persist cover onto the diary row (same cover_photo_url path as workbench/PDF).
+      // F2B: prefer durable IndexedDB handoff → navigate; fall back to blocking upload.
       const coverReportId = result.reportId
       const coverProjectId = result.projectId
       if (coverReportId) {
@@ -685,27 +687,35 @@ function SiteDiarySetupPage() {
             fields: { coverPhotoUrl: null },
           })
         } else if (coverPhoto?.file) {
-          const { storagePath, error: coverUpErr } = await uploadCoverPhotoFile(supabase, {
-            userId: user.id,
-            reportId: coverReportId,
-            file: coverPhoto.file,
+          const handoff = await putPendingCover(coverReportId, {
+            blob: coverPhoto.file,
+            mimeType: coverPhoto.file.type || 'image/jpeg',
+            fileName: coverPhoto.file.name || 'cover.jpg',
           })
-          if (coverUpErr || !storagePath) {
-            throw new Error(
-              coverUpErr?.message
-                || 'We couldn’t upload the cover photo. Check your connection and try again.',
-            )
+          if (!handoff?.ok) {
+            // Critical fallback: cover exists only in React memory — block until durable.
+            const { storagePath, error: coverUpErr } = await uploadCoverPhotoFile(supabase, {
+              userId: user.id,
+              reportId: coverReportId,
+              file: coverPhoto.file,
+            })
+            if (coverUpErr || !storagePath) {
+              throw new Error(
+                coverUpErr?.message
+                  || 'We couldn’t upload the cover photo. Check your connection and try again.',
+              )
+            }
+            await updateDiarySetupFields(supabase, {
+              reportId: coverReportId,
+              projectId: coverProjectId,
+              fields: { coverPhotoUrl: storagePath },
+            })
           }
-          await updateDiarySetupFields(supabase, {
-            reportId: coverReportId,
-            projectId: coverProjectId,
-            fields: { coverPhotoUrl: storagePath },
-          })
         }
       }
 
-      // Cover must be durable on the report before navigation (above). Author
-      // profile persist is best-effort and must not delay router.push.
+      // Cover is durable via IndexedDB handoff (preferred) or blocking upload
+      // fallback before navigation. Author profile persist is best-effort.
       if (result.navigatedTo) {
         router.push(result.navigatedTo)
       }

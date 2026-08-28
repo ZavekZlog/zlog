@@ -47,6 +47,7 @@ import {
   createBlankDiaryDraft,
   createTodaysDiaryDraft,
   fetchOpenDraft,
+  updateDiarySetupFields,
 } from '@/lib/diary-draft'
 import { DiarySaveError, DIARY_SAVE_LOG, finalizeSiteDiarySave } from '@/lib/diary-save'
 import {
@@ -85,6 +86,13 @@ import {
   isCoverAutosavePendingToken,
   coverPhotoStateAfterUpload,
 } from '@/lib/diary-cover-photo'
+import {
+  getPendingCover,
+  putPendingCover,
+  markPendingCoverRemoved,
+  fileFromPendingCover,
+  syncPendingCoverUpload,
+} from '@/lib/diary-cover-pending'
 import {
   diaryHubHref,
   diaryEditHref,
@@ -581,6 +589,8 @@ export default function SiteDiaryPage() {
   const coverRemovedRef = useRef(false)
   const coverPhotoRef = useRef(null)
   coverPhotoRef.current = coverPhoto
+  /** F2B — generation of IndexedDB pending cover; stale uploads must not commit. */
+  const coverPendingGenerationRef = useRef(null)
   const [signature, setSignature] = useState(null)
   const [signatureMode, setSignatureMode] = useState('draw') // 'carried' | 'accepted' | 'draw'
   const [brandingSelection, setBrandingSelection] = useState(null)
@@ -933,6 +943,31 @@ export default function SiteDiaryPage() {
           if (cancelled) return
         }
 
+        // F2B: local durable pending cover (IndexedDB) overrides empty server path for preview.
+        // Network upload must NOT block first usable UI.
+        let pendingCoverGeneration = null
+        try {
+          const pending = await getPendingCover(editingReportId)
+          if (pending && !pending.removed && pending.blob) {
+            const file = fileFromPendingCover(pending)
+            if (file) {
+              const localPreview = URL.createObjectURL(pending.blob)
+              pendingCoverGeneration = pending.generation
+              coverPendingGenerationRef.current = pending.generation
+              coverRemovedRef.current = false
+              const localState = {
+                file,
+                preview: localPreview,
+                storagePath: null,
+              }
+              coverPhotoRef.current = localState
+              setCoverPhoto(localState)
+            }
+          }
+        } catch {
+          /* pending handoff optional — diary still opens */
+        }
+
         let labour
         let plant
         let reportPhotos
@@ -1092,12 +1127,46 @@ export default function SiteDiaryPage() {
             setLoading(false)
           }
 
+          // F2B: resume canonical cover upload after first paint (non-blocking).
+          if (pendingCoverGeneration && !cancelled) {
+            void (async () => {
+              const gen = pendingCoverGeneration
+              try {
+                const { data: { user } } = await supabase.auth.getUser()
+                if (!user?.id || coverRemovedRef.current) return
+                if (coverPendingGenerationRef.current !== gen) return
+                const synced = await syncPendingCoverUpload(supabase, {
+                  userId: user.id,
+                  reportId: editingReportId,
+                  generation: gen,
+                  updateCoverUrl: async (storagePath) => {
+                    await updateDiarySetupFields(supabase, {
+                      reportId: editingReportId,
+                      projectId,
+                      fields: { coverPhotoUrl: storagePath },
+                    })
+                  },
+                })
+                if (!synced.ok || !synced.storagePath) return
+                if (cancelled || coverRemovedRef.current) return
+                if (coverPendingGenerationRef.current !== gen) return
+                loadedCoverPathRef.current = synced.storagePath
+                const keepPreview = coverPhotoRef.current?.preview || null
+                const nextCover = coverPhotoStateAfterUpload(synced.storagePath, keepPreview)
+                coverPhotoRef.current = nextCover
+                if (commit()) setCoverPhoto(nextCover)
+              } catch {
+                /* background resume — diary remains usable */
+              }
+            })()
+          }
+
           if (allProjectsPromise) {
             const { data: allProjects } = await allProjectsPromise
             if (!cancelled && commit()) setProjects(allProjects || [])
           }
 
-          if (editHydration.coverStoragePath) {
+          if (editHydration.coverStoragePath && !pendingCoverGeneration) {
             const preview = await resolveCoverPhotoPreviewUrl(
               supabase,
               editHydration.coverStoragePath,
@@ -1167,6 +1236,39 @@ export default function SiteDiaryPage() {
           if (commit()) {
             setLoadDiagnostic('')
             setHydrateComplete(true)
+          }
+
+          if (pendingCoverGeneration && !cancelled) {
+            void (async () => {
+              const gen = pendingCoverGeneration
+              try {
+                const { data: { user } } = await supabase.auth.getUser()
+                if (!user?.id || coverRemovedRef.current) return
+                if (coverPendingGenerationRef.current !== gen) return
+                const synced = await syncPendingCoverUpload(supabase, {
+                  userId: user.id,
+                  reportId: editingReportId,
+                  generation: gen,
+                  updateCoverUrl: async (storagePath) => {
+                    await updateDiarySetupFields(supabase, {
+                      reportId: editingReportId,
+                      projectId,
+                      fields: { coverPhotoUrl: storagePath },
+                    })
+                  },
+                })
+                if (!synced.ok || !synced.storagePath) return
+                if (cancelled || coverRemovedRef.current) return
+                if (coverPendingGenerationRef.current !== gen) return
+                loadedCoverPathRef.current = synced.storagePath
+                const keepPreview = coverPhotoRef.current?.preview || null
+                const nextCover = coverPhotoStateAfterUpload(synced.storagePath, keepPreview)
+                coverPhotoRef.current = nextCover
+                if (commit()) setCoverPhoto(nextCover)
+              } catch {
+                /* background resume — diary remains usable */
+              }
+            })()
           }
         }
       } catch (err) {
@@ -1594,7 +1696,48 @@ export default function SiteDiaryPage() {
         storagePath: null,
       }
     })
-  }, [])
+    // F2B: durable pending replace — new generation invalidates in-flight uploads.
+    if (editingReportId) {
+      void putPendingCover(editingReportId, {
+        blob: file,
+        mimeType: file.type || 'image/jpeg',
+        fileName: file.name || 'cover.jpg',
+      }).then((handoff) => {
+        if (handoff?.ok && handoff.generation) {
+          coverPendingGenerationRef.current = handoff.generation
+          void (async () => {
+            const gen = handoff.generation
+            try {
+              const { data: { user } } = await supabase.auth.getUser()
+              if (!user?.id || coverRemovedRef.current) return
+              const synced = await syncPendingCoverUpload(supabase, {
+                userId: user.id,
+                reportId: editingReportId,
+                generation: gen,
+                updateCoverUrl: async (storagePath) => {
+                  await updateDiarySetupFields(supabase, {
+                    reportId: editingReportId,
+                    projectId,
+                    fields: { coverPhotoUrl: storagePath },
+                  })
+                },
+              })
+              if (!synced.ok || !synced.storagePath) return
+              if (coverRemovedRef.current) return
+              if (coverPendingGenerationRef.current !== gen) return
+              loadedCoverPathRef.current = synced.storagePath
+              const keepPreview = coverPhotoRef.current?.preview || null
+              const nextCover = coverPhotoStateAfterUpload(synced.storagePath, keepPreview)
+              coverPhotoRef.current = nextCover
+              setCoverPhoto(nextCover)
+            } catch {
+              /* background upload — local preview remains */
+            }
+          })()
+        }
+      })
+    }
+  }, [editingReportId, projectId, supabase])
 
   const canvasRef = useRef(null)
   const signaturePadRef = useRef(null)
@@ -1893,6 +2036,15 @@ export default function SiteDiaryPage() {
       setError('')
     }
     setCoverPhoto(null)
+    // F2B: tombstone pending so a slow upload cannot restore this cover.
+    if (editingReportId) {
+      void markPendingCoverRemoved(editingReportId).then((result) => {
+        if (result?.generation) coverPendingGenerationRef.current = result.generation
+        else coverPendingGenerationRef.current = null
+      })
+    } else {
+      coverPendingGenerationRef.current = null
+    }
   }
 
   const labourHasData = labourRowHasData
