@@ -63,9 +63,9 @@ import { loadEditDiarySetupSources } from '@/lib/diary-edit-hydrate'
 import {
   coverPhotoStateFromSaved,
   resolveCoverPhotoPreviewUrl,
-  uploadCoverPhotoFile,
+  uploadRawCoverFallbackFile,
 } from '@/lib/diary-cover-photo'
-import { putPendingCover } from '@/lib/diary-cover-pending'
+import { putPendingCover, newCoverPendingGeneration } from '@/lib/diary-cover-pending'
 import { diaryHubHref } from '@/lib/diary-routing'
 import {
   resolveSignedInAuthorProfile,
@@ -684,7 +684,7 @@ function SiteDiarySetupPage() {
           await updateDiarySetupFields(supabase, {
             reportId: coverReportId,
             projectId: coverProjectId,
-            fields: { coverPhotoUrl: null },
+            fields: { coverPhotoUrl: null, coverProcessingVersion: null },
           })
         } else if (coverPhoto?.file) {
           const handoff = await putPendingCover(coverReportId, {
@@ -694,21 +694,24 @@ function SiteDiarySetupPage() {
           })
           if (!handoff?.ok) {
             // Critical fallback: cover exists only in React memory — block until durable.
-            const { storagePath, error: coverUpErr } = await uploadCoverPhotoFile(supabase, {
+            // C1: immutable generation-scoped raw path (never shared cover.jpg).
+            const generation = newCoverPendingGeneration()
+            const { storagePath, error: coverUpErr } = await uploadRawCoverFallbackFile(supabase, {
               userId: user.id,
               reportId: coverReportId,
+              generation,
               file: coverPhoto.file,
             })
             if (coverUpErr || !storagePath) {
               throw new Error(
                 coverUpErr?.message
-                  || 'We couldn’t upload the cover photo. Check your connection and try again.',
+                  || 'We couldn\u2019t upload the cover photo. Check your connection and try again.',
               )
             }
             await updateDiarySetupFields(supabase, {
               reportId: coverReportId,
               projectId: coverProjectId,
-              fields: { coverPhotoUrl: storagePath },
+              fields: { coverPhotoUrl: storagePath, coverProcessingVersion: null },
             })
           }
         }

@@ -81,10 +81,11 @@ import {
   planCoverPhotoPersistence,
   applyCoverPhotoPatch,
   coverPhotoPersistedOnRow,
-  uploadCoverPhotoFile,
   coverPhotoUrlForAutosave,
   isCoverAutosavePendingToken,
   coverPhotoStateAfterUpload,
+  coverSetupFieldsFromSync,
+  uploadRawCoverFallbackFile,
 } from '@/lib/diary-cover-photo'
 import {
   getPendingCover,
@@ -92,6 +93,7 @@ import {
   markPendingCoverRemoved,
   fileFromPendingCover,
   syncPendingCoverUpload,
+  newCoverPendingGeneration,
 } from '@/lib/diary-cover-pending'
 import {
   diaryHubHref,
@@ -1400,9 +1402,15 @@ export default function SiteDiaryPage() {
               error: { message: 'cover-file-missing', code: null },
             }
           }
-          const { storagePath, error: coverUploadError } = await uploadCoverPhotoFile(supabase, {
+          let coverGen = coverPendingGenerationRef.current
+          if (!coverGen) {
+            coverGen = newCoverPendingGeneration()
+            coverPendingGenerationRef.current = coverGen
+          }
+          const { storagePath, error: coverUploadError } = await uploadRawCoverFallbackFile(supabase, {
             userId: user.id,
             reportId: editingReportId,
+            generation: coverGen,
             file: liveCover.file,
           })
           if (coverUploadError || !storagePath) {
@@ -1418,6 +1426,14 @@ export default function SiteDiaryPage() {
               },
             }
           }
+          await updateDiarySetupFields(supabase, {
+            reportId: editingReportId,
+            projectId,
+            fields: coverSetupFieldsFromSync({
+              storagePath,
+              coverProcessingVersion: null,
+            }),
+          })
           loadedCoverPathRef.current = storagePath
           coverRemovedRef.current = false
           // Drop local File so Share will not re-upload this object.
@@ -1433,6 +1449,7 @@ export default function SiteDiaryPage() {
           payload = {
             ...payload,
             cover_photo_url: storagePath,
+            cover_processing_version: null,
           }
           latestPayloadRef.current = payload
         } catch (err) {
@@ -2503,21 +2520,29 @@ export default function SiteDiaryPage() {
       let requiredCoverPath = null
 
       if (coverPlan.needsUpload && coverPlan.file) {
-        const { storagePath: coverPath, error: coverUploadError } = await uploadCoverPhotoFile(supabase, {
+        let coverGen = coverPendingGenerationRef.current
+        if (!coverGen) {
+          coverGen = newCoverPendingGeneration()
+          coverPendingGenerationRef.current = coverGen
+        }
+        const { storagePath: coverPath, error: coverUploadError } = await uploadRawCoverFallbackFile(supabase, {
           userId: user.id,
           reportId: editingReportId,
+          generation: coverGen,
           file: coverPlan.file,
         })
         if (coverUploadError || !coverPath) {
           failSave(COVER_UPLOAD_FAIL_MESSAGE)
           return
         }
-        coverPlan = planCoverPhotoPersistence({
-          coverPhoto: liveCover,
-          loadedCoverPath: loadedCoverPathRef.current,
-          coverRemoved: false,
-          uploadedPath: coverPath,
-        })
+        coverPlan = {
+          needsUpload: false,
+          file: null,
+          patch: {
+            cover_photo_url: coverPath,
+            cover_processing_version: null,
+          },
+        }
         if (!coverPlan.patch?.cover_photo_url) {
           failSave(COVER_UPLOAD_FAIL_MESSAGE)
           return

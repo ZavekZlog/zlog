@@ -1,6 +1,6 @@
 {
   "introspectedAt": "2026-08-05T20:33:50.151Z",
-  "pendingRefreshAfterMigration": "20260816090000_diary_temporary_works.sql",
+  "pendingRefreshAfterMigration": "20260829140000_daily_reports_cover_processing_version.sql",
   "host": "epvkxavaxmzyskteecsv.supabase.co",
   "source": "GET /rest/v1/ Accept: application/openapi+json",
   "definitionKeysSample": [
@@ -175,6 +175,15 @@
           "default": null
         },
         {
+          "name": "cover_processing_version",
+          "type": "string",
+          "format": "text",
+          "description": "Pipeline id for prepared cover at cover_photo_url (e.g. zlog-cover-pipeline-v1). Null for legacy/raw.",
+          "nullable": true,
+          "requiredInSchema": false,
+          "default": null
+        },
+        {
           "name": "signature_url",
           "type": "string",
           "format": "text",
@@ -282,6 +291,7 @@
         "creator_name",
         "creator_role",
         "cover_photo_url",
+        "cover_processing_version",
         "signature_url",
         "branding_id",
         "brand_color",
