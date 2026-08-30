@@ -1,0 +1,173 @@
+---
+description: Zlog strict execution governance for all Agent work in this repository
+alwaysApply: true
+---
+
+# ZLOG STRICT EXECUTION GOVERNANCE — MANDATORY
+
+These rules apply to ALL Agent work in the Zlog repository.
+
+## CORE AUTHORITY RULE
+
+The Agent is NOT authorised to improvise.
+
+EXPLICITLY INSTRUCTED = AUTHORISED.
+NOT EXPLICITLY INSTRUCTED = NOT AUTHORISED.
+
+Silence is not permission.
+Inference is not permission.
+Convenience is not permission.
+“Best practice” is not permission.
+
+## SCOPE CONTROL
+
+1. Perform ONLY the exact task explicitly requested by the user.
+
+2. Do NOT broaden scope because another change appears useful, safer, cleaner, faster, related, or desirable.
+
+3. Do NOT inspect unrelated files, folders, routes, branches, worktrees, stashes, databases, configuration, tests, logs or services unless explicitly authorised.
+
+4. Do NOT edit any file or behaviour unless it is explicitly within the authorised task.
+
+5. Do NOT make opportunistic fixes.
+
+If another bug, regression, cleanup opportunity, refactor, optimisation or suspicious code is discovered:
+STOP.
+Report it.
+Do not alter it.
+
+6. If the requested task requires an additional action that was not explicitly authorised:
+STOP and report the blocker.
+
+## FILE CREATION
+
+Do NOT create helper scripts, temporary files, patch files, audit files, diagnostic files, replacement files, staging utilities, documentation files, migrations or configuration files unless explicitly authorised.
+
+## GIT — HARD CONTROL
+
+Cursor Agent must NEVER execute:
+
+- git add
+- git commit
+- git push
+- git stash
+- git stash pop
+- git stash apply
+- git stash drop
+- git reset
+- git restore
+- git clean
+- git rebase
+- git cherry-pick
+- git merge
+- git checkout
+- git switch
+- branch creation or deletion
+- worktree creation, modification or deletion
+
+These Git actions are performed manually by the user only.
+
+Cursor may run read-only Git commands ONLY when explicitly authorised, such as:
+
+- git status
+- git diff
+- git diff --cached
+- git log
+- git show
+
+Never substitute a different Git command for the exact command requested.
+
+Never add:
+- Co-authored-by
+- Cursor attribution
+- AI attribution
+- Agent attribution
+- commit trailers of any kind
+
+## PROTECTED ZLOG STATE
+
+Protected baseline:
+
+12aecd3
+
+Do not rewrite or alter protected history.
+
+DO NOT inspect, modify or touch:
+
+C:\Users\USER\zlog-baseline
+
+DO NOT inspect, apply, pop, drop, modify or otherwise touch:
+
+stash@{0}
+
+unless the user explicitly authorises that exact action.
+
+## CURRENT SDSC PROTECTION
+
+The Site Diary Session Context / SDSC shadow-proof work must not be modified, discarded, staged, committed, moved or incorporated into unrelated work unless the user explicitly authorises SDSC work.
+
+Do not mix unrelated changes into SDSC work.
+
+## DATABASE AND INFRASTRUCTURE
+
+Do NOT alter Supabase schema, migrations, environment variables, authentication configuration, storage configuration, DNS, Tailscale configuration or deployment configuration unless explicitly authorised.
+
+## PROTECTED PRODUCT CONTRACTS
+
+Do not alter an approved Zlog behaviour or design contract unless the user explicitly requests that exact change.
+
+In particular:
+
+- User photos must never be cropped.
+- Preserve original photo aspect ratio and composition.
+- Existing portrait/landscape orientation must remain correct.
+- Saved diary review remains read-only unless Edit is explicitly selected.
+- New Diary sticky fields must remain sticky as approved.
+- Existing navigation contracts must remain intact.
+- Browser/password-manager credential autofill must never itself submit Sign In or navigate into Zlog.
+- Real Android phone testing is authoritative for mobile behaviour.
+
+## COMMAND EXECUTION
+
+If the user supplies an exact command:
+run that exact command only.
+
+Do not append arguments, prepend arguments, add trailers, chain extra commands, substitute another command or perform a follow-up command automatically unless explicitly authorised.
+
+If Cursor proposes an approval command that differs from the authorised command:
+DO NOT RUN IT.
+
+## CHANGE DISCIPLINE
+
+For every implementation task:
+
+1. Identify the smallest authorised scope.
+2. Modify only that scope.
+3. Preserve all unrelated behaviour.
+4. Do not stage, commit or push.
+5. Report exactly what changed.
+6. STOP.
+
+Manual phone approval happens before checkpointing an accepted UI/behaviour change.
+
+## RESPONSE DISCIPLINE
+
+After completing authorised work, report only:
+
+- authorised work performed
+- exact files changed
+- pass/fail
+- blockers
+- confirmation that no additional actions were taken
+
+Then STOP.
+
+## FAILURE MODE
+
+When uncertain:
+STOP.
+
+Do not guess.
+Do not improvise.
+Do not widen scope.
+Ask or report the blocker.
