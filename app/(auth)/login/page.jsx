@@ -12,8 +12,8 @@ import {
   inputStyle,
 } from '@/lib/premium-ui'
 import {
-  consumeLoginSubmitIntent,
-  markLoginSubmitIntent,
+  isTrustedPrimarySignInPointerDown,
+  isTrustedSignInCtaKey,
   passwordInputType,
   passwordVisibilityLabel,
   readLoginFormCredentials,
@@ -22,7 +22,8 @@ import { safeAppReturnPath } from '@/lib/auth/return-path'
 
 /**
  * Sign-in — inherits re-centred ZlogBrandWordmark glow.
- * Auth runs only on explicit user action: Sign In submit or Enter/Return.
+ * Auth runs only on a trusted primary pointerdown on Sign In, or trusted
+ * Enter/Space while Sign In itself has focus. Form submit never authenticates.
  *
  * Credential source (M0-02):
  * - Email/password inputs are uncontrolled (no React value / defaultValue).
@@ -38,7 +39,6 @@ export default function Login() {
   const supabase = createClient()
   const router = useRouter()
   const formRef = useRef(null)
-  const authIntentRef = useRef(false)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -131,27 +131,20 @@ export default function Login() {
     }
   }
 
-  /**
-   * Conventional form submit (password-manager friendly).
-   * Autofill alone must not authenticate — requires prior Sign In / Enter intent.
-   */
+  /** Password-manager / native submit must never authenticate. */
   const handleFormSubmit = (e) => {
     e.preventDefault()
-    if (!consumeLoginSubmitIntent(authIntentRef)) return
+  }
+
+  const handleSignInPointerDown = (e) => {
+    if (!isTrustedPrimarySignInPointerDown(e)) return
     void authenticate()
   }
 
-  /** Enter/Return marks explicit intent; native submit then authenticates. */
-  const handleFormKeyDown = (e) => {
-    if (e.key !== 'Enter') return
-    if (e.nativeEvent?.isComposing) return
-    const tag = e.target?.tagName
-    if (tag === 'TEXTAREA' || tag === 'BUTTON') return
-    markLoginSubmitIntent(authIntentRef)
-  }
-
-  const handleSignInClick = () => {
-    markLoginSubmitIntent(authIntentRef)
+  const handleSignInKeyDown = (e) => {
+    if (!isTrustedSignInCtaKey(e)) return
+    e.preventDefault()
+    void authenticate()
   }
 
   return (
@@ -194,7 +187,6 @@ export default function Login() {
             ref={formRef}
             method="post"
             onSubmit={handleFormSubmit}
-            onKeyDown={handleFormKeyDown}
             className="space-y-4"
             noValidate
           >
@@ -262,7 +254,13 @@ export default function Login() {
               </div>
             </div>
 
-            <PrimaryCTA type="submit" onClick={handleSignInClick} disabled={loading} className="w-full">
+            <PrimaryCTA
+              type="button"
+              onPointerDown={handleSignInPointerDown}
+              onKeyDown={handleSignInKeyDown}
+              disabled={loading}
+              className="w-full"
+            >
               {loading ? 'Signing in...' : 'Sign In'}
             </PrimaryCTA>
           </form>

@@ -404,6 +404,8 @@ export function workbenchPrimaryButtonStyle(disabled = false) {
  *   loading?: boolean
  *   type?: string
  *   onClick?: import('react').MouseEventHandler
+ *   onPointerDown?: import('react').PointerEventHandler
+ *   onKeyDown?: import('react').KeyboardEventHandler
  *   href?: string
  *   style?: import('react').CSSProperties
  *   className?: string
@@ -417,6 +419,8 @@ export function PrimaryCTA({
   loading = false,
   type = 'button',
   onClick,
+  onPointerDown,
+  onKeyDown,
   href,
   style,
   className = '',
@@ -467,6 +471,8 @@ export function PrimaryCTA({
       type={type}
       disabled={isDisabled}
       onClick={onClick}
+      onPointerDown={onPointerDown}
+      onKeyDown={onKeyDown}
       className={classNames}
       data-zlog-cta-surface={surface}
       aria-busy={loading || undefined}
