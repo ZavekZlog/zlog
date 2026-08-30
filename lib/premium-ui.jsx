@@ -8,8 +8,9 @@ export const DIARY_ACCENT = REPORT_THEMES.diary.accent
 /** Brand chrome accent (Forge Orange) — not a report-type colour; CTAs use powder-coat --rust */
 export const BRAND_ACCENT = '255,80,0'
 export const CTA_ORANGE = 'var(--action)'
-/** Powder-coat CTA base — landing “Start Trial” uses --rust enamel */
-export const CTA_POWDER = 'var(--rust)'
+/** Powder-coat PrimaryCTA base — approved construction/enamel orange (#DB3D06). */
+export const ZLOG_POWDER_CTA_ORANGE = '#DB3D06'
+export const CTA_POWDER = ZLOG_POWDER_CTA_ORANGE
 
 /* ── Typography tokens (Barlow via body; Space Grotesk reserved for brand moments) ── */
 export const typeTokens = {
@@ -323,11 +324,11 @@ export function ModuleCategoryRail({
  * Matches landing “Start 7-Day Free Trial” exactly (--rust enamel, highlight, depth, glow).
  * Do not approximate; always render via PrimaryCTA.
  */
-export const POWDER_CTA_BORDER = '1px solid color-mix(in srgb, var(--rust), var(--ink) 58%)'
+export const POWDER_CTA_BORDER = `1px solid color-mix(in srgb, ${ZLOG_POWDER_CTA_ORANGE}, var(--ink) 58%)`
 export const POWDER_CTA_BACKGROUND =
-  'linear-gradient(180deg, color-mix(in srgb, var(--rust), var(--text) 16%) 0%, color-mix(in srgb, var(--rust), var(--text) 6%) 18%, var(--rust) 42%, var(--rust) 62%, color-mix(in srgb, var(--rust), var(--ink) 29%) 88%, color-mix(in srgb, var(--rust), var(--ink) 45%) 100%)'
+  `linear-gradient(180deg, color-mix(in srgb, ${ZLOG_POWDER_CTA_ORANGE}, var(--text) 16%) 0%, color-mix(in srgb, ${ZLOG_POWDER_CTA_ORANGE}, var(--text) 6%) 18%, ${ZLOG_POWDER_CTA_ORANGE} 42%, ${ZLOG_POWDER_CTA_ORANGE} 62%, color-mix(in srgb, ${ZLOG_POWDER_CTA_ORANGE}, var(--ink) 29%) 88%, color-mix(in srgb, ${ZLOG_POWDER_CTA_ORANGE}, var(--ink) 45%) 100%)`
 export const POWDER_CTA_SHADOW =
-  'inset 0 1px 0 color-mix(in srgb, var(--text), transparent 75%), inset 0 16px 28px color-mix(in srgb, var(--text), transparent 94%), inset 0 -14px 20px color-mix(in srgb, var(--ink), transparent 48%), 0 0 22px color-mix(in srgb, var(--rust), transparent 75%)'
+  `inset 0 1px 0 color-mix(in srgb, var(--text), transparent 75%), inset 0 16px 28px color-mix(in srgb, var(--text), transparent 94%), inset 0 -14px 20px color-mix(in srgb, var(--ink), transparent 48%), 0 0 22px color-mix(in srgb, ${ZLOG_POWDER_CTA_ORANGE}, transparent 75%)`
 export const POWDER_CTA_HIGHLIGHT =
   'linear-gradient(180deg, color-mix(in srgb, var(--text), transparent 90%) 0%, color-mix(in srgb, var(--text), transparent 97%) 55%, transparent 100%)'
 
@@ -391,7 +392,7 @@ export function workbenchPrimaryButtonStyle(disabled = false) {
   return {
     ...equalChoiceButtonStyle(disabled),
     width: '100%',
-    border: '1px solid color-mix(in srgb, var(--rust) 42%, var(--edge))',
+    border: `1px solid color-mix(in srgb, ${ZLOG_POWDER_CTA_ORANGE} 42%, var(--edge))`,
     boxShadow: 'inset 0 1px 0 var(--edge-highlight)',
   }
 }
@@ -654,7 +655,7 @@ export function premiumBackPillStyle() {
  * TEXT Zlog wordmark Z accent — alias of the established app-header token only.
  * Source of truth: CSS --rust (globals.css). Do not hard-code a separate hex.
  */
-export const ZLOG_TEXT_WORDMARK_Z_COLOR = 'var(--rust)'
+export const ZLOG_TEXT_WORDMARK_Z_COLOR = '#DB3D06'
 
 /**
  * Text letters for the Zlog product wordmark.
