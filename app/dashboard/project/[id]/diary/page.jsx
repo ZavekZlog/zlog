@@ -139,6 +139,13 @@ import {
   withTimeout,
 } from '@/lib/diary-edit-hydrate'
 import {
+  hydrateStickyFromRow,
+} from '@/lib/project-sticky-fields'
+import {
+  hydrateProjectDatesFromRow,
+} from '@/lib/diary-setup-project-dates'
+import { runSiteDiaryShadowWorkbenchMerge } from '@/lib/site-diary-session-context'
+import {
   diaryLinkedProjectSelectColumns,
   diaryProjectSelectorSelectColumns,
   programmeDatesForProjectDetails,
@@ -468,6 +475,8 @@ export default function SiteDiaryPage() {
   const autosaveInFlightRef = useRef(null)
   const autosaveQueuedRef = useRef(false)
   const suppressAutosaveRef = useRef(false)
+  /** Reuses identity from the existing auth effect — no extra auth query for SDSC shadow. */
+  const authUserIdRef = useRef(null)
 
   // Clear stale locks when opening/switching a report so Save is never silently blocked.
   useEffect(() => {
@@ -495,6 +504,7 @@ export default function SiteDiaryPage() {
     const applyAuthUser = (user) => {
       if (cancelled) return
       if (user) {
+        authUserIdRef.current = user.id || null
         setSessionExpired(false)
         setError((prev) => {
           if (prev !== SESSION_EXPIRED_SAVE_MESSAGE) return prev
@@ -503,6 +513,7 @@ export default function SiteDiaryPage() {
         })
         return
       }
+      authUserIdRef.current = null
       setSessionExpired(true)
       setSaving(false)
       setJustSaved(false)
@@ -1121,6 +1132,36 @@ export default function SiteDiaryPage() {
           ackedSnapshotRef.current = null
         }
         suppressAutosaveRef.current = true
+
+        // SDSC Phase 1 shadow — merge only fields workbench already has (no new fetches).
+        {
+          const shadowUserId = authUserIdRef.current
+          if (shadowUserId && editingReportId && projectId) {
+            const dates = hydrateProjectDatesFromRow(proj)
+            const sticky = hydrateStickyFromRow(proj)
+            runSiteDiaryShadowWorkbenchMerge({
+              userId: shadowUserId,
+              projectId,
+              reportId: editingReportId,
+              projectName: proj?.name || '',
+              projectStartDate: dates.projectStartDate,
+              projectPlannedCompletionDate: dates.projectPlannedCompletionDate,
+              projectAddress: sticky.projectAddress,
+              projectManager: sticky.projectManager,
+              workingDaysPerWeek: sticky.workingDaysPerWeek,
+              projectReference: editHydration.projectReference,
+              reportDate: reportDateInputValue(existing.report_date) || todayIsoDate(),
+              shift: existing.shift || existing.shift_type || 'Day',
+              author: hydrateAuthorName(existing),
+              authorRole: hydrateAuthorRole(existing),
+              reportingOnBehalfOf: existing.company_reporting_for || '',
+              brandingId: existing.branding_id || null,
+              brandColor: existing.brand_color || null,
+              logoStoragePath: existing.brand_logo_url || null,
+              coverStoragePath: editHydration.coverStoragePath || null,
+            })
+          }
+        }
 
         if (progressiveCompose) {
           // First usable paint — secondary media/selector work continues below.

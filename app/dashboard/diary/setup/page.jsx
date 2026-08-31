@@ -78,6 +78,11 @@ import {
   writeReportSetupExtras,
   writeSetupFormDraft,
 } from '@/lib/report-setup'
+import {
+  getSiteDiarySessionSnapshot,
+  runSiteDiaryShadowSetupProof,
+  SITE_DIARY_SHADOW_FIELD_KEYS,
+} from '@/lib/site-diary-session-context'
 
 const setupInputStyle = {
   ...inputStyle,
@@ -110,6 +115,26 @@ async function signedLogoUrl(supabase, path) {
   if (path.startsWith('http') || path.startsWith('blob:')) return path
   const { data } = await supabase.storage.from('site-photos').createSignedUrl(path, 3600)
   return data?.signedUrl ?? null
+}
+
+function isCompleteSdscSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return false
+  for (const key of SITE_DIARY_SHADOW_FIELD_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(snapshot, key) || snapshot[key] === undefined) {
+      return false
+    }
+  }
+  return true
+}
+
+function sdscSnapshotMatchesEditTarget(snapshot, { userId, projectId, reportId } = {}) {
+  if (!snapshot) return false
+  const same = (a, b) => String(a ?? '').trim() === String(b ?? '').trim()
+  return (
+    same(snapshot.userId, userId)
+    && same(snapshot.projectId, projectId)
+    && same(snapshot.reportId, reportId)
+  )
 }
 
 function SiteDiarySetupPage() {
@@ -161,6 +186,9 @@ function SiteDiarySetupPage() {
   const authorInputRef = useRef(null)
   const reportingOnBehalfOfInputRef = useRef(null)
   const reportDateInputRef = useRef(null)
+  const detailsTouchedRef = useRef(false)
+  const userChangedLogoRef = useRef(false)
+  const userChangedCoverRef = useRef(false)
 
   const existingProjects = useMemo(
     () => (projects || []).filter((p) => p?.id && p?.name),
@@ -202,11 +230,104 @@ function SiteDiarySetupPage() {
 
   useEffect(() => {
     let cancelled = false
+    let usedFastPath = false
+
+    const applySdscSnapshotToForm = (snapshot) => {
+      setSelectedProjectId(snapshot.projectId || NEW_PROJECT_VALUE)
+      setProjectName(snapshot.projectName || '')
+      setProjectAddress(snapshot.projectAddress || '')
+      setProjectManager(snapshot.projectManager || '')
+      setWorkingDaysPerWeek(snapshot.workingDaysPerWeek || '')
+      setCurrentPhase(snapshot.currentPhase || '')
+      setProjectStartDate(snapshot.projectStartDate || '')
+      setProjectPlannedCompletionDate(snapshot.projectPlannedCompletionDate || '')
+      setShift(hydrateShift(snapshot.shift))
+      setProjectReference(snapshot.projectReference || '')
+      setReportDate(snapshot.reportDate || '')
+      setReportingCompany(snapshot.reportingCompany || '')
+      setReportingOnBehalfOf(snapshot.reportingOnBehalfOf || '')
+      setAuthor(snapshot.author || '')
+      setAuthorRole(snapshot.authorRole || '')
+      setBrandingId(snapshot.brandingId || null)
+      setBrandColor(snapshot.brandColor || null)
+      setLogoStoragePath(snapshot.logoStoragePath || null)
+      setLogoFile(null)
+      setCoverRemoved(false)
+      const coverPath = snapshot.coverStoragePath || null
+      if (coverPath) {
+        setCoverPhoto(coverPhotoStateFromSaved(coverPath, null))
+      } else {
+        setCoverPhoto(null)
+      }
+    }
+
+    const trySdscFastPath = async () => {
+      if (!editingReportId || !editingProjectId) {
+        return false
+      }
+
+      let sessionUserId = ''
+      try {
+        const { data } = await supabase.auth.getSession()
+        sessionUserId = data?.session?.user?.id || ''
+      } catch {
+        return false
+      }
+      if (!String(sessionUserId).trim()) {
+        return false
+      }
+
+      const snapshot = getSiteDiarySessionSnapshot({
+        userId: sessionUserId,
+        projectId: editingProjectId,
+        reportId: editingReportId,
+      })
+      const complete = isCompleteSdscSnapshot(snapshot)
+        && sdscSnapshotMatchesEditTarget(snapshot, {
+          userId: sessionUserId,
+          projectId: editingProjectId,
+          reportId: editingReportId,
+        })
+      if (!complete) {
+        return false
+      }
+
+      applySdscSnapshotToForm(snapshot)
+
+      const logoPath = snapshot.logoStoragePath || null
+      if (logoPath) {
+        let preview = null
+        try {
+          preview = await signedLogoUrl(supabase, logoPath)
+        } catch {
+          preview = null
+        }
+        if (cancelled) return false
+        if (!preview) {
+          return false
+        }
+        setLogoPreview(preview)
+      } else {
+        setLogoPreview(null)
+      }
+
+      if (cancelled) return false
+      setLoading(false)
+      return true
+    }
 
     const load = async () => {
+      detailsTouchedRef.current = false
+      userChangedLogoRef.current = false
+      userChangedCoverRef.current = false
       setLoading(true)
       setError('')
       try {
+        if (editingReportId) {
+          usedFastPath = await trySdscFastPath()
+          if (cancelled) return
+        }
+
         const [projectRows, profile] = await Promise.all([
           fetchProjectsForSetup(supabase),
           fetchDefaultCompanyProfile(supabase),
@@ -244,62 +365,105 @@ function SiteDiarySetupPage() {
           const project = loaded.project
           const dates = hydrateProjectDatesFromRow(project)
           const sticky = hydrateStickyFromRow(project)
+          const skipFormReconcile = usedFastPath && detailsTouchedRef.current
+          const skipLogoReconcile = usedFastPath && userChangedLogoRef.current
+          const skipCoverReconcile = usedFastPath && userChangedCoverRef.current
 
-          setSelectedProjectId(loaded.projectId || editingProjectId || NEW_PROJECT_VALUE)
-          setProjectName(project?.name || '')
-          setProjectStartDate(dates.projectStartDate)
-          setProjectPlannedCompletionDate(dates.projectPlannedCompletionDate)
-          setProjectAddress(sticky.projectAddress)
-          setProjectManager(sticky.projectManager)
-          setWorkingDaysPerWeek(sticky.workingDaysPerWeek)
-          setCurrentPhase(String(report?.current_phase || '').trim())
+          if (!skipFormReconcile) {
+            setSelectedProjectId(loaded.projectId || editingProjectId || NEW_PROJECT_VALUE)
+            setProjectName(project?.name || '')
+            setProjectStartDate(dates.projectStartDate)
+            setProjectPlannedCompletionDate(dates.projectPlannedCompletionDate)
+            setProjectAddress(sticky.projectAddress)
+            setProjectManager(sticky.projectManager)
+            setWorkingDaysPerWeek(sticky.workingDaysPerWeek)
+            setCurrentPhase(String(report?.current_phase || '').trim())
 
-          // Project Reference — project column first (extras only as legacy fallback).
-          setProjectReference(loaded.hydration.projectReference)
+            // Project Reference — project column first (extras only as legacy fallback).
+            setProjectReference(loaded.hydration.projectReference)
 
-          // Edit/View setup: saved diary values win; never keep account-derived aliases.
+            // Edit/View setup: saved diary values win; never keep account-derived aliases.
+            const savedAuthor = String(report?.creator_name || '').trim()
+            const safeSavedAuthor =
+              savedAuthor && !isAccountDerivedAuthorName(savedAuthor, signedInUser)
+                ? savedAuthor
+                : ''
+            setAuthor(safeSavedAuthor || profileName || '')
+            setAuthorRole(hydrateAuthorRole(report) || profileRole || '')
+            setShift(hydrateShift(report?.shift))
+            setReportingOnBehalfOf(
+              report?.company_reporting_for || '',
+            )
+            setReportDate(reportDateInputValue(report?.report_date) || todayIsoDate())
+          }
+
+          // Coherent Reporting Company — name + logo from the same identity (never mix).
+          const companyIdentity = await fetchReportingCompanyForReport(supabase, report)
+          if (cancelled) return
+          const logoPath = companyIdentity.logoStoragePath || null
+          if (!skipFormReconcile) {
+            setReportingCompany(companyIdentity.companyName || '')
+            setBrandingId(companyIdentity.brandingId || null)
+            setBrandColor(companyIdentity.brandColor || null)
+          }
+          if (!skipLogoReconcile) {
+            if (!skipFormReconcile) setLogoStoragePath(logoPath)
+            if (logoPath) {
+              const preview = await signedLogoUrl(supabase, logoPath)
+              if (!cancelled && !userChangedLogoRef.current) setLogoPreview(preview)
+            } else if (!skipFormReconcile && !cancelled && !userChangedLogoRef.current) {
+              setLogoPreview(null)
+            }
+          }
+
+          // Cover photo — same daily_reports.cover_photo_url as workbench/PDF/review.
+          const coverPath = loaded.hydration?.coverStoragePath || null
+          if (!skipCoverReconcile) {
+            if (!skipFormReconcile) setCoverRemoved(false)
+            if (coverPath) {
+              if (!skipFormReconcile) {
+                setCoverPhoto(coverPhotoStateFromSaved(coverPath, null))
+              }
+              const coverPreview = await resolveCoverPhotoPreviewUrl(supabase, coverPath)
+              if (!cancelled && !userChangedCoverRef.current) {
+                setCoverPhoto(coverPhotoStateFromSaved(coverPath, coverPreview))
+              }
+            } else if (!skipFormReconcile) {
+              setCoverPhoto(null)
+            }
+          }
+
+          // SDSC Phase 1 shadow proof only — never drives UI / loading / navigation.
           const savedAuthor = String(report?.creator_name || '').trim()
           const safeSavedAuthor =
             savedAuthor && !isAccountDerivedAuthorName(savedAuthor, signedInUser)
               ? savedAuthor
               : ''
-          setAuthor(safeSavedAuthor || profileName || '')
-          setAuthorRole(hydrateAuthorRole(report) || profileRole || '')
-          setShift(hydrateShift(report?.shift))
-          setReportingOnBehalfOf(
-            report?.company_reporting_for || '',
-          )
-          setReportDate(reportDateInputValue(report?.report_date) || todayIsoDate())
+          runSiteDiaryShadowSetupProof({
+            userId: signedInUser?.id || '',
+            projectId: loaded.projectId || editingProjectId || '',
+            reportId: editingReportId,
+            projectName: project?.name || '',
+            projectStartDate: dates.projectStartDate,
+            projectPlannedCompletionDate: dates.projectPlannedCompletionDate,
+            projectAddress: sticky.projectAddress,
+            projectManager: sticky.projectManager,
+            workingDaysPerWeek: sticky.workingDaysPerWeek,
+            projectReference: loaded.hydration.projectReference,
+            reportDate: reportDateInputValue(report?.report_date) || todayIsoDate(),
+            shift: hydrateShift(report?.shift),
+            currentPhase: String(report?.current_phase || '').trim(),
+            author: (safeSavedAuthor || profileName || ''),
+            authorRole: hydrateAuthorRole(report) || profileRole || '',
+            reportingOnBehalfOf: report?.company_reporting_for || '',
+            reportingCompany: companyIdentity.companyName || '',
+            brandingId: companyIdentity.brandingId || null,
+            brandColor: companyIdentity.brandColor || null,
+            logoStoragePath: logoPath,
+            coverStoragePath: coverPath,
+          })
 
-          // Coherent Reporting Company — name + logo from the same identity (never mix).
-          const companyIdentity = await fetchReportingCompanyForReport(supabase, report)
-          if (cancelled) return
-          setReportingCompany(companyIdentity.companyName || '')
-          setBrandingId(companyIdentity.brandingId || null)
-          setBrandColor(companyIdentity.brandColor || null)
-          const logoPath = companyIdentity.logoStoragePath || null
-          setLogoStoragePath(logoPath)
-          if (logoPath) {
-            const preview = await signedLogoUrl(supabase, logoPath)
-            if (!cancelled) setLogoPreview(preview)
-          } else if (!cancelled) {
-            setLogoPreview(null)
-          }
-
-          // Cover photo — same daily_reports.cover_photo_url as workbench/PDF/review.
-          const coverPath = loaded.hydration?.coverStoragePath || null
-          setCoverRemoved(false)
-          if (coverPath) {
-            setCoverPhoto(coverPhotoStateFromSaved(coverPath, null))
-            const coverPreview = await resolveCoverPhotoPreviewUrl(supabase, coverPath)
-            if (!cancelled) {
-              setCoverPhoto(coverPhotoStateFromSaved(coverPath, coverPreview))
-            }
-          } else {
-            setCoverPhoto(null)
-          }
-
-          setLoading(false)
+          if (!usedFastPath) setLoading(false)
           return
         }
 
@@ -354,7 +518,7 @@ function SiteDiarySetupPage() {
       } catch (err) {
         if (!cancelled) setError(err?.message || 'Could not load setup')
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled && !usedFastPath) setLoading(false)
       }
     }
 
@@ -491,6 +655,10 @@ function SiteDiarySetupPage() {
   const handleLogoFiles = (files) => {
     const file = files?.[0]
     if (!file) return
+    if (editingReportId) {
+      detailsTouchedRef.current = true
+      userChangedLogoRef.current = true
+    }
     setError('')
     if (logoObjectUrl) URL.revokeObjectURL(logoObjectUrl)
     const url = URL.createObjectURL(file)
@@ -501,6 +669,10 @@ function SiteDiarySetupPage() {
   }
 
   const removeLogo = () => {
+    if (editingReportId) {
+      detailsTouchedRef.current = true
+      userChangedLogoRef.current = true
+    }
     if (logoObjectUrl) URL.revokeObjectURL(logoObjectUrl)
     setLogoObjectUrl(null)
     setLogoFile(null)
@@ -511,6 +683,10 @@ function SiteDiarySetupPage() {
   const onCoverDrop = (files) => {
     const file = files?.[0]
     if (!file) return
+    if (editingReportId) {
+      detailsTouchedRef.current = true
+      userChangedCoverRef.current = true
+    }
     setError('')
     setCoverRemoved(false)
     setCoverPhoto((prev) => {
@@ -524,6 +700,10 @@ function SiteDiarySetupPage() {
   }
 
   const removeCoverPhoto = () => {
+    if (editingReportId) {
+      detailsTouchedRef.current = true
+      userChangedCoverRef.current = true
+    }
     setCoverPhoto((prev) => {
       if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
       return null
@@ -532,6 +712,7 @@ function SiteDiarySetupPage() {
   }
 
   const handleProjectDatesChange = ({ startDate, plannedCompletionDate }) => {
+    if (editingReportId) detailsTouchedRef.current = true
     setProjectStartDate(startDate)
     setProjectPlannedCompletionDate(plannedCompletionDate)
     const v = validateProjectDates(startDate, plannedCompletionDate)
@@ -539,6 +720,7 @@ function SiteDiarySetupPage() {
   }
 
   const handleStickyFieldsChange = (next) => {
+    if (editingReportId) detailsTouchedRef.current = true
     setProjectAddress(next.projectAddress)
     setProjectManager(next.projectManager)
     setWorkingDaysPerWeek(next.workingDaysPerWeek)
@@ -781,6 +963,11 @@ function SiteDiarySetupPage() {
         </div>
       )}
 
+      <div
+        onChange={() => {
+          if (editingReportId) detailsTouchedRef.current = true
+        }}
+      >
       <GlassSection accent={DIARY_ACCENT}>
         <div
           style={{
@@ -1080,6 +1267,7 @@ function SiteDiarySetupPage() {
           required
         />
       </GlassSection>
+      </div>
 
       <PrimaryCTA
         type="button"

@@ -25,6 +25,7 @@ import {
 import { ReportDeletionDialog } from '@/components/report-management/ReportDeletionDialog'
 import { REPORT_THEMES } from '@/lib/report-theme'
 import { NOT_RECORDED, loadSavedDiaryView } from '@/lib/diary-saved-view'
+import { mergeSiteDiarySessionSnapshot } from '@/lib/site-diary-session-context'
 import {
   gridImageSrc,
   shouldEagerLoadSavedReviewThumb,
@@ -380,6 +381,7 @@ function SavedDiaryViewer() {
   const [basisError, setBasisError] = useState('')
   const pdfReadyRef = useRef(null)
   const pdfCacheGenRef = useRef(0)
+  const sdscSeedRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -392,12 +394,15 @@ function SavedDiaryViewer() {
         const result = await loadSavedDiaryView(supabase, { projectId, reportId })
         if (cancelled) return
         if (!result.ok) {
+          sdscSeedRef.current = null
           setError(result.message)
           return
         }
+        sdscSeedRef.current = result.sdscSeed || null
         setView(result.view)
       } catch (err) {
         if (!cancelled) {
+          sdscSeedRef.current = null
           setError(err?.message || 'We couldn’t open that saved Site Diary.')
         }
       } finally {
@@ -831,7 +836,17 @@ function SavedDiaryViewer() {
             <SecondaryButton
               type="button"
               disabled={actionsBusy}
-              onClick={() => router.push(editHref)}
+              onClick={() => {
+                const seed = sdscSeedRef.current
+                if (seed) {
+                  try {
+                    mergeSiteDiarySessionSnapshot(seed)
+                  } catch {
+                    /* shadow isolation — fail closed to existing Edit navigation */
+                  }
+                }
+                router.push(editHref)
+              }}
               className="zlog-saved-diary-review__action-btn"
               style={reviewActionStyle}
             >
