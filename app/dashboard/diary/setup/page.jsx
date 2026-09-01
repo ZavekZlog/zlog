@@ -80,6 +80,7 @@ import {
 } from '@/lib/report-setup'
 import {
   getSiteDiarySessionSnapshot,
+  mergeSiteDiarySessionSnapshot,
   runSiteDiaryShadowSetupProof,
   SITE_DIARY_SHADOW_FIELD_KEYS,
 } from '@/lib/site-diary-session-context'
@@ -135,6 +136,43 @@ function sdscSnapshotMatchesEditTarget(snapshot, { userId, projectId, reportId }
     && same(snapshot.projectId, projectId)
     && same(snapshot.reportId, reportId)
   )
+}
+
+/** Complete in-memory snapshot for existing-diary Continue — before router.push. */
+function buildExistingDiaryContinueSdscSnapshot({
+  userId,
+  projectId,
+  reportId,
+  form,
+  reportingCompany,
+  brandingId,
+  brandColor,
+  logoStoragePath,
+  coverStoragePath,
+}) {
+  return {
+    userId: userId || '',
+    projectId: projectId || '',
+    reportId: reportId || '',
+    projectName: String(form?.projectName || ''),
+    projectStartDate: String(form?.startDate || ''),
+    projectPlannedCompletionDate: String(form?.plannedCompletionDate || ''),
+    projectAddress: String(form?.projectAddress || ''),
+    projectManager: String(form?.projectManager || ''),
+    workingDaysPerWeek: String(form?.workingDaysPerWeek || ''),
+    projectReference: String(form?.projectReference || ''),
+    reportDate: String(form?.reportDate || ''),
+    shift: form?.shift || '',
+    currentPhase: String(form?.currentPhase || ''),
+    author: String(form?.author || ''),
+    authorRole: String(form?.authorRole || ''),
+    reportingOnBehalfOf: String(form?.reportingOnBehalfOf || ''),
+    reportingCompany: String(reportingCompany || ''),
+    brandingId: brandingId ?? null,
+    brandColor: brandColor ?? null,
+    logoStoragePath: logoStoragePath ?? null,
+    coverStoragePath: coverStoragePath ?? null,
+  }
 }
 
 function SiteDiarySetupPage() {
@@ -599,6 +637,7 @@ function SiteDiarySetupPage() {
   }
 
   const handleSelectExisting = (projectId, { keepProjectName = null } = {}) => {
+    if (editingReportId) return
     setError('')
     if (!projectId || projectId === NEW_PROJECT_VALUE) {
       const cleared = clearToNewProjectSelection({
@@ -625,6 +664,7 @@ function SiteDiarySetupPage() {
   }
 
   const handleProjectNameChange = (e) => {
+    if (editingReportId) return
     const nextName = e.target.value
     setProjectName(nextName)
     setError('')
@@ -748,6 +788,11 @@ function SiteDiarySetupPage() {
 
     // Canonical continue form — same source as rendered inputs (state + live input
     // values when mobile preload/autofill has not yet synced into React state).
+    // Existing saved diary: project identity is fixed to the current diary project.
+    const continueSelectedProjectId = (editingReportId && editingProjectId
+      && editingProjectId !== NEW_PROJECT_VALUE)
+      ? editingProjectId
+      : selectedProjectId
     const continueForm = buildDiarySetupContinueForm(
       {
         projectName,
@@ -770,9 +815,9 @@ function SiteDiarySetupPage() {
       },
       {
         existingProjects,
-        selectedProjectId,
+        selectedProjectId: continueSelectedProjectId,
         dom: {
-          projectName: projectNameInputRef.current?.value,
+          projectName: editingReportId ? undefined : projectNameInputRef.current?.value,
           author: authorInputRef.current?.value,
           reportingOnBehalfOf: reportingOnBehalfOfInputRef.current?.value,
           reportDate: reportDateInputRef.current?.value,
@@ -834,7 +879,7 @@ function SiteDiarySetupPage() {
           reportingCompany: companySnapshot.companyName || continueForm.reportingCompany || reportingCompany,
         },
         existingProjects,
-        selectedProjectId,
+        selectedProjectId: continueSelectedProjectId,
         editingReportId,
         editingProjectId,
         getUser: async () => user,
@@ -859,6 +904,7 @@ function SiteDiarySetupPage() {
       // F2B: prefer durable IndexedDB handoff → navigate; fall back to blocking upload.
       const coverReportId = result.reportId
       const coverProjectId = result.projectId
+      let continueCoverPath = coverRemoved ? null : (coverPhoto?.storagePath || null)
       if (coverReportId) {
         if (coverRemoved) {
           await updateDiarySetupFields(supabase, {
@@ -866,6 +912,7 @@ function SiteDiarySetupPage() {
             projectId: coverProjectId,
             fields: { coverPhotoUrl: null, coverProcessingVersion: null },
           })
+          continueCoverPath = null
         } else if (coverPhoto?.file) {
           const handoff = await putPendingCover(coverReportId, {
             blob: coverPhoto.file,
@@ -893,7 +940,33 @@ function SiteDiarySetupPage() {
               projectId: coverProjectId,
               fields: { coverPhotoUrl: storagePath, coverProcessingVersion: null },
             })
+            continueCoverPath = storagePath
           }
+        }
+      }
+
+      // Existing-diary Continue: complete SDSC snapshot before navigation so
+      // Workbench → Back keeps the proven fast-Back path.
+      if (editingReportId) {
+        try {
+          mergeSiteDiarySessionSnapshot(buildExistingDiaryContinueSdscSnapshot({
+            userId: user.id,
+            projectId: result.projectId,
+            reportId: result.reportId,
+            form: {
+              ...continueForm,
+              shift: continueForm.shift || shift,
+            },
+            reportingCompany: companySnapshot.companyName
+              || continueForm.reportingCompany
+              || reportingCompany,
+            brandingId: nextBrandingId,
+            brandColor: nextBrandColor,
+            logoStoragePath: nextLogoUrl,
+            coverStoragePath: continueCoverPath,
+          }))
+        } catch {
+          /* shadow isolation — continue navigation */
         }
       }
 
@@ -1187,15 +1260,17 @@ function SiteDiarySetupPage() {
         <input
           ref={projectNameInputRef}
           value={projectName}
-          onChange={handleProjectNameChange}
-          list={existingProjects.length > 0 ? 'diary-setup-project-names' : undefined}
-          placeholder="Select an existing project or type a new name"
-          autoComplete="organization"
+          onChange={editingReportId ? undefined : handleProjectNameChange}
+          readOnly={Boolean(editingReportId)}
+          list={!editingReportId && existingProjects.length > 0 ? 'diary-setup-project-names' : undefined}
+          placeholder={editingReportId ? undefined : 'Select an existing project or type a new name'}
+          autoComplete={editingReportId ? 'off' : 'organization'}
           style={setupInputStyle}
           required
           aria-label="Project Name"
+          aria-readonly={editingReportId ? 'true' : undefined}
         />
-        {existingProjects.length > 0 ? (
+        {!editingReportId && existingProjects.length > 0 ? (
           <datalist id="diary-setup-project-names">
             {existingProjects.map((p) => (
               <option key={p.id} value={p.name} />
