@@ -390,6 +390,7 @@ function SavedDiaryViewer() {
     const load = async () => {
       setLoading(true)
       setError('')
+      let painted = false
       try {
         const result = await loadSavedDiaryView(supabase, { projectId, reportId })
         if (cancelled) return
@@ -400,8 +401,19 @@ function SavedDiaryViewer() {
         }
         sdscSeedRef.current = result.sdscSeed || null
         setView(result.view)
+        painted = true
+        if (!cancelled) setLoading(false)
+        const hydrate = result.hydrateDisplayMedia
+        if (!cancelled && hydrate && typeof hydrate.run === 'function') {
+          const applyPatch = (patch) => {
+            if (!cancelled && patch) {
+              setView((current) => (current ? { ...current, ...patch } : current))
+            }
+          }
+          void hydrate.run(applyPatch).catch(() => {})
+        }
       } catch (err) {
-        if (!cancelled) {
+        if (!cancelled && !painted) {
           sdscSeedRef.current = null
           setError(err?.message || 'We couldn’t open that saved Site Diary.')
         }
@@ -410,7 +422,7 @@ function SavedDiaryViewer() {
       }
     }
 
-    load()
+    void load().catch(() => {})
     return () => {
       cancelled = true
     }
@@ -424,6 +436,8 @@ function SavedDiaryViewer() {
 
   // Hydrate durable share-ready PDF only — never regenerate on open (Android gesture + UX).
   // PDF is produced at save/finalise and reused when the fingerprint still matches.
+  // Fingerprint is path-based; signed-URL-only view patches must not restart this work.
+  const sharePdfFingerprint = view ? fingerprintFromSavedDiaryView(view) : ''
   useEffect(() => {
     if (!view?.projectId || !view?.reportId) return
 
@@ -433,7 +447,7 @@ function SavedDiaryViewer() {
     setPdfCacheState('idle')
     setPdfStatus('')
     const startedAt = Date.now()
-    const fingerprint = fingerprintFromSavedDiaryView(view)
+    const fingerprint = sharePdfFingerprint
 
     emitShareDiag('pdf-cache-hydrate-start', {
       surface: 'saved-diary-view',
@@ -489,12 +503,16 @@ function SavedDiaryViewer() {
           elapsedMs: Date.now() - startedAt,
         })
       }
-    })()
+    })().catch(() => {
+      if (cancelled || gen !== pdfCacheGenRef.current) return
+      pdfReadyRef.current = null
+      setPdfCacheState('missing')
+    })
 
     return () => {
       cancelled = true
     }
-  }, [view])
+  }, [view?.projectId, view?.reportId, sharePdfFingerprint])
 
   if (loading) {
     return (
@@ -954,7 +972,7 @@ function SavedDiaryViewer() {
       <GlassSection title="Project & Report Details" accent={DIARY_ACCENT}>
         <div style={{ marginTop: 0 }}>
           <p style={groupTitleStyle}>Cover Photo</p>
-          {view.coverPhotoUrl ? (
+          {view.coverPreviewStatus === 'ready' && view.coverPhotoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={view.coverPhotoUrl}
@@ -962,17 +980,20 @@ function SavedDiaryViewer() {
               style={{
                 display: 'block',
                 width: '100%',
+                objectFit: 'contain',
                 borderRadius: 12,
                 border: '1px solid var(--edge)',
                 background: '#0b0d12',
               }}
             />
-          ) : (
+          ) : view.coverPreviewStatus === 'loading' ? (
+            <EmptySection>Loading cover photo…</EmptySection>
+          ) : view.coverPreviewStatus === 'failed' ? (
             <EmptySection>
-              {view.coverPhotoPath
-                ? 'Cover photo is saved on this diary but could not be loaded. Open Edit This Diary or try again.'
-                : 'No cover photo was saved on this diary.'}
+              Cover photo is saved on this diary but could not be loaded. Open Edit This Diary or try again.
             </EmptySection>
+          ) : (
+            <EmptySection>No cover photo was saved on this diary.</EmptySection>
           )}
         </div>
         {view.detailGroups.map((group, groupIndex) => (
@@ -1195,7 +1216,7 @@ function SavedDiaryViewer() {
       </GlassSection>
 
       <GlassSection title="Signature" accent={DIARY_ACCENT}>
-        {view.signatureUrl ? (
+        {view.signaturePreviewStatus === 'ready' && view.signatureUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={view.signatureUrl}
@@ -1211,6 +1232,8 @@ function SavedDiaryViewer() {
               padding: 10,
             }}
           />
+        ) : view.signaturePreviewStatus === 'loading' ? (
+          <EmptySection>Loading signature…</EmptySection>
         ) : (
           <EmptySection>No signature was saved on this diary.</EmptySection>
         )}
