@@ -17,15 +17,24 @@ import {
   ZlogBackControl,
   ModuleHomeCard,
   SecondaryButton,
+  DestructiveButton,
   dashboardCardInteractionCss,
 } from '@/lib/premium-ui'
+import { ReportDeletionDialog } from '@/components/report-management/ReportDeletionDialog'
 import { REPORT_THEMES } from '@/lib/report-theme'
 import {
   DIARY_MISSING_MESSAGE,
   savedDiaryViewerHref,
 } from '@/lib/diary-routing'
 import { clearSetupFormDraft } from '@/lib/report-setup'
-import { savedReportListHref } from '@/lib/report-deletion'
+import {
+  BULK_SAVED_DIARY_DELETE_LABELS,
+  deleteSiteDiaries,
+  savedReportListHref,
+  selectAllReports,
+  selectedReportsCountLabel,
+  toggleReportSelection,
+} from '@/lib/report-deletion'
 
 const DIARY_ACCENT = REPORT_THEMES.diary.accent
 
@@ -67,6 +76,14 @@ const savedDiaryListCss = `
     flex: 1 1 auto;
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+  .zlog-saved-diary-toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    min-width: 0;
   }
   .zlog-saved-diary-list {
     /* Traps the whole list in one layer at z-index 0: isolate means a row,
@@ -117,6 +134,26 @@ const savedDiaryListCss = `
   .zlog-saved-diary-open:focus-visible {
     outline: 3px solid color-mix(in srgb, rgb(${DIARY_ACCENT}) 72%, white);
     outline-offset: -3px;
+  }
+  .zlog-saved-diary-open--selecting {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    align-items: center;
+    column-gap: 8px;
+  }
+  .zlog-saved-diary-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    min-height: 22px;
+  }
+  .zlog-saved-diary-check input {
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    accent-color: rgb(${DIARY_ACCENT});
+    pointer-events: none;
   }
   .zlog-saved-diary-project {
     display: block;
@@ -244,6 +281,11 @@ function SiteDiaryEntryPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(() => (missingReport ? DIARY_MISSING_MESSAGE : ''))
   const [reports, setReports] = useState([])
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [deleteIds, setDeleteIds] = useState([])
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   const title = useMemo(() => {
     if (mode === 'previous') return 'Use a Previous Diary'
@@ -283,7 +325,12 @@ function SiteDiaryEntryPage() {
 
         const { data, error: qErr } = await query
         if (qErr) throw qErr
-        if (!cancelled) setReports(data || [])
+        if (!cancelled) {
+          const nextReports = data || []
+          setReports(nextReports)
+          const validIds = new Set(nextReports.map((row) => row?.id).filter(Boolean))
+          setSelectedIds((current) => new Set([...current].filter((id) => validIds.has(id))))
+        }
       } catch {
         if (!cancelled) {
           setError('We couldn’t load your diaries. Check your connection and try again.')
@@ -299,6 +346,7 @@ function SiteDiaryEntryPage() {
   }, [mode, filterProjectId, supabase])
 
   const openExistingReport = (row) => {
+    if (selectionMode) return
     const href = savedDiaryViewerHref(row?.project_id, row?.id)
     if (!href) {
       setError('That diary can’t be opened. Try another one, or start a new diary.')
@@ -324,6 +372,62 @@ function SiteDiaryEntryPage() {
 
   const leaveSavedList = () => {
     setMode(null)
+    setSelectionMode(false)
+    setSelectedIds(new Set())
+    setDeleteIds([])
+    setDeleteError('')
+  }
+
+  const enterSelectionMode = () => {
+    setSelectionMode(true)
+    setSelectedIds(new Set())
+    setDeleteError('')
+  }
+
+  const exitSelectionMode = () => {
+    if (deleting) return
+    setSelectionMode(false)
+    setSelectedIds(new Set())
+    setDeleteIds([])
+    setDeleteError('')
+  }
+
+  const toggleSelected = (reportId) => {
+    setSelectedIds((current) => toggleReportSelection(current, reportId))
+  }
+
+  const selectAllVisible = () => {
+    if (selectedIds.size > 0 && selectedIds.size === reports.length) {
+      setSelectedIds(new Set())
+      return
+    }
+    setSelectedIds(selectAllReports(reports))
+  }
+
+  const requestDeleteSelected = () => {
+    if (selectedIds.size < 1 || deleting) return
+    setDeleteError('')
+    setDeleteIds([...selectedIds])
+  }
+
+  const confirmDeleteSelected = async () => {
+    if (deleting || deleteIds.length < 1) return
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      const result = await deleteSiteDiaries(supabase, deleteIds)
+      const deleted = new Set(result.deletedIds)
+      setReports((current) => current.filter((row) => !deleted.has(String(row.id))))
+      setSelectedIds(new Set())
+      setSelectionMode(false)
+      setDeleteIds([])
+    } catch (deleteFailure) {
+      setDeleteError(
+        deleteFailure?.message || 'We couldn’t delete the selected diaries. Try again.',
+      )
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
@@ -396,21 +500,77 @@ function SiteDiaryEntryPage() {
           <div className="zlog-saved-diary-manage-dock" data-sticky-manage-bar>
             <div
               className="zlog-saved-diary-manage-bar"
-              aria-label="Saved diary navigation"
+              aria-label={selectionMode ? 'Saved diary selection' : 'Saved diary navigation'}
+              data-selection-mode={selectionMode ? 'true' : undefined}
             >
               <div className="zlog-saved-diary-toolbar">
                 <ZlogBackControl onClick={leaveSavedList} />
-                <p
-                  style={{
-                    minWidth: 0,
-                    margin: 0,
-                    color: 'var(--text-2)',
-                    fontSize: 14,
-                    lineHeight: 1.4,
-                  }}
-                >
-                  Tap a diary to open and review it.
-                </p>
+                {selectionMode ? (
+                  <>
+                    <p
+                      style={{
+                        minWidth: 0,
+                        margin: 0,
+                        color: 'var(--text-2)',
+                        fontSize: 14,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {selectedReportsCountLabel(selectedIds.size)}
+                    </p>
+                    <div className="zlog-saved-diary-toolbar-actions">
+                      <SecondaryButton
+                        type="button"
+                        disabled={reports.length < 1 || deleting}
+                        onClick={selectAllVisible}
+                        style={{ minHeight: 44, width: 'auto', padding: '8px 14px' }}
+                      >
+                        {selectedIds.size > 0 && selectedIds.size === reports.length
+                          ? 'Clear'
+                          : 'Select All'}
+                      </SecondaryButton>
+                      <DestructiveButton
+                        type="button"
+                        disabled={selectedIds.size < 1 || deleting}
+                        onClick={requestDeleteSelected}
+                        style={{ minHeight: 44, width: 'auto', padding: '8px 14px' }}
+                      >
+                        Delete Selected
+                      </DestructiveButton>
+                      <SecondaryButton
+                        type="button"
+                        disabled={deleting}
+                        onClick={exitSelectionMode}
+                        style={{ minHeight: 44, width: 'auto', padding: '8px 14px' }}
+                      >
+                        Cancel
+                      </SecondaryButton>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p
+                      style={{
+                        minWidth: 0,
+                        margin: 0,
+                        color: 'var(--text-2)',
+                        fontSize: 14,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      Tap a diary to open and review it.
+                    </p>
+                    {mode === 'saved' && !loading && reports.length > 0 ? (
+                      <SecondaryButton
+                        type="button"
+                        onClick={enterSelectionMode}
+                        style={{ minHeight: 44, width: 'auto', padding: '8px 14px' }}
+                      >
+                        Select
+                      </SecondaryButton>
+                    ) : null}
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -439,26 +599,56 @@ function SiteDiaryEntryPage() {
                 const reportDate = formatReportDate(row.report_date)
                 const shift = row.shift || '—'
                 const summary = (row.site_summary || '').trim()
+                const selected = selectedIds.has(row.id)
                 return (
                   <div
                     key={row.id}
                     className="zlog-saved-diary-row"
                     role="listitem"
                     data-saved-diary-row
+                    data-selected={selectionMode && selected ? 'true' : undefined}
                   >
                     <button
                       type="button"
-                      className="zlog-saved-diary-open"
-                      onClick={() => openExistingReport(row)}
-                      aria-label={`${projectName}, ${reportDate}, shift ${shift}. Tap to open and review.`}
+                      className={
+                        selectionMode
+                          ? 'zlog-saved-diary-open zlog-saved-diary-open--selecting'
+                          : 'zlog-saved-diary-open'
+                      }
+                      onClick={() => {
+                        if (selectionMode) {
+                          toggleSelected(row.id)
+                          return
+                        }
+                        openExistingReport(row)
+                      }}
+                      aria-pressed={selectionMode ? selected : undefined}
+                      aria-label={
+                        selectionMode
+                          ? `${selected ? 'Deselect' : 'Select'} ${projectName}, ${reportDate}`
+                          : `${projectName}, ${reportDate}, shift ${shift}. Tap to open and review.`
+                      }
                     >
-                      <span className="zlog-saved-diary-project">{projectName}</span>
-                      <span className="zlog-saved-diary-meta">
-                        {reportDate} · Shift: {shift}
-                      </span>
-                      {summary ? (
-                        <span className="zlog-saved-diary-summary">{summary}</span>
+                      {selectionMode ? (
+                        <span className="zlog-saved-diary-check">
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            readOnly
+                            tabIndex={-1}
+                            aria-hidden="true"
+                          />
+                        </span>
                       ) : null}
+                      <span>
+                        <span className="zlog-saved-diary-project">{projectName}</span>
+                        <span className="zlog-saved-diary-meta">
+                          {reportDate} · Shift: {shift}
+                        </span>
+                        {summary ? (
+                          <span className="zlog-saved-diary-summary">{summary}</span>
+                        ) : null}
+                      </span>
                     </button>
                   </div>
                 )
@@ -467,6 +657,20 @@ function SiteDiaryEntryPage() {
           ) : null}
         </>
       )}
+
+      <ReportDeletionDialog
+        open={deleteIds.length > 0}
+        count={deleteIds.length}
+        busy={deleting}
+        error={deleteError}
+        labels={BULK_SAVED_DIARY_DELETE_LABELS}
+        onCancel={() => {
+          if (deleting) return
+          setDeleteIds([])
+          setDeleteError('')
+        }}
+        onConfirm={confirmDeleteSelected}
+      />
     </PremiumShell>
   )
 }
