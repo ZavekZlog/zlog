@@ -738,11 +738,16 @@ export default function SiteDiaryPage() {
       }, DIARY_WORKBENCH_LOAD_TIMEOUT_MS)
 
       try {
-        // Continue landings (`?compose=1`) paint the diary once report + project +
-        // form fields are applied. Selector lists and signed-URL previews finish after.
+        // Continue landings (`?compose=1`) paint once report + project + form
+        // fields are applied. Saved-diary Edit (`?edit=1`) keeps signature
+        // preview blocking, then paints before unused selector/recent fetches
+        // and non-critical signed cover/logo/photo previews.
         const composeFlag = String(composeQuery || '').toLowerCase()
         const progressiveCompose =
           composeFlag === '1' || composeFlag === 'true' || composeFlag === 'compose'
+        const editFlag = String(editQuery || '').toLowerCase()
+        const progressiveEdit =
+          editFlag === '1' || editFlag === 'true' || editFlag === 'edit'
 
         const proj = await fetchProjectRowForEditHydrate(supabase, projectId)
 
@@ -762,7 +767,8 @@ export default function SiteDiaryPage() {
             .eq('is_draft', false)
           : null
 
-        if (!progressiveCompose) {
+        // Edit Workbench does not consume the selector list — do not fetch it.
+        if (!progressiveCompose && !progressiveEdit) {
           const { data: allProjects } = await supabase
             .from('projects')
             .select(diaryProjectSelectorSelectColumns())
@@ -948,8 +954,8 @@ export default function SiteDiaryPage() {
           reportExtras: extras,
         })
         setProjectReference(editHydration.projectReference)
-        // Path first so compose can paint; signed preview can finish after first paint.
-        if (progressiveCompose) {
+        // Path first so compose/edit can paint; signed preview finishes after first paint.
+        if (progressiveCompose || progressiveEdit) {
           applyCoverPathOnly(editHydration.coverStoragePath)
         } else {
           await applyCover(editHydration.coverStoragePath)
@@ -1054,7 +1060,7 @@ export default function SiteDiaryPage() {
         setCompanyReportingFor(existing.company_reporting_for || '')
         setCreatorName(hydrateAuthorName(existing))
         setCreatorRole(hydrateAuthorRole(existing))
-        if (!progressiveCompose) {
+        if (!progressiveCompose && !progressiveEdit) {
           const logoPath = existing.brand_logo_url || null
           if (logoPath) {
             const preview = await signedUrlForPath(supabase, logoPath)
@@ -1108,7 +1114,7 @@ export default function SiteDiaryPage() {
         }
         // Always replace plant rows from this report only (never merge prior diary state).
         setPlantRows(hydratePlantFormRows(plant, makeUuid))
-        if (progressiveCompose) {
+        if (progressiveCompose || progressiveEdit) {
           if (reportPhotos?.length) {
             const withoutPreview = reportPhotos.map(mapPhotoRowWithoutPreview)
             setPhotos(withoutPreview)
@@ -1258,6 +1264,78 @@ export default function SiteDiaryPage() {
             setLoadDiagnostic('')
             setHydrateComplete(true)
           }
+        } else if (progressiveEdit) {
+          // First usable paint — unused selector/recent and non-critical signed
+          // cover/logo/photo previews continue below. Signature preview is already applied.
+          if (commit()) {
+            setLoadDiagnostic('')
+            setLoading(false)
+          }
+
+          // F2B: resume canonical cover upload after first paint (non-blocking).
+          if (pendingCoverGeneration && !cancelled) {
+            void (async () => {
+              const gen = pendingCoverGeneration
+              try {
+                const { data: { user } } = await supabase.auth.getUser()
+                if (!user?.id || coverRemovedRef.current) return
+                if (coverPendingGenerationRef.current !== gen) return
+                const synced = await syncPendingCoverUpload(supabase, {
+                  userId: user.id,
+                  reportId: editingReportId,
+                  generation: gen,
+                  updateCoverUrl: async (storagePath) => {
+                    await updateDiarySetupFields(supabase, {
+                      reportId: editingReportId,
+                      projectId,
+                      fields: { coverPhotoUrl: storagePath },
+                    })
+                  },
+                })
+                if (!synced.ok || !synced.storagePath) return
+                if (cancelled || coverRemovedRef.current) return
+                if (coverPendingGenerationRef.current !== gen) return
+                loadedCoverPathRef.current = synced.storagePath
+                const keepPreview = coverPhotoRef.current?.preview || null
+                const nextCover = coverPhotoStateAfterUpload(synced.storagePath, keepPreview)
+                coverPhotoRef.current = nextCover
+                if (commit()) setCoverPhoto(nextCover)
+              } catch {
+                /* background resume — diary remains usable */
+              }
+            })()
+          }
+
+          if (editHydration.coverStoragePath && !pendingCoverGeneration) {
+            const preview = await resolveCoverPhotoPreviewUrl(
+              supabase,
+              editHydration.coverStoragePath,
+            )
+            if (!cancelled && commit()) {
+              setCoverPhoto(coverPhotoStateFromSaved(editHydration.coverStoragePath, preview))
+            }
+          }
+
+          {
+            const logoPath = existing.brand_logo_url || null
+            if (logoPath) {
+              const preview = await signedUrlForPath(supabase, logoPath)
+              if (!cancelled && commit()) setSetupLogoPreview(preview)
+            }
+          }
+
+          if (reportPhotos?.length) {
+            const withPreview = await signReportPhotoRows(reportPhotos)
+            if (!cancelled && commit()) {
+              setPhotos(withPreview)
+              setLocationWalk(groupPhotosByArea(withPreview))
+            }
+          }
+
+          if (commit()) {
+            setLoadDiagnostic('')
+            setHydrateComplete(true)
+          }
         } else {
           let logsQuery = supabase
             .from('daily_reports')
@@ -1323,7 +1401,7 @@ export default function SiteDiaryPage() {
     }
     load()
     return () => { cancelled = true }
-  }, [projectId, editingReportId, formReloadToken, composeQuery, supabase])
+  }, [projectId, editingReportId, formReloadToken, composeQuery, editQuery, supabase])
 
   const autosavePayload = useMemo(() => buildDiaryAutosavePayload({
     weather,
