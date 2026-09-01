@@ -811,6 +811,7 @@ function SiteDiarySetupPage() {
         logoUrl: brandLogoUrl || null,
         brandingId,
         brandColor: candidateBrandColor,
+        userId: user.id,
       })
       const nextBrandingId = companySnapshot.brandingId || brandingId
       const nextBrandColor = companySnapshot.brandColor || candidateBrandColor
@@ -836,10 +837,7 @@ function SiteDiarySetupPage() {
         selectedProjectId,
         editingReportId,
         editingProjectId,
-        getUser: async () => {
-          const { data: { user: u } } = await supabase.auth.getUser()
-          return u
-        },
+        getUser: async () => user,
         persistProject: (plan) => persistSetupProject({ supabase, plan }),
         createDraft: (fields) => createDiaryDraftFromSetup(supabase, fields),
         updateDraft: (args) => updateDiarySetupFields(supabase, args),
