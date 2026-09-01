@@ -7,7 +7,7 @@
  *    saved diary in the read-only viewer. Management actions live there.
  */
 
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Eye } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -233,7 +233,10 @@ function SiteDiaryEntryPage() {
   const searchParams = useSearchParams()
   const filterProjectId = searchParams.get('project') || null
   const missingReport = searchParams.get('missing') === '1'
-  const supabase = createClient()
+  // One client for this mounted page. createClient() is a new object each
+  // render; putting that in the reports-load effect would reload the list.
+  const supabase = useMemo(() => createClient(), [])
+  const openingSavedDiaryRef = useRef(false)
 
   const [mode, setMode] = useState(() => (
     searchParams.get('view') === 'saved' ? 'saved' : null
@@ -254,6 +257,7 @@ function SiteDiaryEntryPage() {
 
   useEffect(() => {
     if (mode === 'saved' && filterProjectId) {
+      if (openingSavedDiaryRef.current) return
       router.replace(savedReportListHref())
     }
   }, [filterProjectId, mode, router])
@@ -302,6 +306,7 @@ function SiteDiaryEntryPage() {
     }
     // Read-only viewer for the exact saved report — one continuous document.
     // Never opens the compose workbench and never creates a row.
+    openingSavedDiaryRef.current = true
     router.push(href)
   }
 
