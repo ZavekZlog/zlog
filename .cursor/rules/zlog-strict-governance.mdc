@@ -127,6 +127,16 @@ In particular:
 - Browser/password-manager credential autofill must never itself submit Sign In or navigate into Zlog.
 - Real Android phone testing is authoritative for mobile behaviour.
 
+## SAVED DIARIES MANAGEMENT — PROTECTED BASELINE 8bd3dd3
+
+The Android-approved Saved Diaries bulk-management UX at commit 8bd3dd3 is a protected product contract.
+
+Do not remove, weaken, rename, or change its semantics during unrelated work.
+
+Protected behaviour includes: compact Saved Diaries list; first-tap opens the diary; true-total count copy (never loaded/page/batch terminology); Load more diaries; Select and selection mode; Select All of the full Saved Diaries dataset via ID-only retrieval; exact-count in-app delete confirmation with an irreversible warning; MAX_DELETE_COUNT = 50 per RPC call with internal batching for larger selections; partial-batch failure handling; post-delete first-page refill; independent opened-diary Delete Diary.
+
+Future changes to this contract require an explicit task scope and Android acceptance.
+
 ## COMMAND EXECUTION
 
 If the user supplies an exact command:
