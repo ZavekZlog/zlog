@@ -137,6 +137,36 @@ Protected behaviour includes: compact Saved Diaries list; first-tap opens the di
 
 Future changes to this contract require an explicit task scope and Android acceptance.
 
+## SDSC FAST PATH
+
+A complete SDSC snapshot that matches the current user/project/report may release Project Details first paint from local session context before legacy DB hydrate.
+
+Background reconcile must not overwrite dirty user form edits, a user-selected/removed logo, or a user-selected/removed cover.
+
+## EXISTING DIARY PROJECT IDENTITY
+
+Existing saved-diary Project Name remains read-only identity.
+
+Normal editable project-detail fields, including Project Manager, remain editable.
+
+## SAVED VIEW PROGRESSIVE MEDIA
+
+Saved-diary first paint precedes signed-media hydrate.
+
+Full report images are not eagerly signed for review; background media failure must remain non-fatal and must not restore whole-page loading, clear the diary, or navigate away.
+
+## CONTINUE AUTH REUSE
+
+Already-resolved Continue user identity must be reused.
+
+Do not reintroduce a gratuitous serial auth.getUser chain on Continue.
+
+## AUTH SIGN-IN CONTRACT
+
+Password-manager autofill may populate fields but must not submit Sign In or navigate into Zlog.
+
+A genuine existing authenticated session hitting /login must still redirect via middleware, distinct from autofill.
+
 ## COMMAND EXECUTION
 
 If the user supplies an exact command:
