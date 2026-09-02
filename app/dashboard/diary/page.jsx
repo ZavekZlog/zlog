@@ -29,14 +29,17 @@ import {
 import { clearSetupFormDraft } from '@/lib/report-setup'
 import {
   BULK_SAVED_DIARY_DELETE_LABELS,
-  deleteSiteDiaries,
+  deleteSiteDiariesInSafeBatches,
   savedReportListHref,
-  selectAllReports,
   selectedReportsCountLabel,
   toggleReportSelection,
 } from '@/lib/report-deletion'
 
 const DIARY_ACCENT = REPORT_THEMES.diary.accent
+const SAVED_DIARY_PAGE_SIZE = 50
+const SAVED_DIARY_ID_PAGE_SIZE = 1000
+const SAVED_DIARY_LIST_COLUMNS =
+  'id, project_id, report_date, shift, site_summary, projects(id, name)'
 
 /**
  * Peer cards in one group share a height — the tallest copy sets the row, so
@@ -72,10 +75,32 @@ const savedDiaryListCss = `
     gap: 12px;
     min-width: 0;
   }
-  .zlog-saved-diary-toolbar p {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow-wrap: anywhere;
+  .zlog-saved-diary-toolbar--selecting {
+    display: grid;
+    grid-template-columns: auto minmax(min-content, 1fr) auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 8px;
+  }
+  .zlog-saved-diary-count {
+    flex: 1 0 auto;
+    min-width: min-content;
+    margin: 0;
+    color: var(--text-2);
+    font-size: 14px;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+  .zlog-saved-diary-toolbar--selecting .zlog-saved-diary-count {
+    grid-column: 2;
+    grid-row: 1;
+    text-align: center;
+  }
+  .zlog-saved-diary-toolbar-cancel {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
   }
   .zlog-saved-diary-toolbar-actions {
     display: flex;
@@ -84,6 +109,15 @@ const savedDiaryListCss = `
     justify-content: flex-end;
     gap: 8px;
     min-width: 0;
+  }
+  .zlog-saved-diary-toolbar--selecting .zlog-saved-diary-toolbar-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    flex-wrap: nowrap;
+    justify-content: stretch;
+  }
+  .zlog-saved-diary-toolbar--selecting .zlog-saved-diary-toolbar-actions > * {
+    flex: 1 1 auto;
   }
   .zlog-saved-diary-list {
     /* Traps the whole list in one layer at z-index 0: isolate means a row,
@@ -265,6 +299,78 @@ function formatReportDate(iso) {
   })
 }
 
+function savedDiariesListCountLabel(total) {
+  const count = Number(total) || 0
+  return count === 1 ? '1 saved diary' : `${count} saved diaries`
+}
+
+function savedDiariesSelectAllLabel(selectedCount, total) {
+  if (selectedCount > 0 && total > 0 && selectedCount === total) return 'Clear'
+  return 'Select All'
+}
+
+function savedDiariesLoadMoreLabel() {
+  return 'Load more diaries'
+}
+
+function applySavedDiaryListFilter(query, { filterProjectId, mode }) {
+  // View Saved Diaries is cross-project; only project-scoped hub entry uses ?project=.
+  if (filterProjectId && mode !== 'saved') {
+    return query.eq('project_id', filterProjectId)
+  }
+  return query
+}
+
+function buildSavedDiaryListQuery(supabase, { from, to, filterProjectId, mode }) {
+  return applySavedDiaryListFilter(
+    supabase
+      .from('daily_reports')
+      .select(SAVED_DIARY_LIST_COLUMNS, { count: 'exact' })
+      .order('report_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .range(from, to),
+    { filterProjectId, mode },
+  )
+}
+
+function buildSavedDiaryIdQuery(supabase, { from, to, filterProjectId, mode }) {
+  return applySavedDiaryListFilter(
+    supabase
+      .from('daily_reports')
+      .select('id', { count: 'exact' })
+      .order('report_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .range(from, to),
+    { filterProjectId, mode },
+  )
+}
+
+async function fetchAllSavedDiaryIds(supabase, { filterProjectId, mode }) {
+  const ids = []
+  const seen = new Set()
+  let from = 0
+  for (;;) {
+    const { data, error, count } = await buildSavedDiaryIdQuery(supabase, {
+      from,
+      to: from + SAVED_DIARY_ID_PAGE_SIZE - 1,
+      filterProjectId,
+      mode,
+    })
+    if (error) throw error
+    const page = (data || []).map((row) => String(row?.id || '').trim()).filter(Boolean)
+    for (const id of page) {
+      if (seen.has(id)) continue
+      seen.add(id)
+      ids.push(id)
+    }
+    if (page.length < SAVED_DIARY_ID_PAGE_SIZE) break
+    if (typeof count === 'number' && ids.length >= count) break
+    if (!page.length) break
+    from += page.length
+  }
+  return ids
+}
+
 function SiteDiaryEntryPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -281,11 +387,14 @@ function SiteDiaryEntryPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(() => (missingReport ? DIARY_MISSING_MESSAGE : ''))
   const [reports, setReports] = useState([])
+  const [totalSavedDiaryCount, setTotalSavedDiaryCount] = useState(0)
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [deleteIds, setDeleteIds] = useState([])
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [selectingAll, setSelectingAll] = useState(false)
 
   const title = useMemo(() => {
     if (mode === 'previous') return 'Use a Previous Diary'
@@ -311,23 +420,19 @@ function SiteDiaryEntryPage() {
       setLoading(true)
       setError((prev) => (prev === DIARY_MISSING_MESSAGE ? prev : ''))
       try {
-        let query = supabase
-          .from('daily_reports')
-          .select('id, project_id, report_date, shift, site_summary, projects(id, name)')
-          .order('report_date', { ascending: false })
-          .order('created_at', { ascending: false })
-          .limit(50)
-
-        // View Saved Diaries is cross-project; only project-scoped hub entry uses ?project=.
-        if (filterProjectId && mode !== 'saved') {
-          query = query.eq('project_id', filterProjectId)
-        }
-
-        const { data, error: qErr } = await query
+        const { data, error: qErr, count } = await buildSavedDiaryListQuery(supabase, {
+          from: 0,
+          to: SAVED_DIARY_PAGE_SIZE - 1,
+          filterProjectId,
+          mode,
+        })
         if (qErr) throw qErr
         if (!cancelled) {
           const nextReports = data || []
           setReports(nextReports)
+          setTotalSavedDiaryCount(
+            typeof count === 'number' ? count : nextReports.length,
+          )
           const validIds = new Set(nextReports.map((row) => row?.id).filter(Boolean))
           setSelectedIds((current) => new Set([...current].filter((id) => validIds.has(id))))
         }
@@ -376,6 +481,7 @@ function SiteDiaryEntryPage() {
     setSelectedIds(new Set())
     setDeleteIds([])
     setDeleteError('')
+    setTotalSavedDiaryCount(0)
   }
 
   const enterSelectionMode = () => {
@@ -396,12 +502,65 @@ function SiteDiaryEntryPage() {
     setSelectedIds((current) => toggleReportSelection(current, reportId))
   }
 
-  const selectAllVisible = () => {
-    if (selectedIds.size > 0 && selectedIds.size === reports.length) {
+  const selectAllVisible = async () => {
+    if (deleting || selectingAll) return
+    if (selectedIds.size > 0 && selectedIds.size === totalSavedDiaryCount) {
       setSelectedIds(new Set())
       return
     }
-    setSelectedIds(selectAllReports(reports))
+    setSelectingAll(true)
+    setError((prev) => (prev === DIARY_MISSING_MESSAGE ? prev : ''))
+    try {
+      const ids = await fetchAllSavedDiaryIds(supabase, { filterProjectId, mode })
+      setSelectedIds(new Set(ids))
+    } catch {
+      setError('We couldn’t select all diaries. Check your connection and try again.')
+    } finally {
+      setSelectingAll(false)
+    }
+  }
+
+  const refreshSavedDiaryFirstPage = async () => {
+    const { data, error: qErr, count } = await buildSavedDiaryListQuery(supabase, {
+      from: 0,
+      to: SAVED_DIARY_PAGE_SIZE - 1,
+      filterProjectId,
+      mode,
+    })
+    if (qErr) throw qErr
+    const nextReports = data || []
+    setReports(nextReports)
+    setTotalSavedDiaryCount(
+      typeof count === 'number' ? count : nextReports.length,
+    )
+  }
+
+  const loadMoreSavedDiaries = async () => {
+    if (loading || loadingMore || deleting) return
+    if (reports.length >= totalSavedDiaryCount) return
+    setLoadingMore(true)
+    setError((prev) => (prev === DIARY_MISSING_MESSAGE ? prev : ''))
+    try {
+      const from = reports.length
+      const { data, error: qErr, count } = await buildSavedDiaryListQuery(supabase, {
+        from,
+        to: from + SAVED_DIARY_PAGE_SIZE - 1,
+        filterProjectId,
+        mode,
+      })
+      if (qErr) throw qErr
+      const page = data || []
+      setReports((current) => {
+        const existing = new Set(current.map((row) => String(row?.id || '')).filter(Boolean))
+        const appended = page.filter((row) => row?.id && !existing.has(String(row.id)))
+        return appended.length ? [...current, ...appended] : current
+      })
+      if (typeof count === 'number') setTotalSavedDiaryCount(count)
+    } catch {
+      setError('We couldn’t load more diaries. Check your connection and try again.')
+    } finally {
+      setLoadingMore(false)
+    }
   }
 
   const requestDeleteSelected = () => {
@@ -415,12 +574,30 @@ function SiteDiaryEntryPage() {
     setDeleting(true)
     setDeleteError('')
     try {
-      const result = await deleteSiteDiaries(supabase, deleteIds)
-      const deleted = new Set(result.deletedIds)
-      setReports((current) => current.filter((row) => !deleted.has(String(row.id))))
-      setSelectedIds(new Set())
-      setSelectionMode(false)
-      setDeleteIds([])
+      const result = await deleteSiteDiariesInSafeBatches(supabase, deleteIds)
+      const deleted = new Set((result.deletedIds || []).map(String))
+      if (deleted.size) {
+        try {
+          await refreshSavedDiaryFirstPage()
+        } catch {
+          setReports((current) => current.filter((row) => !deleted.has(String(row.id))))
+          setTotalSavedDiaryCount((current) => Math.max(0, current - deleted.size))
+        }
+      }
+      if (result.ok) {
+        setSelectedIds(new Set())
+        setSelectionMode(false)
+        setDeleteIds([])
+        setDeleteError('')
+      } else {
+        const remaining = (result.remainingIds || []).map(String)
+        setSelectedIds(new Set(remaining))
+        setDeleteIds(remaining)
+        setDeleteError(
+          result.error
+          || 'Some diaries could not be deleted. The remaining selected diaries were not removed.',
+        )
+      }
     } catch (deleteFailure) {
       setDeleteError(
         deleteFailure?.message || 'We couldn’t delete the selected diaries. Try again.',
@@ -429,6 +606,8 @@ function SiteDiaryEntryPage() {
       setDeleting(false)
     }
   }
+
+  const remainingSavedDiaries = Math.max(0, totalSavedDiaryCount - reports.length)
 
   return (
     <PremiumShell
@@ -503,31 +682,36 @@ function SiteDiaryEntryPage() {
               aria-label={selectionMode ? 'Saved diary selection' : 'Saved diary navigation'}
               data-selection-mode={selectionMode ? 'true' : undefined}
             >
-              <div className="zlog-saved-diary-toolbar">
+              <div
+                className={
+                  selectionMode
+                    ? 'zlog-saved-diary-toolbar zlog-saved-diary-toolbar--selecting'
+                    : 'zlog-saved-diary-toolbar'
+                }
+              >
                 <ZlogBackControl onClick={leaveSavedList} />
                 {selectionMode ? (
                   <>
-                    <p
-                      style={{
-                        minWidth: 0,
-                        margin: 0,
-                        color: 'var(--text-2)',
-                        fontSize: 14,
-                        lineHeight: 1.4,
-                      }}
-                    >
+                    <p className="zlog-saved-diary-count">
                       {selectedReportsCountLabel(selectedIds.size)}
                     </p>
+                    <SecondaryButton
+                      type="button"
+                      disabled={deleting}
+                      onClick={exitSelectionMode}
+                      className="zlog-saved-diary-toolbar-cancel"
+                      style={{ minHeight: 44, width: 'auto', padding: '8px 14px' }}
+                    >
+                      Cancel
+                    </SecondaryButton>
                     <div className="zlog-saved-diary-toolbar-actions">
                       <SecondaryButton
                         type="button"
-                        disabled={reports.length < 1 || deleting}
+                        disabled={totalSavedDiaryCount < 1 || deleting || selectingAll}
                         onClick={selectAllVisible}
                         style={{ minHeight: 44, width: 'auto', padding: '8px 14px' }}
                       >
-                        {selectedIds.size > 0 && selectedIds.size === reports.length
-                          ? 'Clear'
-                          : 'Select All'}
+                        {savedDiariesSelectAllLabel(selectedIds.size, totalSavedDiaryCount)}
                       </SecondaryButton>
                       <DestructiveButton
                         type="button"
@@ -537,28 +721,12 @@ function SiteDiaryEntryPage() {
                       >
                         Delete Selected
                       </DestructiveButton>
-                      <SecondaryButton
-                        type="button"
-                        disabled={deleting}
-                        onClick={exitSelectionMode}
-                        style={{ minHeight: 44, width: 'auto', padding: '8px 14px' }}
-                      >
-                        Cancel
-                      </SecondaryButton>
                     </div>
                   </>
                 ) : (
                   <>
-                    <p
-                      style={{
-                        minWidth: 0,
-                        margin: 0,
-                        color: 'var(--text-2)',
-                        fontSize: 14,
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      Tap a diary to open and review it.
+                    <p className="zlog-saved-diary-count">
+                      {savedDiariesListCountLabel(totalSavedDiaryCount)}
                     </p>
                     {mode === 'saved' && !loading && reports.length > 0 ? (
                       <SecondaryButton
@@ -577,7 +745,7 @@ function SiteDiaryEntryPage() {
 
           {loading && <p style={{ color: 'var(--text-2)' }}>Loading your diaries…</p>}
 
-          {!loading && reports.length === 0 && (
+          {!loading && reports.length === 0 && totalSavedDiaryCount < 1 && (
             <div style={{ padding: '8px 0 24px', color: 'var(--text-2)', fontSize: 14, lineHeight: 1.5 }}>
               No saved Site Diaries yet{filterProjectId && mode !== 'saved' ? ' for this project' : ''}.
               <div style={{ marginTop: 14 }}>
@@ -653,6 +821,19 @@ function SiteDiaryEntryPage() {
                   </div>
                 )
               })}
+            </div>
+          ) : null}
+
+          {!loading && remainingSavedDiaries > 0 ? (
+            <div style={{ padding: '10px 0 16px' }}>
+              <SecondaryButton
+                type="button"
+                disabled={loadingMore || deleting}
+                onClick={loadMoreSavedDiaries}
+                style={{ minHeight: 44 }}
+              >
+                {savedDiariesLoadMoreLabel()}
+              </SecondaryButton>
             </div>
           ) : null}
         </>
