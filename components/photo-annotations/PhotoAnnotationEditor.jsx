@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PrimaryCTA, SecondaryButton, labelStyle } from '@/lib/premium-ui'
+import { annotationEditorUserPhotoStyle } from '@/lib/photo-workspace/photo-001-no-crop'
 import {
   createEmptyAnnotationDoc,
   normalizeAnnotationDoc,
@@ -561,16 +562,7 @@ export function PhotoAnnotationEditor({
                 src={imageSrc}
                 alt=""
                 draggable={false}
-                style={{
-                  position: 'absolute',
-                  left: fit.x,
-                  top: fit.y,
-                  width: fit.w,
-                  height: fit.h,
-                  objectFit: 'fill',
-                  userSelect: 'none',
-                  pointerEvents: 'none',
-                }}
+                style={annotationEditorUserPhotoStyle(fit)}
               />
               <canvas
                 ref={overlayRef}

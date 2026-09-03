@@ -1,6 +1,7 @@
 'use client'
 
 import { SecondaryButton, textareaStyle } from '@/lib/premium-ui'
+import { ANNOTATION_PHOTO_CARD_THUMB_IMG_STYLE } from '@/lib/photo-workspace/photo-001-no-crop'
 
 /**
  * Single photo in an active area group: preview, AI description, edit / regenerate / remove.
@@ -29,13 +30,7 @@ export function AnnotationPhotoCard({
         <img
           src={photo.preview}
           alt=""
-          style={{
-            width: 88,
-            height: 88,
-            objectFit: 'cover',
-            borderRadius: 8,
-            border: '1px solid var(--edge)',
-          }}
+          style={ANNOTATION_PHOTO_CARD_THUMB_IMG_STYLE}
         />
       ) : (
         <div style={{ width: 88, height: 88, borderRadius: 8, background: 'var(--edge)' }} />

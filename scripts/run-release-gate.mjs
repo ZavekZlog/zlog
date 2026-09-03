@@ -40,6 +40,7 @@ const NODE_TESTS = [
   'lib/premium-ui-back-contract.test.js',
   'lib/premium-ui-workbench-cta-contract.test.js',
   'lib/diary-pdf-layout.test.js',
+  'lib/photo-workspace/photo-001-no-crop.test.js',
   'lib/diary-checkpoint-ab65437-contract.test.js',
   'lib/cta-hierarchy-contract.test.js',
   'lib/zlog-text-wordmark-contract.test.js',

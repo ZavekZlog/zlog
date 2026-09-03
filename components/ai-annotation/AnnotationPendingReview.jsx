@@ -1,6 +1,7 @@
 'use client'
 
 import { PrimaryCTA, SecondaryButton, labelStyle, textareaStyle } from '@/lib/premium-ui'
+import { ANNOTATION_PENDING_PREVIEW_IMG_STYLE } from '@/lib/photo-workspace/photo-001-no-crop'
 
 /**
  * Pending capture: preview + AI description editor + Save / Discard.
@@ -26,14 +27,7 @@ export function AnnotationPendingReview({
         <img
           src={previewUrl}
           alt="Capture preview"
-          style={{
-            width: '100%',
-            maxHeight: 220,
-            objectFit: 'cover',
-            borderRadius: 10,
-            border: '1px solid var(--edge)',
-            marginBottom: 12,
-          }}
+          style={ANNOTATION_PENDING_PREVIEW_IMG_STYLE}
         />
       )}
       {aiLoading ? (

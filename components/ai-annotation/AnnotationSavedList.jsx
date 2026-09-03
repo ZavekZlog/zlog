@@ -1,6 +1,7 @@
 'use client'
 
 import { SecondaryButton, labelStyle } from '@/lib/premium-ui'
+import { ANNOTATION_SAVED_LIST_THUMB_IMG_STYLE } from '@/lib/photo-workspace/photo-001-no-crop'
 
 /**
  * List of saved annotation items for the current session / report.
@@ -33,13 +34,7 @@ export function AnnotationSavedList({ items = [], onRemoveItem }) {
               <img
                 src={item.preview}
                 alt=""
-                style={{
-                  width: 72,
-                  height: 72,
-                  objectFit: 'cover',
-                  borderRadius: 8,
-                  border: '1px solid var(--edge)',
-                }}
+                style={ANNOTATION_SAVED_LIST_THUMB_IMG_STYLE}
               />
             ) : (
               <div

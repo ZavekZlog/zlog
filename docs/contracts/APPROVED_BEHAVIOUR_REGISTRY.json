@@ -1,5 +1,5 @@
 {
-  "version": "1.1.14",
+  "version": "1.1.15",
   "updated": "2026-09-03",
   "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage. Source contracts are NOT screenshot visual tests.",
   "behaviours": [
@@ -499,12 +499,29 @@
       "id": "PHOTO-001",
       "description": "All user photographs must preserve the complete image and original aspect ratio. Cropping is prohibited in app and PDF surfaces.",
       "area": "photos",
+      "owningSurfaces": [
+        "components/ai-annotation/AnnotationPendingReview.jsx",
+        "components/ai-annotation/AnnotationPhotoCard.jsx",
+        "components/ai-annotation/AnnotationSavedList.jsx",
+        "components/ai-annotation/AreaPhotoViewer.jsx",
+        "components/photo-workspace/CaptureThumbnailGrid.jsx",
+        "components/photo-workspace/CapturePhotoPreview.jsx",
+        "components/photo-annotations/PhotoAnnotationViewer.jsx",
+        "components/photo-annotations/PhotoAnnotationEditor.jsx",
+        "lib/diary-setup-cover-preview.js",
+        "app/dashboard/diary/setup/page.jsx",
+        "app/dashboard/project/[id]/diary/page.jsx",
+        "app/dashboard/project/[id]/diary/view/page.jsx",
+        "components/pdf/DiaryPdfDocument.jsx",
+        "lib/diary-pdf-layout.js"
+      ],
       "tests": [
         "lib/diary-setup-cover-preview.test.js",
-        "lib/diary-pdf-layout.test.js"
+        "lib/diary-pdf-layout.test.js",
+        "lib/photo-workspace/photo-001-no-crop.test.js"
       ],
       "manualQA": true,
-      "manualQANote": "Android must confirm setup Cover photo, saved-diary review cover, and PDF cover show the full image with original aspect. Automation locks contain-equivalent styles and used-box aspect math — not screenshot geometry."
+      "manualQANote": "Android must confirm setup Cover photo, saved-diary review cover, PDF cover, annotation pending preview, 88x88 / 72x72 annotation thumbs, capture grid/preview, and saved photo grids show the full image with original aspect. Automation locks contain-equivalent styles, fixed-frame contain math, and a crop-assignment guard — not screenshot geometry."
     },
     {
       "id": "DORMANT-001",
