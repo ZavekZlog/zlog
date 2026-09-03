@@ -26,6 +26,7 @@ import {
   pathMatchesAny,
   isGateExemptFile,
   loadScopeManifest,
+  loadTaskScopeDeclaration,
 } from './lib/scope-files.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -82,11 +83,22 @@ function main() {
 
   const lists = loadProtectedLists()
   const cli = parseArgs(process.argv.slice(2))
+  // Fixture mode (--files): ignore developer .zlog-task-scope.json so unit tests stay hermetic.
+  const declaration =
+    cli.files.length > 0
+      ? { allowProtectedScope: false, protectedScopeReason: '' }
+      : loadTaskScopeDeclaration()
   const allow =
     cli.allow ||
     process.env.ZLOG_ALLOW_PROTECTED_SCOPE === '1' ||
-    process.env.ZLOG_ALLOW_PROTECTED_SCOPE === 'true'
-  const reason = (cli.reason || process.env.ZLOG_PROTECTED_SCOPE_REASON || '').trim()
+    process.env.ZLOG_ALLOW_PROTECTED_SCOPE === 'true' ||
+    declaration.allowProtectedScope
+  const reason = (
+    cli.reason ||
+    process.env.ZLOG_PROTECTED_SCOPE_REASON ||
+    declaration.protectedScopeReason ||
+    ''
+  ).trim()
 
   const dirty = cli.files.length > 0 ? cli.files : listDirtyFiles()
   const hits = dirty.filter((f) => isProtected(f, lists.protectedPaths, lists.protectedGlobs))

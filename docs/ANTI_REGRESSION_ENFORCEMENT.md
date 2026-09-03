@@ -1,8 +1,11 @@
 # Zlog Anti-Regression Enforcement
 
-**Version:** 1.0.0  
-**Date Updated:** 2026-08-14  
-**Status:** Enforceable (gates HARD FAIL) — not advisory-only  
+**Version:** 1.1.0
+**Date Updated:** 2026-09-03
+**Reason Updated:** ESLint fingerprint gate (approved warnings vs new warnings)
+**User Decision:** ESLint baseline hardening — no product runtime refactor
+**Previous Version:** 1.0.0
+**Status:** Enforceable (gates HARD FAIL) — not advisory-only
 
 This document is the operating procedure for the machine-checked guardrails in `docs/PROTECTED_SCOPE_MANIFEST.json`.
 
@@ -32,7 +35,10 @@ This document is the operating procedure for the machine-checked guardrails in `
    Source-string terminology lock (Site Diary, Sign out, Project & Report Details, …).
 5. **Behaviour registry** — linked executable tests for diary/auth persistence rules.
 6. **Visual regression** — `npm run test:visual` (compare) / `npm run test:visual:update` (intentional only).
-7. **Canonical release** — `npm run test:release`  
+7. **ESLint gate** — `npm run check:eslint-gate`
+   Zero unapproved live errors. Approved warning fingerprints may remain. Any new warning fails. Do not treat baseline warnings as a clean codebase.
+   Known defects in dormant/unmounted files (`docs/contracts/DORMANT_ESLINT_DEFECTS.json`) are **not** approved exceptions. They are reported and non-blocking only while DORMANT-001 is active. Removing DORMANT-001 without resolving E8 fails the gate. Do not add ESLINT-E8.
+8. **Canonical release** — `npm run test:release`
    Aggregates all of the above + node suites + playwright behavioural + visual.
 
 ## Checkpoint ab65437 (protected restore point)

@@ -41,6 +41,7 @@ export function CurrentAreaProvider({
   const [area, setAreaState] = useState('')
   const [hydrated, setHydrated] = useState(false)
 
+  /* eslint-disable react-hooks/set-state-in-effect -- ESLINT-E9 */
   useEffect(() => {
     if (!scopeKey) {
       setAreaState('')
@@ -50,6 +51,7 @@ export function CurrentAreaProvider({
     setAreaState(readCurrentArea(scopeKey))
     setHydrated(true)
   }, [scopeKey])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const setArea = useCallback((next) => {
     const value = typeof next === 'string' ? next.trim() : ''

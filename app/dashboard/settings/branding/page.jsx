@@ -67,6 +67,7 @@ export default function BrandingSettingsPage() {
     setLoading(false)
   }, [supabase])
 
+  /* eslint-disable-next-line react-hooks/set-state-in-effect -- ESLINT-E5 */
   useEffect(() => { load() }, [load])
 
   const resetForm = () => {
@@ -269,7 +270,7 @@ export default function BrandingSettingsPage() {
           {(logoPreview || brandColor) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               {logoPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element
+                // eslint-disable-next-line @next/next/no-img-element -- ESLINT-BRAND-LOGO-IMG
                 <img
                   src={logoPreview}
                   alt="Logo preview"
@@ -343,7 +344,7 @@ export default function BrandingSettingsPage() {
                 }}
               >
                 {previews[row.id] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
+                  // eslint-disable-next-line @next/next/no-img-element -- ESLINT-BRAND-LOGO-IMG
                   <img src={previews[row.id]} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                 ) : null}
               </div>

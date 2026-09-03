@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "defects": [
+    {
+      "id": "E8",
+      "file": "components/ai-annotation/AreaPhotoViewer.jsx",
+      "rule": "react-hooks/preserve-manual-memoization",
+      "blockedBy": "DORMANT-001",
+      "reason": "fixture"
+    }
+  ]
+}

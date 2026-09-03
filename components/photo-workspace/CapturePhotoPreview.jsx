@@ -69,9 +69,11 @@ export function CapturePhotoPreview({
   const [pendingDelete, setPendingDelete] = useState(null)
   const [resolvedSrc, setResolvedSrc] = useState('')
 
+  /* eslint-disable react-hooks/set-state-in-effect -- ESLINT-E10 */
   useEffect(() => {
     setIndex(Math.min(Math.max(0, startIndex), maxIndex))
   }, [startIndex, maxIndex])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const safeIndex = Math.min(Math.max(0, index), maxIndex)
   const photo = list[safeIndex] || null
@@ -79,12 +81,15 @@ export function CapturePhotoPreview({
   const degrees = Number(photo?.rotationDegrees) || 0
   const [draft, setDraft] = useState(() => photo?.acceptedDescription || '')
 
+  /* eslint-disable react-hooks/set-state-in-effect -- ESLINT-E11 */
   useEffect(() => {
     setDraft(photo?.acceptedDescription || '')
   }, [photo?.id])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Phase D: use cached report preview, or sign canonical report path on demand.
   // Never use the 512px thumbnail in the full viewer.
+  /* eslint-disable react-hooks/set-state-in-effect -- ESLINT-E12 */
   useEffect(() => {
     let cancelled = false
     const immediate = viewerImageSrc(photo)
@@ -106,6 +111,7 @@ export function CapturePhotoPreview({
       cancelled = true
     }
   }, [photo, photo?.id, photo?.preview, photo?.imageUrl, ensureReportPreview])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!photo) return null
 
@@ -204,7 +210,7 @@ export function CapturePhotoPreview({
         ) : null}
 
         {src ? (
-          // eslint-disable-next-line @next/next/no-img-element
+          // eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG
           <img
             src={src}
             alt={`Photo ${photoNumber}`}

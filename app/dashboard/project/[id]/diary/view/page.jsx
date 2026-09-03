@@ -291,7 +291,7 @@ function SavedPhotoGrid({ photos, perPage, numberOffset, totalPhotoCount = 0 }) 
               }}
             >
               {src ? (
-                // eslint-disable-next-line @next/next/no-img-element
+                // eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG
                 <img
                   src={src}
                   alt={caption || `Photo ${numberOffset + index + 1}`}
@@ -444,8 +444,10 @@ function SavedDiaryViewer() {
     let cancelled = false
     const gen = ++pdfCacheGenRef.current
     pdfReadyRef.current = null
+    /* eslint-disable react-hooks/set-state-in-effect -- ESLINT-E4 */
     setPdfCacheState('idle')
     setPdfStatus('')
+    /* eslint-enable react-hooks/set-state-in-effect */
     const startedAt = Date.now()
     const fingerprint = sharePdfFingerprint
 
@@ -973,7 +975,7 @@ function SavedDiaryViewer() {
         <div style={{ marginTop: 0 }}>
           <p style={groupTitleStyle}>Cover Photo</p>
           {view.coverPreviewStatus === 'ready' && view.coverPhotoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
+            // eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG
             <img
               src={view.coverPhotoUrl}
               alt="Site Diary cover photo"
@@ -1217,7 +1219,7 @@ function SavedDiaryViewer() {
 
       <GlassSection title="Signature" accent={DIARY_ACCENT}>
         {view.signaturePreviewStatus === 'ready' && view.signatureUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
+          // eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG
           <img
             src={view.signatureUrl}
             alt="Saved signature"

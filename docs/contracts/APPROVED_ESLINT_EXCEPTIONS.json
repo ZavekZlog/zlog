@@ -1,0 +1,200 @@
+{
+  "version": "1.0.0",
+  "updated": "2026-09-03",
+  "description": "Narrow, registered ESLint suppressions for approved Zlog lifecycle/ref patterns. Never disable protected React hook/compiler rules without an ESLINT-* id that matches this registry. Not a licence to skip Android QA.",
+  "protectedRules": [
+    "react-hooks/set-state-in-effect",
+    "react-hooks/refs",
+    "react-hooks/preserve-manual-memoization",
+    "react-hooks/exhaustive-deps",
+    "@next/next/no-img-element"
+  ],
+  "exceptions": [
+    {
+      "id": "ESLINT-E1",
+      "file": "app/(auth)/login/page.jsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "reason": "signedOut=1 must reset React login UI state after Sign out without wiping the password manager.",
+      "preserves": "AUTH-001 / AUTH-002 / AUTH-004 — app-held form state clear is conditional on ?signedOut=1 only",
+      "tests": [
+        "lib/auth/login-form.test.js",
+        "lib/auth/session-persistence.test.js",
+        "lib/auth/sign-out.test.js"
+      ],
+      "scope": "single-effect"
+    },
+    {
+      "id": "ESLINT-E3",
+      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "reason": "Switching editingReportId must clear save/share locks so Save is never silently blocked.",
+      "preserves": "Diary Save & Share stale-lock reset on report identity change",
+      "tests": [
+        "lib/diary-save.test.js",
+        "lib/diary-share-workflow.test.js",
+        "lib/diary-autosave.test.js"
+      ],
+      "scope": "single-effect"
+    },
+    {
+      "id": "ESLINT-E4",
+      "file": "app/dashboard/project/[id]/diary/view/page.jsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "reason": "Opening/changing a saved diary must reset pdfCacheState before hydrate so a previous PDF cannot display.",
+      "preserves": "Saved-diary share PDF reuse / Android gesture-safe hydrate (DIARY-034)",
+      "tests": [
+        "lib/diary-saved-view.test.js",
+        "lib/diary-checkpoint-ab65437-contract.test.js"
+      ],
+      "scope": "single-effect"
+    },
+    {
+      "id": "ESLINT-E5",
+      "file": "app/dashboard/settings/branding/page.jsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "reason": "Intentional client mount/hydrate fetch of company_brandings. load() already owns the async setState; the effect only invokes it. Runtime refactor would change branding first-paint without a product request.",
+      "preserves": "Branding settings list hydrate after sign-in",
+      "tests": [],
+      "manualQA": true,
+      "scope": "single-effect"
+    },
+    {
+      "id": "ESLINT-E6",
+      "file": "components/ai-annotation/AiLocationWalk.jsx",
+      "rule": "react-hooks/refs",
+      "reason": "draftPhotosRef must track the latest draft list synchronously for late shadow/Save Area results. An effect would lag one frame.",
+      "preserves": "Location Walk Save Area persistence / draft photo identity",
+      "tests": [
+        "lib/cta-hierarchy-contract.test.js",
+        "lib/ai-annotation/area-groups.test.js"
+      ],
+      "scope": "single-line"
+    },
+    {
+      "id": "ESLINT-E7",
+      "file": "components/ai-annotation/AreaPhotoViewer.jsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "reason": "Viewer index must clamp when startIndex/maxIndex props change so the correct photo is shown.",
+      "preserves": "Location Walk photo review index",
+      "tests": [
+        "lib/ai-annotation/area-groups.test.js"
+      ],
+      "manualQA": true,
+      "scope": "single-effect"
+    },
+    {
+      "id": "ESLINT-E9",
+      "file": "components/ai-annotation/CurrentAreaProvider.jsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "reason": "Current Area is stored in sessionStorage and can only hydrate after mount (not during SSR render).",
+      "preserves": "Sticky Current Area across Location Walk photos",
+      "tests": [],
+      "manualQA": true,
+      "scope": "single-effect"
+    },
+    {
+      "id": "ESLINT-E10",
+      "file": "components/photo-workspace/CapturePhotoPreview.jsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "reason": "Preview index must clamp when startIndex/maxIndex change.",
+      "preserves": "PHOTO-001 / Phase D saved-photo review viewer index",
+      "tests": [
+        "lib/photo-workspace/thumbnail-display.test.js",
+        "lib/photo-workspace/photo-workspace.test.js"
+      ],
+      "scope": "single-effect"
+    },
+    {
+      "id": "ESLINT-E11",
+      "file": "components/photo-workspace/CapturePhotoPreview.jsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "reason": "Caption draft resets only when photo identity changes. Must not depend on acceptedDescription (typing-clobber).",
+      "preserves": "Phase D caption draft keyed by photo id",
+      "tests": [
+        "lib/photo-workspace/thumbnail-display.test.js"
+      ],
+      "scope": "single-effect"
+    },
+    {
+      "id": "ESLINT-E12",
+      "file": "components/photo-workspace/CapturePhotoPreview.jsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "reason": "Resolve cached report preview immediately, else sign canonical report path. Never use the 512px thumbnail.",
+      "preserves": "PHOTO-001 / Phase D full viewer source (not thumbnail)",
+      "tests": [
+        "lib/photo-workspace/thumbnail-display.test.js"
+      ],
+      "scope": "single-effect"
+    },
+    {
+      "id": "ESLINT-PHOTO-001-IMG",
+      "files": [
+        "app/dashboard/project/[id]/diary/page.jsx",
+        "app/dashboard/project/[id]/diary/view/page.jsx",
+        "components/ai-annotation/AreaPhotoViewer.jsx",
+        "components/ai-annotation/AnnotationPendingReview.jsx",
+        "components/ai-annotation/AnnotationPhotoCard.jsx",
+        "components/ai-annotation/AnnotationSavedList.jsx",
+        "components/photo-annotations/PhotoAnnotationEditor.jsx",
+        "components/photo-annotations/PhotoAnnotationViewer.jsx",
+        "components/photo-workspace/CapturePhotoPreview.jsx",
+        "components/photo-workspace/CaptureThumbnailGrid.jsx"
+      ],
+      "rule": "@next/next/no-img-element",
+      "reason": "User photographs must use <img> with contain. next/image can crop and violates PHOTO-001.",
+      "preserves": "PHOTO-001 — no crop, original aspect ratio",
+      "tests": [
+        "lib/diary-setup-cover-preview.test.js",
+        "lib/photo-workspace/thumbnail-display.test.js"
+      ],
+      "scope": "existing-img-disable"
+    },
+    {
+      "id": "ESLINT-BRAND-LOGO-IMG",
+      "files": [
+        "app/dashboard/settings/branding/page.jsx",
+        "components/branding/BrandingSelector.jsx"
+      ],
+      "rule": "@next/next/no-img-element",
+      "reason": "Company logos must keep original aspect; next/image is not approved for these previews.",
+      "preserves": "Report branding logo preview without crop",
+      "tests": [],
+      "manualQA": true,
+      "scope": "existing-img-disable"
+    },
+    {
+      "id": "ESLINT-SETUP-HYDRATE-DEPS",
+      "file": "app/dashboard/diary/setup/page.jsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "reason": "Setup hydrate loads once per edit target; createClient() is not referentially stable.",
+      "preserves": "Project & Report Details hydrate / SDSC fast path",
+      "tests": [
+        "lib/diary-setup-sdsc-fast-path.test.js",
+        "lib/diary-edit-hydrate.test.js"
+      ],
+      "scope": "single-line"
+    },
+    {
+      "id": "ESLINT-BRANDING-SELECTOR-DEPS",
+      "file": "components/branding/BrandingSelector.jsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "reason": "Default branding auto-select effect must not re-run when createClient identity changes.",
+      "preserves": "Branding selector default company",
+      "tests": [],
+      "manualQA": true,
+      "scope": "single-line"
+    },
+    {
+      "id": "ESLINT-E13",
+      "file": "components/project/ProjectDatesFields.jsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "reason": "Re-hydrate programme dates when project row finishes loading or route id changes so the previous project's dates cannot stick.",
+      "preserves": "Project start / planned completion persistence on setup",
+      "tests": [
+        "lib/diary-setup-project-dates.test.js",
+        "lib/diary-site-diary-contract.test.js"
+      ],
+      "scope": "single-effect"
+    }
+  ]
+}

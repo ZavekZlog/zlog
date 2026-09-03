@@ -1,0 +1,10 @@
+{
+  "protectedRules": [
+    "react-hooks/set-state-in-effect",
+    "react-hooks/refs",
+    "react-hooks/preserve-manual-memoization",
+    "react-hooks/exhaustive-deps",
+    "@next/next/no-img-element"
+  ],
+  "exceptions": []
+}

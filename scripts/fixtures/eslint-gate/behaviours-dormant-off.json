@@ -1,0 +1,8 @@
+{
+  "behaviours": [
+    {
+      "id": "AUTH-001",
+      "description": "fixture without DORMANT-001"
+    }
+  ]
+}

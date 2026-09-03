@@ -78,7 +78,7 @@ export function BrandingSelector({
       }
     })()
     return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ESLINT-BRANDING-SELECTOR-DEPS
   }, [autoSelectDefault])
 
   useEffect(() => () => {
@@ -289,7 +289,7 @@ export function BrandingSelector({
           {(logoPreview || extracting) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               {logoPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element
+                // eslint-disable-next-line @next/next/no-img-element -- ESLINT-BRAND-LOGO-IMG
                 <img
                   src={logoPreview}
                   alt="Logo preview"

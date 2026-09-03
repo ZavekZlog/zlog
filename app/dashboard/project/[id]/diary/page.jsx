@@ -523,6 +523,7 @@ export default function SiteDiaryPage() {
   const authUserIdRef = useRef(null)
 
   // Clear stale locks when opening/switching a report so Save is never silently blocked.
+  /* eslint-disable react-hooks/set-state-in-effect -- ESLINT-E3 */
   useEffect(() => {
     saveLockRef.current = false
     completingRef.current = false
@@ -540,6 +541,7 @@ export default function SiteDiaryPage() {
     ackedSnapshotRef.current = null
     suppressAutosaveRef.current = true
   }, [editingReportId])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Detect session loss while editing — recover via Sign in CTA (do not leave Save enabled).
   useEffect(() => {
@@ -3584,7 +3586,7 @@ export default function SiteDiaryPage() {
                 </p>
               )}
               {scanSheetPreview && (
-                // eslint-disable-next-line @next/next/no-img-element
+                // eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG
                 <img
                   src={scanSheetPreview}
                   alt="Sign-in sheet preview"

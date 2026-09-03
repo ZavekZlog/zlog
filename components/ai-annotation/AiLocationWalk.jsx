@@ -209,6 +209,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   const shadowStartedIdsRef = useRef(new Set())
   /** Latest draft list for late shadow results after Save Area may have cleared state. */
   const draftPhotosRef = useRef(draftPhotos)
+  // eslint-disable-next-line react-hooks/refs -- ESLINT-E6
   draftPhotosRef.current = draftPhotos
 
   // Suggestions come from this diary's own saved areas only. A previous diary must

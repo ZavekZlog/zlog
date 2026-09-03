@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "notes": {
+    "no-img-element": "USER PHOTO surfaces must not be mechanically converted to next/image. That violates PHOTO-001 (no crop; preserve original aspect).",
+    "exhaustive-deps:acceptedDescription": "CapturePhotoPreview caption effect is keyed on photo?.id only. Adding photo?.acceptedDescription would clobber in-progress typing."
+  },
+  "warnings": [
+    {
+      "file": "scripts/fixtures/eslint-gate/sample-source.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "approvedUnused",
+      "sourceHint": "const approvedUnused = 1",
+      "classification": "no-unused-vars"
+    }
+  ]
+}

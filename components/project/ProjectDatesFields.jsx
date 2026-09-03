@@ -78,12 +78,14 @@ export function ProjectDatesEditor({
   const [saved, setSaved] = useState(false)
 
   // Re-hydrate when the project row finishes loading or the route id changes.
+  /* eslint-disable react-hooks/set-state-in-effect -- ESLINT-E13 */
   useEffect(() => {
     setStartDate(toDateInputValue(initialStartDate))
     setPlannedCompletionDate(toDateInputValue(initialPlannedCompletionDate))
     setError('')
     setSaved(false)
   }, [projectId, initialStartDate, initialPlannedCompletionDate])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleChange = ({ startDate: s, plannedCompletionDate: p }) => {
     setStartDate(s)

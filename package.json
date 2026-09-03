@@ -19,6 +19,8 @@
     "test:visual": "node scripts/run-visual-tests.mjs",
     "test:visual:update": "node scripts/update-visual-baselines.mjs",
     "check:visual-baselines": "node scripts/check-visual-baselines.mjs",
+    "check:eslint-exceptions": "node scripts/check-eslint-exceptions.mjs",
+    "check:eslint-gate": "node scripts/run-eslint-gate.mjs",
     "test:release": "node scripts/run-release-gate.mjs",
     "test:release-gate": "node scripts/run-release-gate.mjs"
   },

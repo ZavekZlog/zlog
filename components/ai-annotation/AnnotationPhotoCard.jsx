@@ -25,7 +25,7 @@ export function AnnotationPhotoCard({
       }}
     >
       {photo.preview ? (
-        // eslint-disable-next-line @next/next/no-img-element
+        // eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG
         <img
           src={photo.preview}
           alt=""

@@ -194,10 +194,14 @@ function main() {
 
   const max = scopeDef.maxProductFiles
   if (typeof max === 'number' && productDirty.length > max) {
+    const liveTree = cli.files.length === 0
     const allowLarge =
       process.env.ZLOG_ALLOW_LARGE_DIFF === '1' ||
-      process.env.ZLOG_ALLOW_LARGE_DIFF === 'true'
-    const largeReason = (process.env.ZLOG_LARGE_DIFF_REASON || '').trim()
+      process.env.ZLOG_ALLOW_LARGE_DIFF === 'true' ||
+      (liveTree && declaration.allowLargeDiff)
+    const largeReason =
+      (process.env.ZLOG_LARGE_DIFF_REASON || '').trim() ||
+      (liveTree ? declaration.largeDiffReason : '')
     if (!(allowLarge && largeReason)) {
       console.error('')
       console.error('═══════════════════════════════════════════════════════════')

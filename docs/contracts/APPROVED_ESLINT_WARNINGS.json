@@ -1,0 +1,371 @@
+{
+  "version": "1.0.0",
+  "updated": "2026-09-03",
+  "sourceCommit": "a522d748189951bf03202309f0b54e926ce124c9",
+  "description": "Approved legacy ESLint warnings from clean a522d74. New fingerprints FAIL the release gate. Removing a warning is allowed; do not keep dead entries.",
+  "notes": {
+    "no-img-element": "USER PHOTO surfaces must not be mechanically converted to next/image. That violates PHOTO-001 (no crop; preserve original aspect).",
+    "exhaustive-deps:acceptedDescription": "CapturePhotoPreview caption effect is keyed on photo?.id only. Adding photo?.acceptedDescription would clobber in-progress typing."
+  },
+  "photo001NoImgSurfaces": [
+    "app/dashboard/diary/setup/page.jsx",
+    "app/dashboard/project/[id]/diary/page.jsx",
+    "app/dashboard/project/[id]/diary/view/page.jsx",
+    "components/photo-workspace/CapturePhotoPreview.jsx",
+    "components/ai-annotation/AreaPhotoViewer.jsx",
+    "components/ai-annotation/AiLocationWalk.jsx",
+    "components/photo-annotations/PhotoAnnotationEditor.jsx"
+  ],
+  "warnings": [
+    {
+      "file": "app/dashboard/diary/setup/page.jsx",
+      "rule": "@next/next/no-img-element",
+      "messageKey": "no-img-element",
+      "sourceHint": "<img src={logoPreview} alt=\"Reporting company logo preview\" style={{ display: 'block', maxHeight: '100%', maxWidth: '100%', width: 'auto',",
+      "classification": "no-img-element"
+    },
+    {
+      "file": "app/dashboard/diary/setup/page.jsx",
+      "rule": "@next/next/no-img-element",
+      "messageKey": "no-img-element",
+      "sourceHint": "<img src={coverPhoto.preview} alt=\"Cover\" style={SETUP_COVER_PREVIEW_IMG_STYLE} />",
+      "classification": "no-img-element"
+    },
+    {
+      "file": "app/dashboard/page.jsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "messageKey": "supabase",
+      "sourceHint": "}, [])",
+      "classification": "exhaustive-deps"
+    },
+    {
+      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "resequencePhotos",
+      "sourceHint": "function resequencePhotos(photos) {",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "PHOTO_LAYOUT_SECTIONS",
+      "sourceHint": "const PHOTO_LAYOUT_SECTIONS = [",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "labourFromDbRow",
+      "sourceHint": "function labourFromDbRow(row) {",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "plantFromDbRow",
+      "sourceHint": "function plantFromDbRow(row) {",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "projects",
+      "sourceHint": "const [projects, setProjects] = useState([])",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "prefilledFromLast",
+      "sourceHint": "const [prefilledFromLast, setPrefilledFromLast] = useState(false)",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "duplicatedFromReport",
+      "sourceHint": "const [duplicatedFromReport, setDuplicatedFromReport] = useState(false)",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "projectReference",
+      "sourceHint": "const [projectReference, setProjectReference] = useState('')",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "refreshStartData",
+      "sourceHint": "const refreshStartData = useCallback(async () => {",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "onCoverDrop",
+      "sourceHint": "const onCoverDrop = useCallback((accepted) => {",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "removeCoverPhoto",
+      "sourceHint": "const removeCoverPhoto = () => {",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "messageKey": "markSessionExpired",
+      "sourceHint": "const markSessionExpired = () => {",
+      "classification": "exhaustive-deps"
+    },
+    {
+      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "rule": "@next/next/no-img-element",
+      "messageKey": "no-img-element",
+      "sourceHint": "<img src={setupLogoPreview} alt=\"\" style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 8,",
+      "classification": "no-img-element"
+    },
+    {
+      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "rule": "@next/next/no-img-element",
+      "messageKey": "no-img-element",
+      "sourceHint": "<img src={signature.preview} alt=\"Signature\" style={{ maxWidth: '100%', maxHeight: 120, objectFit: 'contain', borderRadius: 8, display: 'block', marginBottom: 10, background: '#fff",
+      "classification": "no-img-element"
+    },
+    {
+      "file": "app/dashboard/project/[id]/diary/view/page.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "groupIndex",
+      "sourceHint": "{view.detailGroups.map((group, groupIndex) => (",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "app/dashboard/project/[id]/page.jsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "messageKey": "supabase",
+      "sourceHint": "}, [id])",
+      "classification": "exhaustive-deps"
+    },
+    {
+      "file": "components/ai-annotation/AiLocationWalk.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "continueToSignature",
+      "sourceHint": "const continueToSignature = () => {",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "components/ai-annotation/AreaPhotoViewer.jsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "messageKey": "list",
+      "sourceHint": "const list = Array.isArray(photos) ? photos : []",
+      "classification": "exhaustive-deps"
+    },
+    {
+      "file": "components/pdf/DiaryPdfDocument.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "PDF_CONTENT_TOP",
+      "sourceHint": "PDF_CONTENT_TOP,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "components/pdf/DiaryPdfDocument.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "CONTENT_H",
+      "sourceHint": "const CONTENT_H = PDF_CONTENT_H",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "components/pdf/DiaryPdfDocument.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "PAGE1_BODY_TOP",
+      "sourceHint": "const PAGE1_BODY_TOP = PAGE1_FRAME_INSET + PAGE1_BANNER_H + 16",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "components/pdf/DiaryPdfDocument.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "PageOneFooter",
+      "sourceHint": "function PageOneFooter({ reportReference = '' }) {",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "components/pdf/DiaryPdfDocument.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "FullPagePhotos",
+      "sourceHint": "function FullPagePhotos({",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "components/pdf/DiaryPdfDocument.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "GridPages",
+      "sourceHint": "function GridPages({",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "components/photo-annotations/PhotoAnnotationEditor.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "_sx",
+      "sourceHint": "const { _sx, _sy, ...clean } = draft",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "components/photo-annotations/PhotoAnnotationEditor.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "_sy",
+      "sourceHint": "const { _sx, _sy, ...clean } = draft",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "components/photo-workspace/CapturePhotoPreview.jsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "messageKey": "photo?.acceptedDescription",
+      "sourceHint": "}, [photo?.id])",
+      "classification": "exhaustive-deps"
+    },
+    {
+      "file": "components/reports/SimpleBrandedReportPage.jsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "messageKey": "supabase",
+      "sourceHint": "}, [projectId, editingReportId, duplicateReportId, tableName])",
+      "classification": "exhaustive-deps"
+    },
+    {
+      "file": "lib/diary-autosave.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "stableTemporaryWorks",
+      "sourceHint": "function stableTemporaryWorks(rows) {",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/diary-reporting-company.test.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "columns",
+      "sourceHint": "select(columns) {",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/diary-routing.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "_reportDate",
+      "sourceHint": "reportDate: _reportDate,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/diary-routing.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "_today",
+      "sourceHint": "today: _today,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/diary-save.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "_liveRow",
+      "sourceHint": "export function adaptReportPayloadForLiveRow(reportPayload, _liveRow) {",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/diary-share.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "canSharePdfFile",
+      "sourceHint": "canSharePdfFile,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/premium-ui.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "_accent",
+      "sourceHint": "export function primaryButtonStyle(_accent = DIARY_ACCENT, disabled = false) {",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/premium-ui.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "_reportName",
+      "sourceHint": "reportName: _reportName,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/premium-ui.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "_meta",
+      "sourceHint": "meta: _meta,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/premium-ui.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "_subtitle",
+      "sourceHint": "subtitle: _subtitle,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/premium-ui.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "_accent",
+      "sourceHint": "accent: _accent = DIARY_ACCENT,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/premium-ui.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "_reportName",
+      "sourceHint": "reportName: _reportName,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/premium-ui.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "_meta",
+      "sourceHint": "meta: _meta,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/premium-ui.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "_subtitle",
+      "sourceHint": "subtitle: _subtitle,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "scripts/check-change-scope.test.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "many",
+      "sourceHint": "const many = Array.from({ length: 12 }, (_, i) => `lib/report-setup.js`).join(',')",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "scripts/check-change-scope.test.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "_",
+      "sourceHint": "const many = Array.from({ length: 12 }, (_, i) => `lib/report-setup.js`).join(',')",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "scripts/check-change-scope.test.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "i",
+      "sourceHint": "const many = Array.from({ length: 12 }, (_, i) => `lib/report-setup.js`).join(',')",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "scripts/check-change-scope.test.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "files",
+      "sourceHint": "const files = [",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "scripts/check-change-scope.test.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "persistenceFiles",
+      "sourceHint": "const persistenceFiles = [",
+      "classification": "no-unused-vars"
+    }
+  ]
+}

@@ -51,6 +51,7 @@ const NODE_TESTS = [
   'scripts/check-approved-copy.test.js',
   'scripts/check-visual-baselines.test.js',
   'lib/ai-annotation/area-photo-viewer-dormant.test.js',
+  'scripts/check-eslint-gate.test.js',
 ]
 
 function run(label, command, args, opts = {}) {
@@ -118,7 +119,7 @@ function main() {
   run('node regression suite', process.execPath, ['--test', ...NODE_TESTS])
 
   if (existsSync(join(root, 'eslint.config.mjs')) || existsSync(join(root, 'eslint.config.js'))) {
-    run('eslint', 'npx', ['eslint', '.', '--max-warnings', '0'], { shell: true })
+    run('eslint', process.execPath, [join(root, 'scripts/run-eslint-gate.mjs')])
   }
 
   const skipE2E =

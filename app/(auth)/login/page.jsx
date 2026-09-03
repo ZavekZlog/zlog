@@ -44,6 +44,7 @@ export default function Login() {
   const [errorMsg, setErrorMsg] = useState('')
 
   // Clear application-held login form DOM state after sign-out.
+  /* eslint-disable react-hooks/set-state-in-effect -- ESLINT-E1 */
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
@@ -62,6 +63,7 @@ export default function Login() {
     const next = safeAppReturnPath(params.get('next'))
     router.replace(next ? `/login?next=${encodeURIComponent(next)}` : '/login')
   }, [router])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const authenticate = async () => {
     if (loading) return

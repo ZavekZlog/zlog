@@ -76,6 +76,11 @@ export function isGateExemptFile(file) {
   if (f === 'docs/ANTI_REGRESSION_ENFORCEMENT.md') return true
   if (f === 'docs/contracts/APPROVED_BEHAVIOUR_REGISTRY.json') return true
   if (f === 'docs/contracts/APPROVED_UI_COPY.json') return true
+  if (f === 'docs/contracts/APPROVED_ESLINT_EXCEPTIONS.json') return true
+  if (f === 'docs/contracts/APPROVED_ESLINT_WARNINGS.json') return true
+  if (f === 'docs/contracts/DORMANT_ESLINT_DEFECTS.json') return true
+  if (f === 'docs/ZLOG_RELEASE_GATE.md') return true
+  if (f === 'eslint.config.mjs') return true
   if (f.startsWith('.cursor/rules/')) return true
   if (f === 'package.json') return true
   if (f === '.gitignore') return true
@@ -134,12 +139,32 @@ export function loadTaskScopeDeclaration({ ignoreFile = false } = {}) {
     (process.env.ZLOG_TASK_SCOPE_APPROVAL || '').trim() ||
     (fromFile && String(fromFile.approvalNote || '').trim()) ||
     ''
+  const allowLargeDiff =
+    process.env.ZLOG_ALLOW_LARGE_DIFF === '1' ||
+    process.env.ZLOG_ALLOW_LARGE_DIFF === 'true' ||
+    Boolean(fromFile && fromFile.allowLargeDiff)
+  const largeDiffReason =
+    (process.env.ZLOG_LARGE_DIFF_REASON || '').trim() ||
+    (fromFile && String(fromFile.largeDiffReason || '').trim()) ||
+    ''
+  const allowProtectedScope =
+    process.env.ZLOG_ALLOW_PROTECTED_SCOPE === '1' ||
+    process.env.ZLOG_ALLOW_PROTECTED_SCOPE === 'true' ||
+    Boolean(fromFile && fromFile.allowProtectedScope)
+  const protectedScopeReason =
+    (process.env.ZLOG_PROTECTED_SCOPE_REASON || '').trim() ||
+    (fromFile && String(fromFile.protectedScopeReason || '').trim()) ||
+    ''
 
   return {
     scope: String(scope || '').trim(),
     reason,
     extraFiles: [...new Set(extraFiles)],
     approvalNote,
+    allowLargeDiff,
+    largeDiffReason,
+    allowProtectedScope,
+    protectedScopeReason,
     source: fromEnv ? 'env' : fromFile ? 'file' : 'none',
   }
 }

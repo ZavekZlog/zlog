@@ -1,12 +1,12 @@
 # Zlog Release Gate (Mandatory)
 
-**Version:** 1.1.0  
-**Date Updated:** 2026-08-14  
-**Reason Updated:** Canonical `npm run test:release` + change-scope / copy gates; honesty on visual gaps  
-**User Decision:** Hard anti-regression enforcement pass  
-**Previous Version:** 1.0.3  
+**Version:** 1.2.0
+**Date Updated:** 2026-09-03
+**Reason Updated:** ESLint is an anti-regression gate (zero unapproved errors; fingerprint warning baseline; new warnings fail)
+**User Decision:** ESLint baseline hardening — no product runtime refactor
+**Previous Version:** 1.1.0
 
-Parent: `docs/ZLOG_PRODUCT_CONSTITUTION.md`  
+Parent: `docs/ZLOG_PRODUCT_CONSTITUTION.md`
 Global UI: `docs/contracts/GLOBAL_UI_TEXT_FIT_CONTRACT.md`
 
 ---
@@ -143,8 +143,16 @@ This executes:
 4. **behaviour-registry** integrity  
 5. **visual-baseline inventory** — approved PNGs present; forbidden baselines absent  
 6. Auth + Site Diary + persistence + golden-journey **node** suites  
-7. Playwright behavioural E2E  
-8. Playwright **visual regression** for approved screens (HARD FAIL on mismatch; never auto-updates)
+7. **ESLint gate** (`npm run check:eslint-gate`) — not `--max-warnings 0`:
+   - unapproved ESLint **errors** must be zero (narrow registered exceptions only)
+   - approved baseline **warning fingerprints** may remain
+   - any **new** warning fingerprint fails, even if the total count did not increase
+   - output states: `ESLint errors: N` / `Approved baseline warnings: N` / `New warnings: N` / `Known dormant defects (DORMANT-001): N`
+   - registry: `docs/contracts/APPROVED_ESLINT_EXCEPTIONS.json`
+   - baseline: `docs/contracts/APPROVED_ESLINT_WARNINGS.json`
+   - dormant defects (not approved code): `docs/contracts/DORMANT_ESLINT_DEFECTS.json` — E8 in unmounted AreaPhotoViewer does not block today's release while DORMANT-001 is active; removing DORMANT-001 without resolving E8 fails the gate
+8. Playwright behavioural E2E
+9. Playwright **visual regression** for approved screens (HARD FAIL on mismatch; never auto-updates)
 
 **Screenshot coverage today:** landing + login only. Dashboard / Sign out / Site Diary shells are refused until manual confirmation (`docs/VISUAL_REGRESSION.md`).
 

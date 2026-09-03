@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "updated": "2026-09-03",
+  "description": "Known ESLint errors in dormant/unmounted components. These are defects, not approved exceptions. They do not block today's release while the named behaviour remains active. Removing that behaviour without resolving the defect fails the ESLint gate. Unrelated files cannot use these entries.",
+  "defects": [
+    {
+      "id": "E8",
+      "file": "components/ai-annotation/AreaPhotoViewer.jsx",
+      "rule": "react-hooks/preserve-manual-memoization",
+      "blockedBy": "DORMANT-001",
+      "reason": "applyDictation calls onCaptionChange inside a setDraft updater. Defective caption/dictation correctness. AreaPhotoViewer is unmounted; DORMANT-001 forbids activation until E8 is resolved, focused tests pass, and Android accepts."
+    }
+  ]
+}

@@ -93,7 +93,7 @@ const FilmstripThumb = memo(function FilmstripThumb({
         }}
       >
         {src ? (
-          // eslint-disable-next-line @next/next/no-img-element
+          // eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG
           <img
             src={src}
             alt=""
@@ -161,10 +161,12 @@ export function AreaPhotoViewer({
   const canPrev = safeIndex > 0
   const canNext = safeIndex < maxIndex
 
+  /* eslint-disable react-hooks/set-state-in-effect -- ESLINT-E7 */
   useEffect(() => {
     const next = Math.min(Math.max(0, startIndex), maxIndex)
     setIndex(next)
   }, [startIndex, maxIndex])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     draftRef.current = draft

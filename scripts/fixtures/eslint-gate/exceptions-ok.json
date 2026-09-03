@@ -1,0 +1,20 @@
+{
+  "protectedRules": [
+    "react-hooks/set-state-in-effect",
+    "react-hooks/refs",
+    "react-hooks/preserve-manual-memoization",
+    "react-hooks/exhaustive-deps",
+    "@next/next/no-img-element"
+  ],
+  "exceptions": [
+    {
+      "id": "ESLINT-FIXTURE-OK",
+      "file": "scripts/fixtures/eslint-gate/registered.jsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "reason": "Fixture-only registered exception",
+      "preserves": "lint-control tests",
+      "tests": ["scripts/check-eslint-gate.test.js"],
+      "scope": "single-effect"
+    }
+  ]
+}

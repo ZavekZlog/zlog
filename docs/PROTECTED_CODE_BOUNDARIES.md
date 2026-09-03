@@ -30,6 +30,7 @@ npm run test:release
 npm run check:change-scope      # declared task scope vs dirty tree + budget + high-risk
 npm run check:protected-scope   # always-protected paths
 npm run check:approved-copy     # approved UI labels still present (source-string, NOT visual)
+npm run check:eslint-gate       # zero unapproved errors; new warning fingerprints fail
 ```
 
 ### Declaring scope (required when product files are dirty)

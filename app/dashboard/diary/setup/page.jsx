@@ -566,7 +566,7 @@ function SiteDiarySetupPage() {
       cancelled = true
     }
     // Intentionally load once per edit target; createClient() is not referentially stable.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ESLINT-SETUP-HYDRATE-DEPS
   }, [editingReportId, editingProjectId])
 
   // Persist form fields while editing (supports Back → return)

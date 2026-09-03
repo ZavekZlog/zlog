@@ -23,7 +23,9 @@ test.describe('Golden Journey A — Auth UI (no Supabase credentials)', () => {
     await expect(password).toHaveAttribute('type', 'password')
 
     const signIn = page.getByRole('button', { name: 'Sign In' })
-    await expect(signIn).toHaveAttribute('type', 'submit')
+    await expect(signIn).toBeVisible()
+    await expect(signIn).toHaveAttribute('type', 'button')
+    await expect(signIn).not.toHaveAttribute('type', 'submit')
   })
 
   test('AUTH-001: filling fields alone does not leave login / does not reach dashboard', async ({

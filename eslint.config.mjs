@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Unused diagnostic (CJS require in a .mjs filename). Do not broaden to scripts/**.
+    "scripts/introspect-live-daily-reports-schema.mjs",
+    // Lint-control fixtures only. Do not broaden to scripts/**.
+    "scripts/fixtures/**",
   ]),
 ]);
 

@@ -556,7 +556,7 @@ export function PhotoAnnotationEditor({
         >
           {imageSrc && fit.w > 0 && (
             <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {/* eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG */}
               <img
                 src={imageSrc}
                 alt=""
