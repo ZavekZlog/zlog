@@ -168,6 +168,7 @@ import {
   ensurePreparedPhotoAssets,
   uploadPreparedPhotoAssets,
   buildPreparedPhotoRecordFields,
+  collectLocalPreparedPdfPhotoSources,
 } from '@/lib/photo-workspace/persist-prepared-photo'
 import {
   createPhotoDisplaySignSession,
@@ -2859,6 +2860,7 @@ export default function SiteDiaryPage() {
 
       const photoRecords = []
       const updateExistingPhotos = []
+      const sharePreparedPdfBlobs = new Map()
 
       let photoPersistResults
       try {
@@ -2928,6 +2930,10 @@ export default function SiteDiaryPage() {
                 })
               }
 
+              if (uploaded.reportPath && prepared.report?.blob instanceof Blob) {
+                sharePreparedPdfBlobs.set(uploaded.reportPath, prepared.report.blob)
+              }
+
               return {
                 kind: 'new',
                 record: {
@@ -2940,7 +2946,7 @@ export default function SiteDiaryPage() {
                   category: photo.category || null,
                   annotations: annotationPayload,
                   overlay_path: overlayPath,
-                  rotation_degrees: Number(photo.rotationDegrees) || 0,
+                  rotation_degrees: 0,
                   assigned_to: (photo.assignedTo || photo.assigned_to || '').trim() || null,
                 },
               }
@@ -3037,9 +3043,18 @@ export default function SiteDiaryPage() {
       setReportIsDraft(false)
       diarySaveLog('success', { reportId: saved.id })
 
+      const localPreparedPhotoSources = collectLocalPreparedPdfPhotoSources({
+        photos: flattenAreaGroups(walkForPersist),
+        userId: user.id,
+        reportId: saved.id,
+      })
+      for (const [path, blob] of sharePreparedPdfBlobs) {
+        localPreparedPhotoSources.set(path, blob)
+      }
       const prepared = await prepareSiteDiaryPdf({
         projectId,
         reportId: saved.id,
+        localPreparedPhotoSources,
         localPreparedCoverBlob,
       })
       if (!prepared.ok) {
