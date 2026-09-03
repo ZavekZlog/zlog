@@ -1,6 +1,6 @@
 {
-  "version": "1.4.7",
-  "updated": "2026-08-20",
+  "version": "1.4.8",
+  "updated": "2026-09-03",
   "description": "Approved application UI terminology. Protects labels from accidental replacement. Does NOT freeze dynamic report content. This is a source-string contract — NOT a visual test.",
   "terms": [
     {
@@ -63,15 +63,15 @@
     },
     {
       "id": "COPY-TAP-DIARY-TO-REVIEW",
-      "label": "Tap a diary to open and review it.",
+      "label": "Tap to open and review.",
       "files": ["app/dashboard/diary/page.jsx"],
-      "notes": "Exact helper copy on the Saved Diaries browsing list. Do not expand."
+      "notes": "Compact Saved Diaries row accessibility fragment (8bd3dd3). First tap opens the diary. Do not restore the removed visible helper paragraph."
     },
     {
       "id": "COPY-SHARE-REPORT",
       "label": "Share Report",
       "files": ["app/dashboard/project/[id]/diary/view/page.jsx"],
-      "notes": "Opened saved-diary review primary action. User goal is sharing; PDF generation stays behind the scenes. PrimaryCTA surface=workbench (restrained rust perimeter, not landing powder-coat)."
+      "notes": "Opened saved-diary review primary action. User goal is sharing; PDF generation stays behind the scenes. PrimaryCTA surface=workbench (equal-choice plate + ZLOG_POWDER_CTA_ORANGE perimeter, not landing powder-coat fill)."
     },
     {
       "id": "COPY-USE-AS-BASIS",

@@ -45,30 +45,37 @@ depth shadow. That component is the single source of truth for every orange CTA
 in the app (landing, auth, dashboard, report saves).
 PrimaryCTA is LOCKED — do not flatten, do not approximate, do not alter without explicit sign-off. All orange CTAs render via PrimaryCTA.
 Token jobs after this lock:
---rust: #B8431C — material for the Z, the Z's glow, and the locked PrimaryCTA
-enamel surface. Not a free-floating fill agents invent per screen.
+ZLOG_POWDER_CTA_ORANGE (#DB3D06) — canonical enamel orange for the text
+wordmark Z and the workbench PrimaryCTA perimeter. Landing powder-coat
+PrimaryCTA fill uses the same constant. Do not substitute var(--rust) /
+#B8431C for those surfaces.
+--rust: #B8431C — remaining CSS token (masthead glow, equal-choice hover).
+Not the text-wordmark Z fill and not the workbench primary perimeter.
 --action: #FF5000 (Forge Orange) — reserved live-state / accent token where a
 non-CTA orange signal is required. It is not the primary button fill and must
 not replace PrimaryCTA.
 --premium-cta-orange: #F5762A remains deleted (historical). Do not revive it as
 a third orange.
-The distinction that remains: the logo Z and the PrimaryCTA share --rust as
-material; they are still different objects (brand asset vs control). What is not
-allowed is a fourth local orange gradient or a flat --action button approximating
-PrimaryCTA.
+The distinction that remains: the text wordmark Z and enamel CTA orange share
+ZLOG_POWDER_CTA_ORANGE; they are still different objects (letters vs control).
+The riveted/graphical Z artwork is NOT governed by the text-wordmark lock.
+What is not allowed is a fourth local orange gradient or a flat --action
+button approximating PrimaryCTA.
 
 TEXT ZLOG WORDMARK — locked
-Text-rendered Zlog wordmarks must reuse the established Zlog Z accent token/style
-already used by the approved app headers — there is ONE source of truth:
-• “Z” = var(--rust) via ZLOG_TEXT_WORDMARK_Z_COLOR / ZlogTextWordmarkLetters
-  (--rust resolves to #B8431C in globals.css; do not substitute #F5A623,
-  --action, or any other orange hex)
+Text-rendered Zlog wordmarks must reuse the established Zlog enamel orange —
+there is ONE source of truth:
+• “Z” = ZLOG_TEXT_WORDMARK_Z_COLOR, which aliases ZLOG_POWDER_CTA_ORANGE
+  (#DB3D06). Do not use var(--rust), #B8431C, #F5A623, or --action for the
+  text Z.
 • “log” = warm white / --text (or the local wordmark light colour)
 Do not make the whole wordmark orange. Do not add glow, gradient, outline, or
 shadow to the text Z. The standalone riveted/graphical Z artwork is NOT governed
 by this rule. Report/client branding is NOT governed by this rule.
 Always render text wordmarks via ZlogTextWordmarkLetters, ZlogWordmark, or
 ZlogBrandWordmark — do not hard-code a one-off Z colour per screen.
+Approved behavioural/design changes must update every owning contract/test
+in the same checkpoint.
 Warm over cool — approved
 The palette was fighting itself: warm text (#F4F2EF), warm rust, against cool
 blue-grey body text (#93a7b9, #8ea2b5, #A3B5C4) and a navy card gradient
@@ -436,7 +443,7 @@ Meaning
 Token
 Orange
 Do this (primary CTA)
-PrimaryCTA (--rust powder-coat enamel) — never flat --action
+PrimaryCTA (ZLOG_POWDER_CTA_ORANGE enamel) — never flat --action
 Red
 This is wrong / gone
 --danger #E5484D

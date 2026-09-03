@@ -385,8 +385,9 @@ function PowderCtaOverlays() {
 }
 
 /**
- * Restrained report/workbench primary — same dark plate + rust perimeter as the
- * locked saved-diary review action. Not landing powder-coat enamel.
+ * Restrained report/workbench primary — same dark plate + enamel perimeter
+ * (ZLOG_POWDER_CTA_ORANGE) as the locked saved-diary review action.
+ * Not landing powder-coat fill or PowderCtaOverlays.
  */
 export function workbenchPrimaryButtonStyle(disabled = false) {
   return {
@@ -658,14 +659,14 @@ export function premiumBackPillStyle() {
 }
 
 /**
- * TEXT Zlog wordmark Z accent — alias of the established app-header token only.
- * Source of truth: CSS --rust (globals.css). Do not hard-code a separate hex.
+ * TEXT Zlog wordmark Z accent — alias of the canonical enamel orange.
+ * Source of truth: ZLOG_POWDER_CTA_ORANGE (#DB3D06). Not CSS --rust / #B8431C.
  */
-export const ZLOG_TEXT_WORDMARK_Z_COLOR = '#DB3D06'
+export const ZLOG_TEXT_WORDMARK_Z_COLOR = ZLOG_POWDER_CTA_ORANGE
 
 /**
  * Text letters for the Zlog product wordmark.
- * Z = var(--rust) · log = warm white (--text). No glow/gradient/outline on the Z.
+ * Z = ZLOG_POWDER_CTA_ORANGE · log = warm white (--text). No glow/gradient/outline on the Z.
  */
 export function ZlogTextWordmarkLetters({ zStyle = {}, logStyle = {} } = {}) {
   return (
@@ -676,7 +677,7 @@ export function ZlogTextWordmarkLetters({ zStyle = {}, logStyle = {} } = {}) {
   )
 }
 
-/** Subtle Zlog wordmark — orange “Z” (var(--rust)), warm white “log” */
+/** Subtle Zlog wordmark — enamel orange “Z” (ZLOG_POWDER_CTA_ORANGE), warm white “log” */
 export function ZlogWordmark({ style } = {}) {
   return (
     <div
@@ -787,7 +788,7 @@ export const BRAND_ATMOSPHERIC_GLOW_STYLE = {
 }
 
 /**
- * FINAL LOCKED brand masthead — text wordmark Z = var(--rust), log = warm white; opacity 0.42 glow.
+ * FINAL LOCKED brand masthead — text wordmark Z = ZLOG_POWDER_CTA_ORANGE, log = warm white; opacity 0.42 glow.
  * Authenticated screens consume this only via ZlogBrandRegion (size md).
  * size lg remains for public auth pages (login/signup).
  */
