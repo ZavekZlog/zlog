@@ -50,6 +50,7 @@ const NODE_TESTS = [
   'scripts/check-change-scope.test.js',
   'scripts/check-approved-copy.test.js',
   'scripts/check-visual-baselines.test.js',
+  'lib/ai-annotation/area-photo-viewer-dormant.test.js',
 ]
 
 function run(label, command, args, opts = {}) {

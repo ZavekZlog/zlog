@@ -1,6 +1,6 @@
 {
-  "version": "1.1.13",
-  "updated": "2026-09-02",
+  "version": "1.1.14",
+  "updated": "2026-09-03",
   "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage. Source contracts are NOT screenshot visual tests.",
   "behaviours": [
     {
@@ -505,6 +505,16 @@
       ],
       "manualQA": true,
       "manualQANote": "Android must confirm setup Cover photo, saved-diary review cover, and PDF cover show the full image with original aspect. Automation locks contain-equivalent styles and used-box aspect math — not screenshot geometry."
+    },
+    {
+      "id": "DORMANT-001",
+      "description": "AreaPhotoViewer is dormant and must not be mounted or activated in the live Site Diary UI without an explicit product task, resolution of known E8 dictation/caption correctness, focused regression tests, and Android acceptance. CapturePhotoPreview is the current live Location Walk viewer. PhotosPerPagePicker may still be imported from the AreaPhotoViewer module. Dictation must not be exposed until that activation work is approved.",
+      "area": "site-diary",
+      "tests": [
+        "lib/ai-annotation/area-photo-viewer-dormant.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "The unmounted/dormant lock is automated. Any future activation of AreaPhotoViewer or photo-caption dictation still requires explicit product approval and real Android acceptance. Known E8 (dictation onCaptionChange inside a state updater) must be resolved before activation."
     }
   ]
 }
