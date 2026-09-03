@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { flushSync } from 'react-dom'
 import SignaturePad from 'signature_pad'
 import { createClient } from '@/lib/supabase/client'
@@ -85,7 +85,8 @@ import {
   isCoverAutosavePendingToken,
   coverPhotoStateAfterUpload,
   coverSetupFieldsFromSync,
-  uploadRawCoverFallbackFile,
+  persistCanonicalCoverUpload,
+  isPreparedCoverStoragePath,
 } from '@/lib/diary-cover-photo'
 import {
   getPendingCover,
@@ -126,6 +127,15 @@ import {
   snapshotUserActivation,
 } from '@/lib/diary-share'
 import { emitShareDiag } from '@/lib/share-diag-beacon'
+import {
+  startShareTimingRun,
+  markShareTiming,
+  patchShareTimingCounts,
+  bumpShareTimingCount,
+  subscribeShareTiming,
+  getShareTimingSnapshot,
+  formatShareTimingLines,
+} from '@/lib/diary-share-timing-diag'
 import { mapWithConcurrency } from '@/lib/diary-pdf-photos'
 import { readReportSetupExtras, reportDateInputValue, todayIsoDate } from '@/lib/report-setup'
 import {
@@ -408,6 +418,40 @@ function dataUrlToBlob(dataUrl) {
 
 /** Android-safe bound — never unbounded parallel storage uploads on Share. */
 const SHARE_PHOTO_UPLOAD_CONCURRENCY = 2
+
+/** TEMPORARY — development-only Android timing readout. Hidden in production builds. */
+function ShareTimingDiagPanel() {
+  const snap = useSyncExternalStore(
+    subscribeShareTiming,
+    getShareTimingSnapshot,
+    getShareTimingSnapshot,
+  )
+  const lines = formatShareTimingLines(snap)
+  return (
+    <div
+      data-share-timing-diag="temporary"
+      style={{
+        marginTop: 12,
+        padding: '10px 12px',
+        borderRadius: 8,
+        border: '1px dashed color-mix(in srgb, var(--text) 35%, transparent)',
+        background: 'color-mix(in srgb, var(--text) 6%, transparent)',
+        fontSize: 12,
+        lineHeight: 1.4,
+        color: 'var(--text-2)',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+      }}
+    >
+      <p style={{ margin: '0 0 8px', fontWeight: 700, color: 'var(--text)', fontSize: 12 }}>
+        SAVE & SHARE DIAGNOSTIC — TEMPORARY
+      </p>
+      {lines.map((line, i) => (
+        <div key={`${i}-${line.slice(0, 24)}`}>{line || '\u00a0'}</div>
+      ))}
+    </div>
+  )
+}
 
 /** Upload transparent overlay PNG; returns storage path or null. */
 async function uploadOverlayPng(supabase, { userId, reportId, sequence, dataUrl }) {
@@ -1188,11 +1232,14 @@ export default function SiteDiaryPage() {
                   userId: user.id,
                   reportId: editingReportId,
                   generation: gen,
-                  updateCoverUrl: async (storagePath) => {
+                  updateCoverRecord: async ({ storagePath, coverProcessingVersion }) => {
                     await updateDiarySetupFields(supabase, {
                       reportId: editingReportId,
                       projectId,
-                      fields: { coverPhotoUrl: storagePath },
+                      fields: coverSetupFieldsFromSync({
+                        storagePath,
+                        coverProcessingVersion,
+                      }),
                     })
                   },
                 })
@@ -1284,11 +1331,14 @@ export default function SiteDiaryPage() {
                   userId: user.id,
                   reportId: editingReportId,
                   generation: gen,
-                  updateCoverUrl: async (storagePath) => {
+                  updateCoverRecord: async ({ storagePath, coverProcessingVersion }) => {
                     await updateDiarySetupFields(supabase, {
                       reportId: editingReportId,
                       projectId,
-                      fields: { coverPhotoUrl: storagePath },
+                      fields: coverSetupFieldsFromSync({
+                        storagePath,
+                        coverProcessingVersion,
+                      }),
                     })
                   },
                 })
@@ -1370,11 +1420,14 @@ export default function SiteDiaryPage() {
                   userId: user.id,
                   reportId: editingReportId,
                   generation: gen,
-                  updateCoverUrl: async (storagePath) => {
+                  updateCoverRecord: async ({ storagePath, coverProcessingVersion }) => {
                     await updateDiarySetupFields(supabase, {
                       reportId: editingReportId,
                       projectId,
-                      fields: { coverPhotoUrl: storagePath },
+                      fields: coverSetupFieldsFromSync({
+                        storagePath,
+                        coverProcessingVersion,
+                      }),
                     })
                   },
                 })
@@ -1526,7 +1579,7 @@ export default function SiteDiaryPage() {
             coverGen = newCoverPendingGeneration()
             coverPendingGenerationRef.current = coverGen
           }
-          const { storagePath, error: coverUploadError } = await uploadRawCoverFallbackFile(supabase, {
+          const { storagePath, error: coverUploadError, preparedBlob, coverProcessingVersion } = await persistCanonicalCoverUpload(supabase, {
             userId: user.id,
             reportId: editingReportId,
             generation: coverGen,
@@ -1550,14 +1603,14 @@ export default function SiteDiaryPage() {
             projectId,
             fields: coverSetupFieldsFromSync({
               storagePath,
-              coverProcessingVersion: null,
+              coverProcessingVersion,
             }),
           })
           loadedCoverPathRef.current = storagePath
           coverRemovedRef.current = false
           // Drop local File so Share will not re-upload this object.
-          // Update ref immediately — do not wait for the next React render.
-          const nextCover = coverPhotoStateAfterUpload(storagePath, liveCover.preview)
+          // Keep the prepared JPEG blob for same-session PDF pass-through.
+          const nextCover = coverPhotoStateAfterUpload(storagePath, liveCover.preview, { preparedBlob })
           coverPhotoRef.current = nextCover
           setCoverPhoto(nextCover)
           // Successful cover persistence must clear a stale red upload banner.
@@ -1568,7 +1621,6 @@ export default function SiteDiaryPage() {
           payload = {
             ...payload,
             cover_photo_url: storagePath,
-            cover_processing_version: null,
           }
           latestPayloadRef.current = payload
         } catch (err) {
@@ -1850,11 +1902,14 @@ export default function SiteDiaryPage() {
                 userId: user.id,
                 reportId: editingReportId,
                 generation: gen,
-                updateCoverUrl: async (storagePath) => {
+                updateCoverRecord: async ({ storagePath, coverProcessingVersion }) => {
                   await updateDiarySetupFields(supabase, {
                     reportId: editingReportId,
                     projectId,
-                    fields: { coverPhotoUrl: storagePath },
+                    fields: coverSetupFieldsFromSync({
+                      storagePath,
+                      coverProcessingVersion,
+                    }),
                   })
                 },
               })
@@ -2486,6 +2541,9 @@ export default function SiteDiaryPage() {
         )
       const tapUserActivation = snapshotUserActivation()
       const tapStartedAt = Date.now()
+      if (process.env.NODE_ENV !== 'production') {
+        markShareTiming('share_now_tap')
+      }
       saveLockRef.current = true
       flushSync(() => {
         setSaving(true)
@@ -2522,6 +2580,9 @@ export default function SiteDiaryPage() {
               : (shareResult.message || 'We couldn’t open the share sheet. Try again.'),
           )
           return
+        }
+        if (process.env.NODE_ENV !== 'production') {
+          markShareTiming('download_fallback_called')
         }
         const downloaded = await downloadSiteDiaryPdf({
           blob: prepared.blob,
@@ -2575,6 +2636,13 @@ export default function SiteDiaryPage() {
       userActivation: tapUserActivation,
     })
     shareReadyPdfRef.current = null
+    if (process.env.NODE_ENV !== 'production') {
+      startShareTimingRun({
+        reportId: editingReportId || null,
+        fromPdfCache: false,
+      })
+      markShareTiming('tap')
+    }
     flushSync(() => {
       setShareReady(false)
       setSaving(true)
@@ -2592,6 +2660,9 @@ export default function SiteDiaryPage() {
       }
 
       await flushPendingAutosave()
+      if (process.env.NODE_ENV !== 'production') {
+        markShareTiming('autosave_flush_done')
+      }
 
       // Commit the active unsaved work area (same as Save Area) before persist.
       // Draft photos outside locationWalk must never be silently omitted from Share.
@@ -2617,6 +2688,12 @@ export default function SiteDiaryPage() {
           })
         }
       }
+      if (process.env.NODE_ENV !== 'production') {
+        patchShareTimingCounts({
+          unsavedAreaCommitted: Boolean(areaFlush?.committed),
+        })
+        markShareTiming('area_flush_done')
+      }
 
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       diarySaveLog('auth check', {
@@ -2626,6 +2703,9 @@ export default function SiteDiaryPage() {
       if (!user) {
         markSessionExpired()
         return
+      }
+      if (process.env.NODE_ENV !== 'production') {
+        markShareTiming('auth_done')
       }
 
       const pendingId = makeUuid()
@@ -2637,6 +2717,21 @@ export default function SiteDiaryPage() {
       })
       let signatureUrl = signature?.storagePath || null
       let requiredCoverPath = null
+      const coverUploadNeeded = Boolean(coverPlan.needsUpload && coverPlan.file)
+      const signatureUploadNeeded = Boolean(signature?.file)
+      if (process.env.NODE_ENV !== 'production') {
+        patchShareTimingCounts({
+          coverUploadNeeded,
+          signatureUploadNeeded,
+        })
+      }
+
+      let localPreparedCoverBlob =
+        coverPhotoRef.current?.preparedBlob instanceof Blob
+          && coverPhotoRef.current.preparedBlob.size > 0
+          && isPreparedCoverStoragePath(coverPhotoRef.current.storagePath)
+          ? coverPhotoRef.current.preparedBlob
+          : null
 
       if (coverPlan.needsUpload && coverPlan.file) {
         let coverGen = coverPendingGenerationRef.current
@@ -2644,7 +2739,12 @@ export default function SiteDiaryPage() {
           coverGen = newCoverPendingGeneration()
           coverPendingGenerationRef.current = coverGen
         }
-        const { storagePath: coverPath, error: coverUploadError } = await uploadRawCoverFallbackFile(supabase, {
+        const {
+          storagePath: coverPath,
+          error: coverUploadError,
+          preparedBlob,
+          coverProcessingVersion,
+        } = await persistCanonicalCoverUpload(supabase, {
           userId: user.id,
           reportId: editingReportId,
           generation: coverGen,
@@ -2659,7 +2759,7 @@ export default function SiteDiaryPage() {
           file: null,
           patch: {
             cover_photo_url: coverPath,
-            cover_processing_version: null,
+            cover_processing_version: coverProcessingVersion,
           },
         }
         if (!coverPlan.patch?.cover_photo_url) {
@@ -2669,8 +2769,13 @@ export default function SiteDiaryPage() {
         requiredCoverPath = coverPlan.patch.cover_photo_url
         loadedCoverPathRef.current = requiredCoverPath
         coverRemovedRef.current = false
+        localPreparedCoverBlob = preparedBlob instanceof Blob && preparedBlob.size > 0
+          ? preparedBlob
+          : null
         // Drop local File after successful upload — planner must not request a second upload.
-        const nextCover = coverPhotoStateAfterUpload(requiredCoverPath, liveCover.preview)
+        const nextCover = coverPhotoStateAfterUpload(requiredCoverPath, liveCover.preview, {
+          preparedBlob: localPreparedCoverBlob,
+        })
         coverPhotoRef.current = nextCover
         setCoverPhoto(nextCover)
         // Upload succeeded — never leave a prior cover-fail banner visible.
@@ -2691,6 +2796,9 @@ export default function SiteDiaryPage() {
           return
         }
         signatureUrl = signaturePath
+      }
+      if (process.env.NODE_ENV !== 'production') {
+        markShareTiming('cover_signature_done')
       }
 
       const reportPayload = applyCoverPhotoPatch(
@@ -2766,6 +2874,9 @@ export default function SiteDiaryPage() {
                     sequence: photo.sequence_number,
                     dataUrl: photo.overlayPreview,
                   })
+                  if (process.env.NODE_ENV !== 'production') {
+                    bumpShareTimingCount('overlayUploadCount')
+                  }
                 } else {
                   overlayPath = null
                 }
@@ -2872,6 +2983,14 @@ export default function SiteDiaryPage() {
           updateExistingPhotos.push(result.patch)
         }
       }
+      if (process.env.NODE_ENV !== 'production') {
+        patchShareTimingCounts({
+          photoCount: sequenced.length,
+          newUploadCount: photoRecords.length,
+          durablePhotoCount: updateExistingPhotos.length,
+        })
+        markShareTiming('photo_persist_done')
+      }
 
       const saved = await finalizeSiteDiarySave(supabase, {
         reportId: editingReportId,
@@ -2888,6 +3007,9 @@ export default function SiteDiaryPage() {
         failSave('We couldn’t save your Site Diary. Check your connection and try again.')
         return
       }
+      if (process.env.NODE_ENV !== 'production') {
+        markShareTiming('finalize_done')
+      }
 
       if (requiredCoverPath && !coverPhotoPersistedOnRow(saved.row, requiredCoverPath)) {
         failSave('We couldn’t save your Site Diary. Check your connection and try again.')
@@ -2898,7 +3020,12 @@ export default function SiteDiaryPage() {
       // a fresh second tap so Android user activation stays live.
       if (requiredCoverPath) {
         const keepPreview = coverPhotoRef.current?.preview || null
-        setCoverPhoto(coverPhotoStateFromSaved(requiredCoverPath, keepPreview))
+        const keepPrepared = coverPhotoRef.current?.preparedBlob || localPreparedCoverBlob || null
+        const nextCover = coverPhotoStateFromSaved(requiredCoverPath, keepPreview, {
+          preparedBlob: keepPrepared,
+        })
+        coverPhotoRef.current = nextCover
+        setCoverPhoto(nextCover)
       }
       if (saved.row) {
         ackedSnapshotRef.current = snapshotFromLiveRow(saved.row)
@@ -2911,6 +3038,7 @@ export default function SiteDiaryPage() {
       const prepared = await prepareSiteDiaryPdf({
         projectId,
         reportId: saved.id,
+        localPreparedCoverBlob,
       })
       if (!prepared.ok) {
         failSave(prepared.message || 'We couldn’t prepare the PDF. Check your connection and try again.')
@@ -3934,6 +4062,7 @@ export default function SiteDiaryPage() {
               )}
             </span>
           </PrimaryCTA>
+          {process.env.NODE_ENV !== 'production' ? <ShareTimingDiagPanel /> : null}
         </div>
         ) : null}
         <style>{`

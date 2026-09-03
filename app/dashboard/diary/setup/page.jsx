@@ -16,6 +16,7 @@ import {
   sectionTitleStyle,
 } from '@/lib/premium-ui'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
+import { SETUP_COVER_PREVIEW_IMG_STYLE } from '@/lib/diary-setup-cover-preview'
 import { extractBrandColorFromFile } from '@/lib/extract-brand-color'
 import { ProjectDatesFields } from '@/components/project/ProjectDatesFields'
 import { ProjectStickyFields } from '@/components/project/ProjectStickyFields'
@@ -63,7 +64,7 @@ import { loadEditDiarySetupSources } from '@/lib/diary-edit-hydrate'
 import {
   coverPhotoStateFromSaved,
   resolveCoverPhotoPreviewUrl,
-  uploadRawCoverFallbackFile,
+  persistCanonicalCoverUpload,
 } from '@/lib/diary-cover-photo'
 import { putPendingCover, newCoverPendingGeneration } from '@/lib/diary-cover-pending'
 import { diaryHubHref } from '@/lib/diary-routing'
@@ -923,7 +924,11 @@ function SiteDiarySetupPage() {
             // Critical fallback: cover exists only in React memory — block until durable.
             // C1: immutable generation-scoped raw path (never shared cover.jpg).
             const generation = newCoverPendingGeneration()
-            const { storagePath, error: coverUpErr } = await uploadRawCoverFallbackFile(supabase, {
+            const {
+              storagePath,
+              error: coverUpErr,
+              coverProcessingVersion,
+            } = await persistCanonicalCoverUpload(supabase, {
               userId: user.id,
               reportId: coverReportId,
               generation,
@@ -938,7 +943,7 @@ function SiteDiarySetupPage() {
             await updateDiarySetupFields(supabase, {
               reportId: coverReportId,
               projectId: coverProjectId,
-              fields: { coverPhotoUrl: storagePath, coverProcessingVersion: null },
+              fields: { coverPhotoUrl: storagePath, coverProcessingVersion },
             })
             continueCoverPath = storagePath
           }
@@ -1201,14 +1206,7 @@ function SiteDiarySetupPage() {
             <img
               src={coverPhoto.preview}
               alt="Cover"
-              style={{
-                width: '100%',
-                maxHeight: 200,
-                objectFit: 'cover',
-                borderRadius: 10,
-                display: 'block',
-                marginBottom: 10,
-              }}
+              style={SETUP_COVER_PREVIEW_IMG_STYLE}
             />
             <button
               type="button"

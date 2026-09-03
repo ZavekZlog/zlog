@@ -1,11 +1,11 @@
 # Photo Workspace Contract (implemented freeze)
 
 **Layer:** C — Feature  
-**Version:** 1.1.0  
-**Date Updated:** 2026-08-15  
-**Reason Updated:** Saved Site Diary photo areas are immediately visible for review  
-**User Decision:** Site Diary Review UX Batch — existing photo visibility  
-**Previous Version:** 1.0.0  
+**Version:** 1.3.0
+**Date Updated:** 2026-09-02
+**Reason Updated:** PHOTO-001 presentation — cover preview follows image aspect at available width; no fixed landscape letterbox
+**User Decision:** COVER PHOTO PRESENTATION — REMOVE ARTIFICIAL LETTERBOX STAGE
+**Previous Version:** 1.2.0
 
 **Status:** Binding freeze for currently implemented photo / location evidence  
 
@@ -32,6 +32,9 @@ This feature contract covers **already implemented** Site Diary photo, annotatio
 7. The saved area’s 1 / 4 / 6 photos-per-page value controls its review density and remains unchanged.
 8. Default visibility is presentation only: it does not enter area edit mode, change persistence, or expose a blank new-area editor as saved content.
 9. **Edit** continues to edit the same saved area. A genuinely new diary still starts with no saved groups, notes, or photos.
+10. **PHOTO-001.**
+    - **Content:** All user photographs must preserve the complete image and original aspect ratio. Cropping is prohibited in app and PDF surfaces. Distortion is prohibited. Never crop/cover.
+    - **Presentation:** Where practical, a cover preview uses the available card width and derives height from the photograph’s aspect ratio. Ordinary portrait and landscape covers must not be forced into a fixed landscape letterbox that creates artificial side bands.
 
 ---
 

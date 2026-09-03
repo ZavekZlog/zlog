@@ -1,6 +1,6 @@
 {
-  "version": "1.1.12",
-  "updated": "2026-08-22",
+  "version": "1.1.13",
+  "updated": "2026-09-02",
   "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage. Source contracts are NOT screenshot visual tests.",
   "behaviours": [
     {
@@ -494,6 +494,17 @@
       ],
       "manualQA": true,
       "manualQANote": "Real Android phone must confirm Share prepares and delivers PDF in one gesture and Save/Share saving semantics remain honest. Source contracts lock prepare/share/download wiring — not share-sheet UX."
+    },
+    {
+      "id": "PHOTO-001",
+      "description": "All user photographs must preserve the complete image and original aspect ratio. Cropping is prohibited in app and PDF surfaces.",
+      "area": "photos",
+      "tests": [
+        "lib/diary-setup-cover-preview.test.js",
+        "lib/diary-pdf-layout.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Android must confirm setup Cover photo, saved-diary review cover, and PDF cover show the full image with original aspect. Automation locks contain-equivalent styles and used-box aspect math — not screenshot geometry."
     }
   ]
 }
