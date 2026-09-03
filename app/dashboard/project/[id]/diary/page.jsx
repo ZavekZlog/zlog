@@ -3061,6 +3061,29 @@ export default function SiteDiaryPage() {
         failSave(prepared.message || 'We couldn’t prepare the PDF. Check your connection and try again.')
         return
       }
+      if (
+        prepared.coverMigrated
+        && prepared.coverPhotoPath
+        && isPreparedCoverStoragePath(prepared.coverPhotoPath)
+      ) {
+        const keepPreview = coverPhotoRef.current?.preview || null
+        const migratedBlob =
+          prepared.coverPreparedBlob instanceof Blob && prepared.coverPreparedBlob.size > 0
+            ? prepared.coverPreparedBlob
+            : null
+        const nextCover = coverPhotoStateAfterUpload(prepared.coverPhotoPath, keepPreview, {
+          preparedBlob: migratedBlob,
+        })
+        coverPhotoRef.current = nextCover
+        loadedCoverPathRef.current = prepared.coverPhotoPath
+        setCoverPhoto(nextCover)
+        if (ackedSnapshotRef.current) {
+          ackedSnapshotRef.current = {
+            ...ackedSnapshotRef.current,
+            cover_photo_url: prepared.coverPhotoPath,
+          }
+        }
+      }
 
       const pdfReadyAt = Date.now()
       const elapsedMsToPdfReady = pdfReadyAt - tapStartedAt
