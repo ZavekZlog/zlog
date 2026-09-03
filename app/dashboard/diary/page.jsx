@@ -403,10 +403,6 @@ function SiteDiaryEntryPage() {
   }, [mode])
 
   useEffect(() => {
-    if (missingReport) setError(DIARY_MISSING_MESSAGE)
-  }, [missingReport])
-
-  useEffect(() => {
     if (mode === 'saved' && filterProjectId) {
       if (openingSavedDiaryRef.current) return
       router.replace(savedReportListHref())
