@@ -34,6 +34,12 @@ import {
   selectedReportsCountLabel,
   toggleReportSelection,
 } from '@/lib/report-deletion'
+import {
+  readSavedDiaryListSnapshot,
+  savedDiaryListPaintState,
+  savedDiaryListRefreshRange,
+  writeSavedDiaryListSnapshot,
+} from '@/lib/diary-saved-list-cache'
 
 const DIARY_ACCENT = REPORT_THEMES.diary.accent
 const SAVED_DIARY_PAGE_SIZE = 50
@@ -321,6 +327,15 @@ function applySavedDiaryListFilter(query, { filterProjectId, mode }) {
   return query
 }
 
+function rememberSavedDiaryList(mode, filterProjectId, reports, totalCount) {
+  return writeSavedDiaryListSnapshot({ mode, filterProjectId }, { reports, totalCount })
+}
+
+function logSavedListReturn(event, detail) {
+  if (process.env.NODE_ENV === 'production') return
+  console.info('[zlog:saved-list]', event, detail)
+}
+
 function buildSavedDiaryListQuery(supabase, { from, to, filterProjectId, mode }) {
   return applySavedDiaryListFilter(
     supabase
@@ -384,10 +399,28 @@ function SiteDiaryEntryPage() {
   const [mode, setMode] = useState(() => (
     searchParams.get('view') === 'saved' ? 'saved' : null
   )) // null | 'previous' | 'saved'
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState(() => (missingReport ? DIARY_MISSING_MESSAGE : ''))
-  const [reports, setReports] = useState([])
-  const [totalSavedDiaryCount, setTotalSavedDiaryCount] = useState(0)
+  const [reports, setReports] = useState(() => {
+    const initialMode = searchParams.get('view') === 'saved' ? 'saved' : null
+    if (initialMode !== 'saved' && initialMode !== 'previous') return []
+    return savedDiaryListPaintState(
+      readSavedDiaryListSnapshot({ mode: initialMode, filterProjectId }),
+    ).reports
+  })
+  const [totalSavedDiaryCount, setTotalSavedDiaryCount] = useState(() => {
+    const initialMode = searchParams.get('view') === 'saved' ? 'saved' : null
+    if (initialMode !== 'saved' && initialMode !== 'previous') return 0
+    return savedDiaryListPaintState(
+      readSavedDiaryListSnapshot({ mode: initialMode, filterProjectId }),
+    ).totalCount
+  })
+  const [loading, setLoading] = useState(() => {
+    const initialMode = searchParams.get('view') === 'saved' ? 'saved' : null
+    if (initialMode !== 'saved' && initialMode !== 'previous') return false
+    return savedDiaryListPaintState(
+      readSavedDiaryListSnapshot({ mode: initialMode, filterProjectId }),
+    ).initialLoading
+  })
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [deleteIds, setDeleteIds] = useState([])
@@ -412,29 +445,60 @@ function SiteDiaryEntryPage() {
   useEffect(() => {
     if (mode !== 'previous' && mode !== 'saved') return
     let cancelled = false
+    const paint = savedDiaryListPaintState(
+      readSavedDiaryListSnapshot({ mode, filterProjectId }),
+    )
+    logSavedListReturn('list-route-mounted', {
+      mode,
+      fromSnapshot: paint.fromSnapshot,
+      rowCount: paint.reports.length,
+    })
+    if (paint.fromSnapshot) {
+      logSavedListReturn('cached-rows-rendered', {
+        mode,
+        rowCount: paint.reports.length,
+        totalCount: paint.totalCount,
+      })
+    }
     const load = async () => {
-      setLoading(true)
+      if (!paint.fromSnapshot) {
+        setLoading(true)
+      }
       setError((prev) => (prev === DIARY_MISSING_MESSAGE ? prev : ''))
       try {
+        const range = savedDiaryListRefreshRange(
+          paint.fromSnapshot ? paint.reports.length : SAVED_DIARY_PAGE_SIZE,
+          SAVED_DIARY_PAGE_SIZE,
+        )
         const { data, error: qErr, count } = await buildSavedDiaryListQuery(supabase, {
-          from: 0,
-          to: SAVED_DIARY_PAGE_SIZE - 1,
+          from: range.from,
+          to: range.to,
           filterProjectId,
           mode,
         })
         if (qErr) throw qErr
         if (!cancelled) {
           const nextReports = data || []
+          const nextTotal = typeof count === 'number' ? count : nextReports.length
           setReports(nextReports)
-          setTotalSavedDiaryCount(
-            typeof count === 'number' ? count : nextReports.length,
-          )
+          setTotalSavedDiaryCount(nextTotal)
+          rememberSavedDiaryList(mode, filterProjectId, nextReports, nextTotal)
           const validIds = new Set(nextReports.map((row) => row?.id).filter(Boolean))
           setSelectedIds((current) => new Set([...current].filter((id) => validIds.has(id))))
+          logSavedListReturn('background-refresh-done', {
+            mode,
+            rowCount: nextReports.length,
+            totalCount: nextTotal,
+            fromSnapshot: paint.fromSnapshot,
+          })
         }
       } catch {
         if (!cancelled) {
           setError('We couldn’t load your diaries. Check your connection and try again.')
+          logSavedListReturn('background-refresh-failed', {
+            mode,
+            fromSnapshot: paint.fromSnapshot,
+          })
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -461,6 +525,12 @@ function SiteDiaryEntryPage() {
 
   const openSavedDiaries = () => {
     setError((prev) => (prev === DIARY_MISSING_MESSAGE ? prev : ''))
+    const paint = savedDiaryListPaintState(
+      readSavedDiaryListSnapshot({ mode: 'saved', filterProjectId }),
+    )
+    setReports(paint.reports)
+    setTotalSavedDiaryCount(paint.totalCount)
+    setLoading(paint.initialLoading)
     setMode('saved')
     router.replace(savedReportListHref())
   }
@@ -525,10 +595,10 @@ function SiteDiaryEntryPage() {
     })
     if (qErr) throw qErr
     const nextReports = data || []
+    const nextTotal = typeof count === 'number' ? count : nextReports.length
     setReports(nextReports)
-    setTotalSavedDiaryCount(
-      typeof count === 'number' ? count : nextReports.length,
-    )
+    setTotalSavedDiaryCount(nextTotal)
+    rememberSavedDiaryList(mode, filterProjectId, nextReports, nextTotal)
   }
 
   const loadMoreSavedDiaries = async () => {
@@ -546,11 +616,12 @@ function SiteDiaryEntryPage() {
       })
       if (qErr) throw qErr
       const page = data || []
-      setReports((current) => {
-        const existing = new Set(current.map((row) => String(row?.id || '')).filter(Boolean))
-        const appended = page.filter((row) => row?.id && !existing.has(String(row.id)))
-        return appended.length ? [...current, ...appended] : current
-      })
+      const nextTotal = typeof count === 'number' ? count : totalSavedDiaryCount
+      const existing = new Set(reports.map((row) => String(row?.id || '')).filter(Boolean))
+      const appended = page.filter((row) => row?.id && !existing.has(String(row.id)))
+      const next = appended.length ? [...reports, ...appended] : reports
+      setReports(next)
+      rememberSavedDiaryList(mode, filterProjectId, next, nextTotal)
       if (typeof count === 'number') setTotalSavedDiaryCount(count)
     } catch {
       setError('We couldn’t load more diaries. Check your connection and try again.')
@@ -576,8 +647,11 @@ function SiteDiaryEntryPage() {
         try {
           await refreshSavedDiaryFirstPage()
         } catch {
-          setReports((current) => current.filter((row) => !deleted.has(String(row.id))))
-          setTotalSavedDiaryCount((current) => Math.max(0, current - deleted.size))
+          const next = reports.filter((row) => !deleted.has(String(row.id)))
+          const nextTotal = Math.max(0, totalSavedDiaryCount - deleted.size)
+          setReports(next)
+          setTotalSavedDiaryCount(nextTotal)
+          rememberSavedDiaryList(mode, filterProjectId, next, nextTotal)
         }
       }
       if (result.ok) {
@@ -724,7 +798,7 @@ function SiteDiaryEntryPage() {
                     <p className="zlog-saved-diary-count">
                       {savedDiariesListCountLabel(totalSavedDiaryCount)}
                     </p>
-                    {mode === 'saved' && !loading && reports.length > 0 ? (
+                    {mode === 'saved' && reports.length > 0 ? (
                       <SecondaryButton
                         type="button"
                         onClick={enterSelectionMode}
@@ -739,7 +813,7 @@ function SiteDiaryEntryPage() {
             </div>
           </div>
 
-          {loading && <p style={{ color: 'var(--text-2)' }}>Loading your diaries…</p>}
+          {loading && reports.length < 1 && <p style={{ color: 'var(--text-2)' }}>Loading your diaries…</p>}
 
           {!loading && reports.length === 0 && totalSavedDiaryCount < 1 && (
             <div style={{ padding: '8px 0 24px', color: 'var(--text-2)', fontSize: 14, lineHeight: 1.5 }}>
@@ -752,7 +826,7 @@ function SiteDiaryEntryPage() {
             </div>
           )}
 
-          {!loading && reports.length > 0 ? (
+          {reports.length > 0 ? (
             <div
               className="zlog-saved-diary-list"
               role="list"

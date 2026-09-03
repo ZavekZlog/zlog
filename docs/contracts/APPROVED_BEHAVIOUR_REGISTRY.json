@@ -1,6 +1,6 @@
 {
-  "version": "1.1.15",
-  "updated": "2026-09-03",
+  "version": "1.1.16",
+  "updated": "2026-09-04",
   "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage. Source contracts are NOT screenshot visual tests.",
   "behaviours": [
     {
@@ -494,6 +494,16 @@
       ],
       "manualQA": true,
       "manualQANote": "Real Android phone must confirm Share prepares and delivers PDF in one gesture and Save/Share saving semantics remain honest. Source contracts lock prepare/share/download wiring — not share-sheet UX."
+    },
+    {
+      "id": "DIARY-LIST-FAST-RETURN",
+      "description": "Returning to an already-loaded Saved Diaries list renders retained rows immediately and refreshes in background.",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-saved-list-cache.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Android must confirm: first Saved Diaries visit may show Loading your diaries; after opening a diary and returning to ?view=saved the previous compact rows appear immediately without a blank list, then background refresh updates if needed."
     },
     {
       "id": "PHOTO-001",
