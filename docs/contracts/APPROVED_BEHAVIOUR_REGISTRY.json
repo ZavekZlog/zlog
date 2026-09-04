@@ -1,5 +1,5 @@
 {
-  "version": "1.1.17",
+  "version": "1.1.18",
   "updated": "2026-09-04",
   "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage. Source contracts are NOT screenshot visual tests.",
   "behaviours": [
@@ -516,6 +516,18 @@
       ],
       "manualQA": true,
       "manualQANote": "Android must confirm: from an opened saved diary, Zlog Back lands on the Saved Diaries list with retained rows immediately, not the two-card Site Diary chooser."
+    },
+    {
+      "id": "DIARY-SAVED-FAST-OPEN",
+      "description": "Opening a read-only saved diary must render the core saved-diary shell and report identity without waiting for secondary labour, plant, photo, branding, PDF-cache or signed-media work.",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-saved-view.test.js",
+        "lib/diary-routing.test.js",
+        "lib/diary-saved-list-cache.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Android must confirm: opening a saved diary shows the diary shell and report identity before labour, plant, photos, branding, thumbnails or PDF cache work; Back/fast-return remain unchanged."
     },
     {
       "id": "PHOTO-001",

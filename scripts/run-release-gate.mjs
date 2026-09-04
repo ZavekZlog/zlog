@@ -30,6 +30,7 @@ const NODE_TESTS = [
   'lib/diary-form-hydrate.test.js',
   'lib/diary-routing.test.js',
   'lib/diary-saved-list-cache.test.js',
+  'lib/diary-saved-view.test.js',
   'lib/diary-setup-continue.test.js',
   'lib/diary-cover-photo.test.js',
   'lib/diary-edit-hydrate.test.js',

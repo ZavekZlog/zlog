@@ -60,6 +60,11 @@ import {
 
 const DIARY_ACCENT = REPORT_THEMES.diary.accent
 
+function logSavedDiaryOpen(event, detail) {
+  if (process.env.NODE_ENV === 'production') return
+  console.info('[zlog:saved-open]', event, detail)
+}
+
 /** TEMPORARY — development-only Android timing readout. Hidden in production builds. */
 function ShareTimingDiagPanel() {
   const snap = useSyncExternalStore(
@@ -432,6 +437,7 @@ function SavedDiaryViewer() {
       setLoading(true)
       setError('')
       let painted = false
+      logSavedDiaryOpen('viewer-route-mounted', { projectId, reportId })
       try {
         const result = await loadSavedDiaryView(supabase, { projectId, reportId })
         if (cancelled) return
@@ -441,16 +447,43 @@ function SavedDiaryViewer() {
           return
         }
         sdscSeedRef.current = result.sdscSeed || null
+        logSavedDiaryOpen('core-report-ready', {
+          reportId: result.view?.reportId || null,
+          projectId: result.view?.projectId || null,
+        })
         setView(result.view)
         painted = true
         if (!cancelled) setLoading(false)
-        const hydrate = result.hydrateDisplayMedia
-        if (!cancelled && hydrate && typeof hydrate.run === 'function') {
-          const applyPatch = (patch) => {
-            if (!cancelled && patch) {
-              setView((current) => (current ? { ...current, ...patch } : current))
-            }
+        logSavedDiaryOpen('first-useful-render', {
+          reportId: result.view?.reportId || null,
+        })
+        const applyPatch = (patch) => {
+          if (!cancelled && patch) {
+            setView((current) => (current ? { ...current, ...patch } : current))
           }
+        }
+        const secondary = result.hydrateSecondary
+        const hydrate = result.hydrateDisplayMedia
+        if (!cancelled && secondary && typeof secondary.run === 'function') {
+          void secondary.run(applyPatch).then((patch) => {
+            if (!cancelled && patch?.sdscSeed) {
+              sdscSeedRef.current = patch.sdscSeed
+            }
+            logSavedDiaryOpen('secondary-data-ready', {
+              labour: patch?.labour?.length || 0,
+              plant: patch?.plant?.length || 0,
+              photos: patch?.photoCount || 0,
+            })
+            if (!cancelled && hydrate && typeof hydrate.run === 'function') {
+              return hydrate.run(applyPatch).then(() => {
+                logSavedDiaryOpen('thumbnails-ready', {
+                  reportId: result.view?.reportId || null,
+                })
+              })
+            }
+            return null
+          }).catch(() => {})
+        } else if (!cancelled && hydrate && typeof hydrate.run === 'function') {
           void hydrate.run(applyPatch).catch(() => {})
         }
       } catch (err) {
@@ -1158,9 +1191,9 @@ function SavedDiaryViewer() {
               ]}
             />
           </>
-        ) : (
+        ) : view.secondaryReady ? (
           <EmptySection>No labour was recorded.</EmptySection>
-        )}
+        ) : null}
       </GlassSection>
 
       <GlassSection title="Plant" accent={DIARY_ACCENT}>
@@ -1174,9 +1207,9 @@ function SavedDiaryViewer() {
               { key: 'notes', label: 'Notes' },
             ]}
           />
-        ) : (
+        ) : view.secondaryReady ? (
           <EmptySection>No plant was recorded.</EmptySection>
-        )}
+        ) : null}
       </GlassSection>
 
       <GlassSection title="Equipment on Hire" accent={DIARY_ACCENT}>
@@ -1269,9 +1302,9 @@ function SavedDiaryViewer() {
               </div>
             ))}
           </>
-        ) : (
+        ) : view.secondaryReady ? (
           <EmptySection>No photo evidence was saved on this diary.</EmptySection>
-        )}
+        ) : null}
       </GlassSection>
 
       <GlassSection title="Signature" accent={DIARY_ACCENT}>
