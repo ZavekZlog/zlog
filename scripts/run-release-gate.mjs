@@ -23,6 +23,8 @@ const NODE_TESTS = [
   'lib/auth/session-persistence.test.js',
   'lib/diary-site-diary-contract.test.js',
   'lib/diary-autosave.test.js',
+  'lib/diary-save.test.js',
+  'lib/diary-save-dirty.test.js',
   'lib/report-deletion.test.js',
   'lib/diary-setup-blank.test.js',
   'lib/diary-setup-author.test.js',

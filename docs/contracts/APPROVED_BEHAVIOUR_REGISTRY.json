@@ -1,5 +1,5 @@
 {
-  "version": "1.1.18",
+  "version": "1.1.19",
   "updated": "2026-09-04",
   "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage. Source contracts are NOT screenshot visual tests.",
   "behaviours": [
@@ -528,6 +528,19 @@
       ],
       "manualQA": true,
       "manualQANote": "Android must confirm: opening a saved diary shows the diary shell and report identity before labour, plant, photos, branding, thumbnails or PDF cache work; Back/fast-return remain unchanged."
+    },
+    {
+      "id": "DIARY-SAVE-FAST-PATH",
+      "description": "Save & Share finalize must persist dirty report, labour, plant, and photo domains, and must skip those domains when their persist snapshots are unchanged. Autosave does not replace finalize. Anti-wipe verification remains on report UPDATE. PDF preparation still follows finalize.",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-save.test.js",
+        "lib/diary-save-dirty.test.js",
+        "lib/diary-autosave.test.js",
+        "lib/diary-share-timing-diag.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Android must confirm a no-edit Save & Share is dramatically faster: finalizeReportSkipped/labour/plant/photos skipped when unchanged, while a genuine edit still persists that domain."
     },
     {
       "id": "PHOTO-001",

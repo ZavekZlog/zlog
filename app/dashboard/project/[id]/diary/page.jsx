@@ -51,6 +51,13 @@ import {
 } from '@/lib/diary-draft'
 import { DiarySaveError, DIARY_SAVE_LOG, finalizeSiteDiarySave } from '@/lib/diary-save'
 import {
+  labourFormToPersistRows,
+  plantFormToPersistRows,
+  photoRowsToBaseline,
+  durablePhotosToBaseline,
+  mergeAutosaveAckIntoReportRow,
+} from '@/lib/diary-save-dirty'
+import {
   DIARY_AUTOSAVE_DEBOUNCE_MS,
   autosavePayloadsEqual,
   autosaveStatusAfterResult,
@@ -515,6 +522,10 @@ export default function SiteDiaryPage() {
   const persistUiErrorRef = useRef('')
   const finalSaveInProgressRef = useRef(false)
   const ackedSnapshotRef = useRef(null)
+  const lastPersistedReportRef = useRef(null)
+  const lastPersistedLabourRef = useRef(null)
+  const lastPersistedPlantRef = useRef(null)
+  const lastPersistedPhotosRef = useRef(null)
   const latestPayloadRef = useRef(null)
   const autosaveTimerRef = useRef(null)
   const autosaveInFlightRef = useRef(null)
@@ -540,6 +551,10 @@ export default function SiteDiaryPage() {
     setAutosaveStatus(null)
     setLoadDiagnostic('')
     ackedSnapshotRef.current = null
+    lastPersistedReportRef.current = null
+    lastPersistedLabourRef.current = null
+    lastPersistedPlantRef.current = null
+    lastPersistedPhotosRef.current = null
     suppressAutosaveRef.current = true
   }, [editingReportId])
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -772,6 +787,10 @@ export default function SiteDiaryPage() {
       setHydrateComplete(false)
       setLoadDiagnostic('')
       ackedSnapshotRef.current = null
+      lastPersistedReportRef.current = null
+      lastPersistedLabourRef.current = null
+      lastPersistedPlantRef.current = null
+      lastPersistedPhotosRef.current = null
       suppressAutosaveRef.current = true
       setError('')
       setPrefilledFromLast(false)
@@ -1184,6 +1203,10 @@ export default function SiteDiaryPage() {
           console.log(DIARY_SAVE_LOG, 'load:snapshot-failed', snapErr)
           ackedSnapshotRef.current = null
         }
+        lastPersistedReportRef.current = existing
+        lastPersistedLabourRef.current = labourFormToPersistRows(labour || [], existing.id)
+        lastPersistedPlantRef.current = plantFormToPersistRows(plant || [], existing.id)
+        lastPersistedPhotosRef.current = photoRowsToBaseline(reportPhotos || [])
         suppressAutosaveRef.current = true
 
         // SDSC Phase 1 shadow — merge only fields workbench already has (no new fetches).
@@ -1669,6 +1692,10 @@ export default function SiteDiaryPage() {
 
       if (result.ok) {
         ackedSnapshotRef.current = result.acked
+        lastPersistedReportRef.current = mergeAutosaveAckIntoReportRow(
+          lastPersistedReportRef.current,
+          result.acked,
+        )
         paintAutosaveStatus(autosaveStatusAfterResult(result))
         return result
       }
@@ -1676,6 +1703,10 @@ export default function SiteDiaryPage() {
       if (result.reason === 'stale' && result.acked) {
         suppressAutosaveRef.current = true
         ackedSnapshotRef.current = result.acked
+        lastPersistedReportRef.current = mergeAutosaveAckIntoReportRow(
+          lastPersistedReportRef.current,
+          result.acked,
+        )
         applyAutosaveSnapshot(result.acked)
         const failure = classifyAutosaveFailure({
           reason: result.reason,
@@ -2241,11 +2272,6 @@ export default function SiteDiaryPage() {
     }
   }
 
-  const labourHasData = labourRowHasData
-
-  const plantHasData = (row) =>
-    row.plant_type.trim() || row.quantity || row.hours || row.notes.trim()
-
   const handleContinueDraft = async () => {
     if (!openDraft?.id || startBusy) return
     openReportForm(openDraft.id, { reportDate: openDraft.report_date })
@@ -2446,6 +2472,11 @@ export default function SiteDiaryPage() {
           reason: result.reason || 'persist-failed',
           message: SAVE_AREA_PERSIST_FAIL_MESSAGE,
         }
+      }
+      if (result.locationWalk) {
+        lastPersistedPhotosRef.current = durablePhotosToBaseline(
+          flattenAreaGroups(result.locationWalk),
+        )
       }
       return result
     } catch (err) {
@@ -2830,28 +2861,8 @@ export default function SiteDiaryPage() {
         coverPlan,
       )
 
-      const labourPayload = labourRows
-        .filter(labourHasData)
-        .map((row, index) => ({
-          report_id: editingReportId,
-          trade: row.trade.trim() || null,
-          company: row.company.trim() || null,
-          count: row.headcount ? parseInt(row.headcount, 10) : null,
-          hours: row.hours ? parseFloat(row.hours) : null,
-          notes: row.notes.trim() || null,
-          sequence: index,
-        }))
-
-      const plantPayload = plantRows
-        .filter(plantHasData)
-        .map((row, index) => ({
-          report_id: editingReportId,
-          item: row.plant_type.trim() || null,
-          ref: row.quantity ? parseInt(row.quantity, 10) : null,
-          status: row.hours ? parseFloat(row.hours) : null,
-          notes: row.notes.trim() || null,
-          sequence: index,
-        }))
+      const labourPayload = labourFormToPersistRows(labourRows, editingReportId)
+      const plantPayload = plantFormToPersistRows(plantRows, editingReportId)
 
       const sequenced = flattenAreaGroups(walkForPersist)
       const keptStoragePaths = sequenced
@@ -3009,6 +3020,13 @@ export default function SiteDiaryPage() {
         keptStoragePaths,
         photoRecords,
         updateExistingPhotos,
+        user,
+        baseline: {
+          reportRow: lastPersistedReportRef.current,
+          labour: lastPersistedLabourRef.current,
+          plant: lastPersistedPlantRef.current,
+          photos: lastPersistedPhotosRef.current,
+        },
       })
 
       if (!saved?.id || saved.id !== editingReportId) {
@@ -3037,9 +3055,13 @@ export default function SiteDiaryPage() {
       }
       if (saved.row) {
         ackedSnapshotRef.current = snapshotFromLiveRow(saved.row)
+        lastPersistedReportRef.current = saved.row
       } else if (latestPayloadRef.current) {
         ackedSnapshotRef.current = latestPayloadRef.current
       }
+      lastPersistedLabourRef.current = labourPayload
+      lastPersistedPlantRef.current = plantPayload
+      lastPersistedPhotosRef.current = durablePhotosToBaseline(sequenced)
       setReportIsDraft(false)
       diarySaveLog('success', { reportId: saved.id })
 
