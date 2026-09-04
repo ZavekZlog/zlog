@@ -24,6 +24,7 @@ import { ReportDeletionDialog } from '@/components/report-management/ReportDelet
 import { REPORT_THEMES } from '@/lib/report-theme'
 import {
   DIARY_MISSING_MESSAGE,
+  diaryHubHref,
   savedDiaryViewerHref,
 } from '@/lib/diary-routing'
 import { clearSetupFormDraft } from '@/lib/report-setup'
@@ -548,6 +549,7 @@ function SiteDiaryEntryPage() {
     setDeleteIds([])
     setDeleteError('')
     setTotalSavedDiaryCount(0)
+    router.replace(diaryHubHref({ projectId: filterProjectId }))
   }
 
   const enterSelectionMode = () => {
