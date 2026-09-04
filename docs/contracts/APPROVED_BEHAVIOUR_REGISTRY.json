@@ -1,5 +1,5 @@
 {
-  "version": "1.1.16",
+  "version": "1.1.17",
   "updated": "2026-09-04",
   "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage. Source contracts are NOT screenshot visual tests.",
   "behaviours": [
@@ -504,6 +504,18 @@
       ],
       "manualQA": true,
       "manualQANote": "Android must confirm: first Saved Diaries visit may show Loading your diaries; after opening a diary and returning to ?view=saved the previous compact rows appear immediately without a blank list, then background refresh updates if needed."
+    },
+    {
+      "id": "DIARY-SAVED-BACK",
+      "description": "In read-only saved-diary review, Zlog Back returns directly to the Saved Diaries list, preserving the retained-list fast-return behaviour.",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-routing.test.js",
+        "lib/diary-saved-view.test.js",
+        "lib/diary-saved-list-cache.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Android must confirm: from an opened saved diary, Zlog Back lands on the Saved Diaries list with retained rows immediately, not the two-card Site Diary chooser."
     },
     {
       "id": "PHOTO-001",

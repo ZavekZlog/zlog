@@ -34,7 +34,7 @@ import {
   temporaryWorkInspectionStatus,
   temporaryWorkNotesDisplay,
 } from '@/lib/diary-daily-records'
-import { diaryHubHref, editExistingDiaryHref, projectAndReportDetailsHref } from '@/lib/diary-routing'
+import { editExistingDiaryHref, projectAndReportDetailsHref } from '@/lib/diary-routing'
 import { createTodaysDiaryDraft } from '@/lib/diary-draft'
 import { deleteSiteDiaries, savedReportListHref } from '@/lib/report-deletion'
 import {
@@ -560,7 +560,7 @@ function SavedDiaryViewer() {
   if (loading) {
     return (
       <PremiumShell
-        backHref={diaryHubHref()}
+        backHref={savedReportListHref()}
         accent={DIARY_ACCENT}
         maxWidth={640}
         stickyBack
@@ -574,7 +574,7 @@ function SavedDiaryViewer() {
   if (error || !view) {
     return (
       <PremiumShell
-        backHref={diaryHubHref()}
+        backHref={savedReportListHref()}
         accent={DIARY_ACCENT}
         maxWidth={640}
         stickyBack
@@ -854,7 +854,7 @@ function SavedDiaryViewer() {
 
   return (
     <PremiumShell
-      backHref={diaryHubHref()}
+      backHref={savedReportListHref()}
       accent={DIARY_ACCENT}
       maxWidth={640}
       stickyBack
@@ -1324,7 +1324,7 @@ export default function SavedDiaryViewerRoute() {
     <Suspense
       fallback={
         <PremiumShell
-          backHref="/dashboard/diary"
+          backHref={savedReportListHref()}
           accent={DIARY_ACCENT}
           maxWidth={640}
           stickyBack
