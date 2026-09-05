@@ -144,6 +144,8 @@ import {
   formatShareTimingLines,
 } from '@/lib/diary-share-timing-diag'
 import { mapWithConcurrency } from '@/lib/diary-pdf-photos'
+import { batchSignedUrlsForStoragePaths } from '@/lib/diary-share-pdf-assets'
+import { prewarmDiaryPdfSessionAssets } from '@/lib/diary-pdf-asset-prewarm'
 import { readReportSetupExtras, reportDateInputValue, todayIsoDate } from '@/lib/report-setup'
 import {
   describeDiaryWorkbenchLoadFailure,
@@ -654,6 +656,7 @@ export default function SiteDiaryPage() {
   const locationWalkRef = useRef(null)
   /** Phase D: session memo for grid batch + on-demand viewer report signing. */
   const photoDisplaySignRef = useRef(null)
+  const pdfPrewarmGenRef = useRef(0)
   const [prefilledFromLast, setPrefilledFromLast] = useState(false)
   const [duplicatedFromReport, setDuplicatedFromReport] = useState(false)
   const [companyReportingFor, setCompanyReportingFor] = useState('')
@@ -1209,6 +1212,19 @@ export default function SiteDiaryPage() {
         lastPersistedPhotosRef.current = photoRowsToBaseline(reportPhotos || [])
         suppressAutosaveRef.current = true
 
+        const kickPdfAssetPrewarm = () => {
+          if (cancelled) return
+          const gen = ++pdfPrewarmGenRef.current
+          void prewarmDiaryPdfSessionAssets({
+            photos: reportPhotos || [],
+            coverPath: editHydration.coverStoragePath || existing.cover_photo_url || null,
+            coverProcessingVersion: existing.cover_processing_version || null,
+            generation: gen,
+            isCurrent: () => !cancelled && pdfPrewarmGenRef.current === gen,
+            batchSignStoragePaths: (paths) => batchSignedUrlsForStoragePaths(supabase, paths),
+          }).catch(() => {})
+        }
+
         // SDSC Phase 1 shadow — merge only fields workbench already has (no new fetches).
         {
           const shadowUserId = authUserIdRef.current
@@ -1316,6 +1332,7 @@ export default function SiteDiaryPage() {
               setLocationWalk(groupPhotosByArea(withPreview))
             }
           }
+          kickPdfAssetPrewarm()
 
           let logs = null
           if (recentDiariesPromise) {
@@ -1407,6 +1424,7 @@ export default function SiteDiaryPage() {
               setLocationWalk(groupPhotosByArea(withPreview))
             }
           }
+          kickPdfAssetPrewarm()
 
           if (commit()) {
             setLoadDiagnostic('')
@@ -1434,6 +1452,7 @@ export default function SiteDiaryPage() {
             setLoadDiagnostic('')
             setHydrateComplete(true)
           }
+          kickPdfAssetPrewarm()
 
           if (pendingCoverGeneration && !cancelled) {
             void (async () => {
