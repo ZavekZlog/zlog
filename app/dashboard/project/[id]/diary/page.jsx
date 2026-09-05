@@ -146,6 +146,7 @@ import {
 import { mapWithConcurrency } from '@/lib/diary-pdf-photos'
 import { batchSignedUrlsForStoragePaths } from '@/lib/diary-share-pdf-assets'
 import { prewarmDiaryPdfSessionAssets } from '@/lib/diary-pdf-asset-prewarm'
+import { handlePdfVisibleTextInput } from '@/lib/diary-share-ready-invalidate'
 import { readReportSetupExtras, reportDateInputValue, todayIsoDate } from '@/lib/report-setup'
 import {
   describeDiaryWorkbenchLoadFailure,
@@ -519,6 +520,10 @@ export default function SiteDiaryPage() {
   const completingRef = useRef(false)
   const shareReadyPdfRef = useRef(null)
   const [shareReady, setShareReady] = useState(false)
+  const invalidatePreparedSharePdf = useCallback(() => {
+    shareReadyPdfRef.current = null
+    setShareReady((prev) => (prev ? false : prev))
+  }, [])
   const [hydrateComplete, setHydrateComplete] = useState(false)
   const [autosaveStatus, setAutosaveStatus] = useState(null)
   const persistUiErrorRef = useRef('')
@@ -541,8 +546,7 @@ export default function SiteDiaryPage() {
   useEffect(() => {
     saveLockRef.current = false
     completingRef.current = false
-    shareReadyPdfRef.current = null
-    setShareReady(false)
+    invalidatePreparedSharePdf()
     setSaving(false)
     setJustSaved(false)
     setShowSaveBanner(false)
@@ -558,7 +562,7 @@ export default function SiteDiaryPage() {
     lastPersistedPlantRef.current = null
     lastPersistedPhotosRef.current = null
     suppressAutosaveRef.current = true
-  }, [editingReportId])
+  }, [editingReportId, invalidatePreparedSharePdf])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Detect session loss while editing — recover via Sign in CTA (do not leave Save enabled).
@@ -630,6 +634,12 @@ export default function SiteDiaryPage() {
   const [weather, setWeather] = useState('')
   const [shiftType, setShiftType] = useState('Day')
   const [siteSummary, setSiteSummary] = useState('')
+  const handleWeatherInput = (event) => {
+    handlePdfVisibleTextInput(invalidatePreparedSharePdf, setWeather, event)
+  }
+  const handleSiteSummaryInput = (event) => {
+    handlePdfVisibleTextInput(invalidatePreparedSharePdf, setSiteSummary, event)
+  }
   const [labourRows, setLabourRows] = useState([emptyLabour()])
   const [labourMode, setLabourMode] = useState('manual') // 'scan' | 'manual'
   const [labourGroupBy, setLabourGroupBy] = useState('trade_company')
@@ -1854,9 +1864,10 @@ export default function SiteDiaryPage() {
   }, [flushPendingAutosave, performAutosave])
 
   const handleLocationWalkChange = useCallback((next) => {
+    invalidatePreparedSharePdf()
     setLocationWalk(next)
     setPhotos(flattenAreaGroups(next))
-  }, [])
+  }, [invalidatePreparedSharePdf])
 
   const handleAreaNameValidationResolved = useCallback(() => {
     const refMsg = persistUiErrorRef.current
@@ -1924,6 +1935,7 @@ export default function SiteDiaryPage() {
     const file = accepted[0]
     if (!file) return
     coverRemovedRef.current = false
+    invalidatePreparedSharePdf()
     // New local cover replaces any previous failed upload banner.
     if (persistUiErrorRef.current === COVER_UPLOAD_FAIL_MESSAGE) {
       persistUiErrorRef.current = ''
@@ -1981,7 +1993,7 @@ export default function SiteDiaryPage() {
         }
       })
     }
-  }, [editingReportId, projectId, supabase])
+  }, [editingReportId, invalidatePreparedSharePdf, projectId, supabase])
 
   const canvasRef = useRef(null)
   const signaturePadRef = useRef(null)
@@ -2097,6 +2109,7 @@ export default function SiteDiaryPage() {
     }
 
     const onEndStroke = () => {
+      invalidatePreparedSharePdf()
       if (pad.isEmpty()) {
         setSignature(null)
         rebindPadIfNeeded()
@@ -2119,13 +2132,14 @@ export default function SiteDiaryPage() {
 
     endStrokeHandlerRef.current = onEndStroke
     pad.addEventListener('endStroke', onEndStroke)
-  }, [teardownSignaturePad])
+  }, [invalidatePreparedSharePdf, teardownSignaturePad])
 
   useEffect(() => () => {
     teardownSignaturePad()
   }, [teardownSignaturePad])
 
   const clearSignaturePad = () => {
+    invalidatePreparedSharePdf()
     signaturePadRef.current?.clear()
     setSignature((prev) => {
       if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
@@ -2138,6 +2152,7 @@ export default function SiteDiaryPage() {
   }
 
   const resignSignature = () => {
+    invalidatePreparedSharePdf()
     setSignature((prev) => {
       if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
       return null
@@ -2239,8 +2254,9 @@ export default function SiteDiaryPage() {
       makeKey: makeUuid,
     })
     setLabourRows(nextRows.length > 0 ? nextRows : [emptyLabour()])
+    invalidatePreparedSharePdf()
     setScanError('')
-  }, [scanOperatives, labourGroupBy])
+  }, [invalidatePreparedSharePdf, scanOperatives, labourGroupBy])
 
   const retrySignInScan = useCallback(() => {
     if (scanLastFile) {
@@ -2260,6 +2276,7 @@ export default function SiteDiaryPage() {
   }, [clearScanPreview])
 
   const updateLabour = (key, field, value) => {
+    invalidatePreparedSharePdf()
     setLabourRows((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)))
   }
 
@@ -2268,10 +2285,12 @@ export default function SiteDiaryPage() {
   }
 
   const updateEquipmentHire = (key, field, value) => {
+    invalidatePreparedSharePdf()
     setEquipmentHireRows((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)))
   }
 
   const removeCoverPhoto = () => {
+    invalidatePreparedSharePdf()
     if (coverPhoto?.file && coverPhoto.preview) URL.revokeObjectURL(coverPhoto.preview)
     coverRemovedRef.current = true
     loadedCoverPathRef.current = null
@@ -2564,8 +2583,7 @@ export default function SiteDiaryPage() {
       saveLockRef.current = false
       completingRef.current = false
       finalSaveInProgressRef.current = false
-      shareReadyPdfRef.current = null
-      setShareReady(false)
+      invalidatePreparedSharePdf()
       flushSync(() => {
         setSaving(false)
         setAutosaveStatus(null)
@@ -3546,7 +3564,10 @@ export default function SiteDiaryPage() {
         {showBrandingSelector ? (
           <BrandingSelector
             value={brandingSelection}
-            onChange={setBrandingSelection}
+            onChange={(next) => {
+              invalidatePreparedSharePdf()
+              setBrandingSelection(next)
+            }}
             accent={DIARY_ACCENT}
             autoSelectDefault={!editingReportId}
           />
@@ -3564,7 +3585,8 @@ export default function SiteDiaryPage() {
           <input
             style={{ ...inputStyle, marginBottom: 0 }}
             value={weather}
-            onChange={(e) => setWeather(e.target.value)}
+            onInput={handleWeatherInput}
+            onChange={handleWeatherInput}
             placeholder="e.g. Overcast, 12°C, light rain PM"
           />
         </GlassSection>
@@ -3585,7 +3607,8 @@ export default function SiteDiaryPage() {
           <textarea
             style={{ ...textareaStyle, marginBottom: 0 }}
             value={siteSummary}
-            onChange={(e) => setSiteSummary(e.target.value)}
+            onInput={handleSiteSummaryInput}
+            onChange={handleSiteSummaryInput}
             placeholder="Overall progress, key activities, and notable events today…"
             rows={5}
           />
@@ -3786,7 +3809,10 @@ export default function SiteDiaryPage() {
                           <button
                             type="button"
                             style={{ ...removeRowStyle, marginBottom: 0, padding: '4px 6px' }}
-                            onClick={() => setLabourRows((rows) => rows.filter((r) => r.key !== row.key))}
+                            onClick={() => {
+                              invalidatePreparedSharePdf()
+                              setLabourRows((rows) => rows.filter((r) => r.key !== row.key))
+                            }}
                             aria-label="Remove labour row"
                           >
                             ×
@@ -3800,7 +3826,10 @@ export default function SiteDiaryPage() {
             </div>
           </div>
 
-          <button type="button" style={addRowButtonStyle} onClick={() => setLabourRows((rows) => [...rows, emptyLabour()])}>
+          <button type="button" style={addRowButtonStyle} onClick={() => {
+            invalidatePreparedSharePdf()
+            setLabourRows((rows) => [...rows, emptyLabour()])
+          }}>
             + Add labour row
           </button>
         </GlassSection>
@@ -3843,7 +3872,10 @@ export default function SiteDiaryPage() {
                 <button
                   type="button"
                   style={removeRowStyle}
-                  onClick={() => setEquipmentHireRows((rows) => rows.filter((r) => r.key !== row.key))}
+                  onClick={() => {
+                    invalidatePreparedSharePdf()
+                    setEquipmentHireRows((rows) => rows.filter((r) => r.key !== row.key))
+                  }}
                 >
                   Remove entry
                 </button>
@@ -3896,7 +3928,10 @@ export default function SiteDiaryPage() {
           <button
             type="button"
             style={addRowButtonStyle}
-            onClick={() => setEquipmentHireRows((rows) => [...rows, emptyEquipmentHire()])}
+            onClick={() => {
+              invalidatePreparedSharePdf()
+              setEquipmentHireRows((rows) => [...rows, emptyEquipmentHire()])
+            }}
           >
             + Add Equipment
           </button>
@@ -3907,8 +3942,14 @@ export default function SiteDiaryPage() {
           disabled={isDiaryViewMode}
           applicable={temporaryWorksApplicable}
           rows={temporaryWorks}
-          onApplicableChange={setTemporaryWorksApplicable}
-          onRowsChange={setTemporaryWorks}
+          onApplicableChange={(value) => {
+            invalidatePreparedSharePdf()
+            setTemporaryWorksApplicable(value)
+          }}
+          onRowsChange={(rows) => {
+            invalidatePreparedSharePdf()
+            setTemporaryWorks(rows)
+          }}
         />
 
         <GlassSection title="Visitors" accent={DIARY_ACCENT}>
