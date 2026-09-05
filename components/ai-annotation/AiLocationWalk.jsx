@@ -38,6 +38,7 @@ import {
   perPageToLayout,
 } from '@/lib/ai-annotation/area-groups'
 import { commitUnsavedPhotoAreaToWalk } from '@/lib/photo-workspace/commit-unsaved-area'
+import { hasUnsavedPhotoWorkspaceDraft } from '@/lib/photo-workspace'
 import {
   applyShadowPrepareToPhotos,
   collectShadowPrepareJobs,
@@ -564,7 +565,13 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   useImperativeHandle(ref, () => ({
     openFirstIncompletePhoto,
     commitUnsavedAreaForShare,
-  }), [openFirstIncompletePhoto, commitUnsavedAreaForShare])
+    hasUnsavedAreaForShare: () => hasUnsavedPhotoWorkspaceDraft({
+      phase,
+      nameDraft,
+      descriptionDraft,
+      draftPhotos,
+    }),
+  }), [openFirstIncompletePhoto, commitUnsavedAreaForShare, phase, nameDraft, descriptionDraft, draftPhotos])
 
   const closeViewer = () => {
     const scrollY = viewer?.scrollY || 0

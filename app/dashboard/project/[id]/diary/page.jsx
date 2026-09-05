@@ -52,6 +52,7 @@ import {
 import { DiarySaveError, DIARY_SAVE_LOG, finalizeSiteDiarySave } from '@/lib/diary-save'
 import {
   labourFormToPersistRows,
+  labourPersistRowsEqual,
   plantFormToPersistRows,
   photoRowsToBaseline,
   durablePhotosToBaseline,
@@ -147,6 +148,13 @@ import { mapWithConcurrency } from '@/lib/diary-pdf-photos'
 import { batchSignedUrlsForStoragePaths } from '@/lib/diary-share-pdf-assets'
 import { prewarmDiaryPdfSessionAssets } from '@/lib/diary-pdf-asset-prewarm'
 import { handlePdfVisibleTextInput } from '@/lib/diary-share-ready-invalidate'
+import {
+  bumpPdfPrepareGeneration,
+  createDiaryPdfBackgroundPrepareScheduler,
+  DIARY_PDF_BACKGROUND_PREPARE_IDLE_MS,
+  shouldAdoptBackgroundPreparedPdf,
+  shouldRunBackgroundPdfPrepare,
+} from '@/lib/diary-pdf-background-prepare'
 import { readReportSetupExtras, reportDateInputValue, todayIsoDate } from '@/lib/report-setup'
 import {
   describeDiaryWorkbenchLoadFailure,
@@ -172,6 +180,7 @@ import {
 } from '@/lib/diary-project-details'
 import {
   persistSaveAreaGroup,
+  photoRowNeedsPreparedUpload,
   SAVE_AREA_PERSIST_FAIL_MESSAGE,
 } from '@/lib/photo-workspace/persist-save-area'
 import {
@@ -519,10 +528,17 @@ export default function SiteDiaryPage() {
   const saveLockRef = useRef(false)
   const completingRef = useRef(false)
   const shareReadyPdfRef = useRef(null)
+  const pdfPrepareGenerationRef = useRef(0)
+  const pdfBackgroundPrepareSchedulerRef = useRef(null)
+  const pdfBackgroundPrepareRunRef = useRef(null)
+  const backgroundPrepareLiveRef = useRef({})
   const [shareReady, setShareReady] = useState(false)
   const invalidatePreparedSharePdf = useCallback(() => {
     shareReadyPdfRef.current = null
+    pdfPrepareGenerationRef.current = bumpPdfPrepareGeneration(pdfPrepareGenerationRef.current)
     setShareReady((prev) => (prev ? false : prev))
+    pdfBackgroundPrepareSchedulerRef.current?.cancel()
+    pdfBackgroundPrepareSchedulerRef.current?.schedule()
   }, [])
   const [hydrateComplete, setHydrateComplete] = useState(false)
   const [autosaveStatus, setAutosaveStatus] = useState(null)
@@ -2188,6 +2204,205 @@ export default function SiteDiaryPage() {
 
   const labourTotals = useMemo(() => labourAggregateTotals(labourRows), [labourRows])
 
+  backgroundPrepareLiveRef.current = {
+    hydrateComplete,
+    writable: isDiaryEditMode,
+    reportId: editingReportId,
+    sessionExpired,
+    saving,
+    projectId,
+    locationWalk,
+    labourRows,
+    temporaryWorks,
+    temporaryWorksApplicable,
+  }
+
+  const runBackgroundPdfPrepare = useCallback(async () => {
+    const live = backgroundPrepareLiveRef.current
+    const startedGeneration = pdfPrepareGenerationRef.current
+    const startedReportId = live.reportId
+    const shareInProgress = Boolean(
+      live.saving
+      || saveLockRef.current
+      || completingRef.current
+      || finalSaveInProgressRef.current,
+    )
+    if (!shouldRunBackgroundPdfPrepare({
+      hydrateComplete: live.hydrateComplete,
+      writable: live.writable,
+      reportId: live.reportId,
+      sessionExpired: live.sessionExpired,
+      shareInProgress,
+      hasUnsavedArea: locationWalkRef.current?.hasUnsavedAreaForShare?.() === true,
+      alreadyHasCurrentFile: Boolean(shareReadyPdfRef.current?.file),
+    })) {
+      return
+    }
+
+    try {
+      await flushPendingAutosave()
+    } catch {
+      return
+    }
+
+    if (pdfPrepareGenerationRef.current !== startedGeneration) return
+    if (String(backgroundPrepareLiveRef.current.reportId || '') !== String(startedReportId || '')) return
+    if (locationWalkRef.current?.hasUnsavedAreaForShare?.() === true) return
+    if (
+      backgroundPrepareLiveRef.current.saving
+      || saveLockRef.current
+      || completingRef.current
+      || finalSaveInProgressRef.current
+    ) {
+      return
+    }
+
+    const labourPayload = labourFormToPersistRows(live.labourRows, live.reportId)
+    if (!labourPersistRowsEqual(labourPayload, lastPersistedLabourRef.current)) return
+    if (signatureRef.current?.file) return
+
+    const persistedRow = lastPersistedReportRef.current
+    const persistedTwPayload = temporaryWorksPayload(
+      temporaryWorksFromDb(persistedRow?.temporary_works),
+    )
+    const liveTwPayload = live.temporaryWorksApplicable === true
+      ? temporaryWorksPayload(live.temporaryWorks)
+      : []
+    const twIdentity = (rows) => JSON.stringify(
+      (rows || []).map((row) => [
+        row.type,
+        row.item,
+        row.location,
+        row.status,
+        row.reference,
+        row.checkResult,
+        row.notes,
+        row.scaffoldCheck,
+        row.scaffoldTag,
+      ]),
+    )
+    if (twIdentity(liveTwPayload) !== twIdentity(persistedTwPayload)) return
+
+    const walk = live.locationWalk || []
+    const userId = authUserIdRef.current
+    const flattened = flattenAreaGroups(walk)
+    if (
+      userId
+      && live.reportId
+      && flattened.some((photo) => photoRowNeedsPreparedUpload(photo, userId, live.reportId))
+    ) {
+      return
+    }
+
+    const livePhotos = durablePhotosToBaseline(flattened)
+    const photoIdentity = (baseline) => JSON.stringify(
+      (baseline || []).map((row) => ({
+        url: String(row?.url || '').trim(),
+        caption: String(row?.caption || '').trim() || null,
+        location: String(row?.location || '').trim() || null,
+        layout: row?.layout || 'grid4',
+        rotation: Number(row?.rotation_degrees) || 0,
+      })),
+    )
+    if (photoIdentity(livePhotos) !== photoIdentity(lastPersistedPhotosRef.current)) {
+      if (!userId || !live.reportId) return
+      for (const group of walk) {
+        if (!group?.id) continue
+        const result = await persistSaveAreaGroup(supabase, {
+          userId,
+          reportId: live.reportId,
+          savedGroup: group,
+          locationWalk: walk,
+        })
+        if (!result.ok) return
+        if (pdfPrepareGenerationRef.current !== startedGeneration) return
+      }
+      lastPersistedPhotosRef.current = livePhotos
+    }
+
+    if (pdfPrepareGenerationRef.current !== startedGeneration) return
+    if (String(backgroundPrepareLiveRef.current.reportId || '') !== String(startedReportId || '')) return
+    if (
+      backgroundPrepareLiveRef.current.saving
+      || saveLockRef.current
+      || completingRef.current
+      || finalSaveInProgressRef.current
+    ) {
+      return
+    }
+
+    const localPreparedPhotoSources = collectLocalPreparedPdfPhotoSources({
+      photos: flattened,
+      userId,
+      reportId: live.reportId,
+    })
+    const coverBlob = coverPhotoRef.current?.preparedBlob
+    const localPreparedCoverBlob =
+      coverBlob instanceof Blob && coverBlob.size > 0 ? coverBlob : null
+
+    let prepared
+    try {
+      prepared = await prepareSiteDiaryPdf({
+        projectId: live.projectId,
+        reportId: live.reportId,
+        localPreparedPhotoSources,
+        localPreparedCoverBlob,
+        skipShareCacheWrite: true,
+      })
+    } catch {
+      return
+    }
+
+    if (!shouldAdoptBackgroundPreparedPdf({
+      prepared,
+      startedGeneration,
+      currentGeneration: pdfPrepareGenerationRef.current,
+      startedReportId,
+      currentReportId: backgroundPrepareLiveRef.current.reportId,
+      shareInProgress: Boolean(
+        backgroundPrepareLiveRef.current.saving
+        || saveLockRef.current
+        || completingRef.current
+        || finalSaveInProgressRef.current,
+      ),
+    })) {
+      return
+    }
+
+    const pdfFile = prepared.file instanceof File
+      ? prepared.file
+      : new File(
+        [prepared.blob],
+        prepared.fileName || 'Zlog-Site-Diary.pdf',
+        { type: 'application/pdf' },
+      )
+    shareReadyPdfRef.current = {
+      ...prepared,
+      file: pdfFile,
+    }
+    setShareReady(true)
+  }, [flushPendingAutosave, supabase])
+
+  pdfBackgroundPrepareRunRef.current = runBackgroundPdfPrepare
+
+  useEffect(() => {
+    const scheduler = createDiaryPdfBackgroundPrepareScheduler({
+      idleMs: DIARY_PDF_BACKGROUND_PREPARE_IDLE_MS,
+      run: () => pdfBackgroundPrepareRunRef.current?.(),
+    })
+    pdfBackgroundPrepareSchedulerRef.current = scheduler
+    return () => {
+      scheduler.cancel()
+      pdfBackgroundPrepareSchedulerRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!hydrateComplete || !isDiaryEditMode || !editingReportId || sessionExpired) return undefined
+    pdfBackgroundPrepareSchedulerRef.current?.schedule()
+    return undefined
+  }, [hydrateComplete, isDiaryEditMode, editingReportId, sessionExpired])
+
   const clearScanPreview = useCallback(() => {
     setScanSheetPreview((prev) => {
       if (prev && String(prev).startsWith('blob:')) {
@@ -2681,6 +2896,7 @@ export default function SiteDiaryPage() {
     }
 
     // Second tap — native share from the already-prepared file only (no PDF prepare).
+    // Also the one-tap path when background prepare already stored a current File.
     if (shareReadyPdfRef.current?.file && !saving) {
       await sharePreparedFile(shareReadyPdfRef.current)
       return
@@ -2706,6 +2922,9 @@ export default function SiteDiaryPage() {
       projectId,
       userActivation: tapUserActivation,
     })
+    pdfPrepareGenerationRef.current = bumpPdfPrepareGeneration(pdfPrepareGenerationRef.current)
+    pdfBackgroundPrepareSchedulerRef.current?.cancel()
+    await pdfBackgroundPrepareSchedulerRef.current?.waitUntilIdle?.()
     shareReadyPdfRef.current = null
     if (process.env.NODE_ENV !== 'production') {
       startShareTimingRun({
