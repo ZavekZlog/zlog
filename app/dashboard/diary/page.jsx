@@ -533,7 +533,7 @@ function SiteDiaryEntryPage() {
     setTotalSavedDiaryCount(paint.totalCount)
     setLoading(paint.initialLoading)
     setMode('saved')
-    router.replace(savedReportListHref())
+    router.push(savedReportListHref())
   }
 
   const startNewReport = () => {

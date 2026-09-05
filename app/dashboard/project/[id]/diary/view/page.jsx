@@ -412,6 +412,10 @@ function SavedDiaryViewer() {
   const router = useRouter()
   const reportId = searchParams.get('report') || null
   const projectId = String(routeProjectId || '')
+  const backToSavedDiaries = (event) => {
+    event?.preventDefault()
+    router.replace(savedReportListHref())
+  }
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -594,6 +598,7 @@ function SavedDiaryViewer() {
     return (
       <PremiumShell
         backHref={savedReportListHref()}
+        onBack={backToSavedDiaries}
         accent={DIARY_ACCENT}
         maxWidth={640}
         stickyBack
@@ -608,6 +613,7 @@ function SavedDiaryViewer() {
     return (
       <PremiumShell
         backHref={savedReportListHref()}
+        onBack={backToSavedDiaries}
         accent={DIARY_ACCENT}
         maxWidth={640}
         stickyBack
@@ -888,6 +894,7 @@ function SavedDiaryViewer() {
   return (
     <PremiumShell
       backHref={savedReportListHref()}
+      onBack={backToSavedDiaries}
       accent={DIARY_ACCENT}
       maxWidth={640}
       stickyBack
@@ -1353,11 +1360,17 @@ function SavedDiaryViewer() {
 }
 
 export default function SavedDiaryViewerRoute() {
+  const router = useRouter()
+  const backToSavedDiaries = (event) => {
+    event?.preventDefault()
+    router.replace(savedReportListHref())
+  }
   return (
     <Suspense
       fallback={
         <PremiumShell
           backHref={savedReportListHref()}
+          onBack={backToSavedDiaries}
           accent={DIARY_ACCENT}
           maxWidth={640}
           stickyBack
