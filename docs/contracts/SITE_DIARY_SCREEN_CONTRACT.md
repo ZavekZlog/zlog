@@ -1,11 +1,11 @@
 # Site Diary — Screen Contract
 
 **Layer:** B — Screen  
-**Version:** 1.20.3
-**Date Updated:** 2026-08-20
-**Reason Updated:** Saved-diary primary action is Share Report (PDF generation stays behind the scenes)
-**User Decision:** APPROVED — restore native share handoff; user-goal label Share Report
-**Previous Version:** 1.20.2
+**Version:** 1.21.0
+**Date Updated:** 2026-09-05
+**Reason Updated:** Setup hierarchy is Project Details first, then Reporting Company, Reporting On Behalf Of, Author, Cover Photo
+**User Decision:** APPROVED — Android visual test of new setup section order
+**Previous Version:** 1.20.3
 
 **Status:** Binding production contract  
 **Routes:**
@@ -19,7 +19,7 @@
 
 **Supersedes (v1.1.x §5 dashboard entry):** Dashboard Site Diary opens the **hub** (`/dashboard/diary`), not setup directly.
 
-**Supersedes (v1.1.x §2 setup sequence):** Locked hierarchy is Reporting Company → Reporting On Behalf Of → Author → Project Details (Project Manager is inside Project Details only).
+**Supersedes (v1.1.x §2 setup sequence):** Locked hierarchy is Project Details → Reporting Company → Reporting On Behalf Of → Author → Cover Photo (Project Name is first inside Project Details; Project Manager remains inside Project Details only).
 
 Parent: `docs/PROTECTED_PRODUCT_DECISIONS.md`  
 Behaviour summary: `docs/PROTECTED_SITE_DIARY_CONTRACT.md`  
@@ -70,35 +70,39 @@ For an existing diary opened on its saved Report Date of today:
 - Continue updates and opens the **same report ID** in the editable workbench (`?compose=1`).
 - Opening this screen must not create a report or reset any diary content.
 
+### PROJECT DETAILS
+
+1. **Project Name** — single control for project choice:
+   - Select / choose an **existing** project name → load that project’s remembered project fields from `public.projects` and retain `project_id`
+   - Type a **new** project name → create a new project on Continue (no leak from a prior selection)
+2. **Project Address**
+3. **Project Manager** — must remain inside Project Details
+4. **Working Days per Week**
+5. **Current Phase** — diary/report-specific; starts blank for a genuinely new diary and never hydrates from the project
+6. **Project Description** — once implemented (not in live schema yet)
+7. **Project Start Date**
+8. **Planned Completion Date**
+9. **Shift** — options exactly: **Day**, **Back**, **Night**
+10. **Report Date**
+11. **Project Reference** where currently approved on this screen
+
 ### REPORTING COMPANY
 
-1. **Reporting Company Name** — from the signed-in user’s company branding profile when available  
-2. **Reporting Company Logo** — branding / logo for who is producing the report
+12. **Reporting Company Name** — from the signed-in user’s company branding profile when available  
+13. **Reporting Company Logo** — branding / logo for who is producing the report
 
 ### REPORTING ON BEHALF OF
 
-3. **Reporting On Behalf Of** — client / main contractor / organisation; on a genuinely new diary, prefill the signed-in user’s most recently used value and keep it fully editable
+14. **Reporting On Behalf Of** — client / main contractor / organisation; on a genuinely new diary, prefill the signed-in user’s most recently used value and keep it fully editable
 
 ### AUTHOR
 
-4. **Author Name** — from explicitly saved profile author name only (`users.full_name` / auth `user_metadata.full_name`); never from email, username, or a previous diary  
-5. **Author Role** — free text from explicit profile job title when present; never invent a role
+15. **Author Name** — from explicitly saved profile author name only (`users.full_name` / auth `user_metadata.full_name`); never from email, username, or a previous diary  
+16. **Author Role** — free text from explicit profile job title when present; never invent a role
 
-### PROJECT DETAILS
+### COVER PHOTO
 
-6. **Project Name** — single control for project choice:
-   - Select / choose an **existing** project name → load that project’s remembered project fields from `public.projects` and retain `project_id`
-   - Type a **new** project name → create a new project on Continue (no leak from a prior selection)
-7. **Project Address**
-8. **Project Manager** — must remain inside Project Details (never above Reporting Company)
-9. **Working Days per Week**
-10. **Current Phase** — diary/report-specific; starts blank for a genuinely new diary and never hydrates from the project
-11. **Project Description** — once implemented (not in live schema yet)
-12. **Project Start Date**
-13. **Planned Completion Date**
-14. **Shift** — options exactly: **Day**, **Back**, **Night**
-15. **Report Date**
-16. **Project Reference** where currently approved on this screen
+Cover photo remains on this setup screen after Author.
 
 New-diary primary CTA: **Continue to Site Diary**
 

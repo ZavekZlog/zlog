@@ -1044,6 +1044,106 @@ function SiteDiarySetupPage() {
           if (editingReportId) detailsTouchedRef.current = true
         }}
       >
+      <GlassSection
+        title="Project Details"
+        accent={DIARY_ACCENT}
+        style={{ paddingTop: 18, paddingBottom: 18 }}
+      >
+        <label
+          style={{
+            ...setupLabelStyle,
+            fontSize: 14,
+            letterSpacing: '0.06em',
+            marginBottom: 8,
+            color: 'var(--text)',
+          }}
+        >
+          Project Name *
+        </label>
+        <input
+          ref={projectNameInputRef}
+          value={projectName}
+          onChange={editingReportId ? undefined : handleProjectNameChange}
+          readOnly={Boolean(editingReportId)}
+          list={!editingReportId && existingProjects.length > 0 ? 'diary-setup-project-names' : undefined}
+          placeholder={editingReportId ? undefined : 'Select an existing project or type a new name'}
+          autoComplete={editingReportId ? 'off' : 'organization'}
+          style={{ ...setupInputStyle, marginBottom: 16 }}
+          required
+          aria-label="Project Name"
+          aria-readonly={editingReportId ? 'true' : undefined}
+        />
+        {!editingReportId && existingProjects.length > 0 ? (
+          <datalist id="diary-setup-project-names">
+            {existingProjects.map((p) => (
+              <option key={p.id} value={p.name} />
+            ))}
+          </datalist>
+        ) : null}
+
+        <ProjectStickyFields
+          projectAddress={projectAddress}
+          projectManager={projectManager}
+          workingDaysPerWeek={workingDaysPerWeek}
+          onChange={handleStickyFieldsChange}
+          error={stickyFieldsError}
+        />
+
+        <label style={setupLabelStyle}>Current Phase</label>
+        <input
+          type="text"
+          value={currentPhase}
+          onChange={(e) => setCurrentPhase(e.target.value)}
+          placeholder="e.g. Groundworks"
+          style={setupInputStyle}
+        />
+
+        {showProjectDatesOnSetup() ? (
+          <div style={{ marginBottom: 4 }}>
+            <ProjectDatesFields
+              startDate={projectStartDate}
+              plannedCompletionDate={projectPlannedCompletionDate}
+              onChange={handleProjectDatesChange}
+              error={projectDatesError}
+            />
+          </div>
+        ) : null}
+
+        <label style={setupLabelStyle}>Shift *</label>
+        <select
+          value={shift}
+          onChange={(e) => setShift(hydrateShift(e.target.value))}
+          style={{ ...setupInputStyle, cursor: 'pointer' }}
+          aria-label="Shift"
+          required
+        >
+          <option value="Day">Day</option>
+          <option value="Back">Back</option>
+          <option value="Night">Night</option>
+          {!SITE_DIARY_SHIFT_OPTIONS.includes(shift) && shift ? (
+            <option value={shift}>{shift}</option>
+          ) : null}
+        </select>
+
+        <label style={setupLabelStyle}>Project Reference</label>
+        <input
+          value={projectReference}
+          onChange={(e) => setProjectReference(e.target.value)}
+          placeholder="Optional job or reference number"
+          style={setupInputStyle}
+        />
+
+        <label style={setupLabelStyle}>Report Date *</label>
+        <input
+          ref={reportDateInputRef}
+          type="date"
+          value={reportDate}
+          onChange={(e) => setReportDate(e.target.value)}
+          style={{ ...setupInputStyle, marginBottom: 0 }}
+          required
+        />
+      </GlassSection>
+
       <GlassSection accent={DIARY_ACCENT}>
         <div
           style={{
@@ -1251,92 +1351,6 @@ function SiteDiarySetupPage() {
             <ImageSourceButtons onFiles={onCoverDrop} hint="One cover image for this report" />
           </div>
         )}
-      </GlassSection>
-
-      <GlassSection title="Project Details" accent={DIARY_ACCENT}>
-        <label style={setupLabelStyle}>Project Name *</label>
-        <input
-          ref={projectNameInputRef}
-          value={projectName}
-          onChange={editingReportId ? undefined : handleProjectNameChange}
-          readOnly={Boolean(editingReportId)}
-          list={!editingReportId && existingProjects.length > 0 ? 'diary-setup-project-names' : undefined}
-          placeholder={editingReportId ? undefined : 'Select an existing project or type a new name'}
-          autoComplete={editingReportId ? 'off' : 'organization'}
-          style={setupInputStyle}
-          required
-          aria-label="Project Name"
-          aria-readonly={editingReportId ? 'true' : undefined}
-        />
-        {!editingReportId && existingProjects.length > 0 ? (
-          <datalist id="diary-setup-project-names">
-            {existingProjects.map((p) => (
-              <option key={p.id} value={p.name} />
-            ))}
-          </datalist>
-        ) : null}
-
-        <ProjectStickyFields
-          projectAddress={projectAddress}
-          projectManager={projectManager}
-          workingDaysPerWeek={workingDaysPerWeek}
-          onChange={handleStickyFieldsChange}
-          error={stickyFieldsError}
-        />
-
-        <label style={setupLabelStyle}>Current Phase</label>
-        <input
-          type="text"
-          value={currentPhase}
-          onChange={(e) => setCurrentPhase(e.target.value)}
-          placeholder="e.g. Groundworks"
-          style={setupInputStyle}
-        />
-
-        {showProjectDatesOnSetup() ? (
-          <div style={{ marginBottom: 4 }}>
-            <ProjectDatesFields
-              startDate={projectStartDate}
-              plannedCompletionDate={projectPlannedCompletionDate}
-              onChange={handleProjectDatesChange}
-              error={projectDatesError}
-            />
-          </div>
-        ) : null}
-
-        <label style={setupLabelStyle}>Shift *</label>
-        <select
-          value={shift}
-          onChange={(e) => setShift(hydrateShift(e.target.value))}
-          style={{ ...setupInputStyle, cursor: 'pointer' }}
-          aria-label="Shift"
-          required
-        >
-          <option value="Day">Day</option>
-          <option value="Back">Back</option>
-          <option value="Night">Night</option>
-          {!SITE_DIARY_SHIFT_OPTIONS.includes(shift) && shift ? (
-            <option value={shift}>{shift}</option>
-          ) : null}
-        </select>
-
-        <label style={setupLabelStyle}>Project Reference</label>
-        <input
-          value={projectReference}
-          onChange={(e) => setProjectReference(e.target.value)}
-          placeholder="Optional job or reference number"
-          style={setupInputStyle}
-        />
-
-        <label style={setupLabelStyle}>Report Date *</label>
-        <input
-          ref={reportDateInputRef}
-          type="date"
-          value={reportDate}
-          onChange={(e) => setReportDate(e.target.value)}
-          style={{ ...setupInputStyle, marginBottom: 0 }}
-          required
-        />
       </GlassSection>
       </div>
 
