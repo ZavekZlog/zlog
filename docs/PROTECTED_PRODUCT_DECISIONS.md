@@ -1,10 +1,10 @@
 # Protected Product Decisions & Regression Contract
 
-**Version:** 1.3.0
-**Date Updated:** 2026-08-19
-**Reason Updated:** Start today’s diary from a previous one lives on the opened saved diary as Use as Basis for New Diary
-**User Decision:** APPROVED — Saved Diaries list is browsing-only; reuse is an opened-diary action
-**Previous Version:** 1.2.0
+**Version:** 1.4.0
+**Date Updated:** 2026-09-06
+**Reason Updated:** Site Diary UX / PDF audit — approved specification recorded (Phase 0)
+**User Decision:** APPROVED — architecture map with Deliveries, transactional refs, labour date filter unchanged
+**Previous Version:** 1.3.0
 
 **Status:** Binding product decisions for commercial Zlog (not a prototype)  
 **Purpose:** Prevent regressions and premature feature builds. Agents and contributors must treat these as frozen unless the user explicitly revises them.
@@ -66,13 +66,13 @@
 | No implementation now | Do not schedule or code PR1–PR8 until explicitly approved |
 | Project Start Date | Project-level — entered once; not re-entered per daily report |
 | Planned Completion Date | Project-level — entered once; not re-entered per daily report |
-| **Project Day** | **Approved.** Calculated automatically from Project Start Date and Planned Completion Date (e.g. `Project Day 17 of 50`). Elapsed programme time only — **not** % complete. Displayed on Site Diary Project card when dates exist. Progress Report Gantt / mark-up remains future premium work. |
+| **Project Day No.** | **Approved.** Calculated automatically from Project Commencement Date and Project Completion Date. Elapsed programme time only — **not** % complete. Displayed on Site Diary when dates exist. Label supersedes **Project Day**. Progress Report Gantt / mark-up remains future premium work. |
 | Planned Days Remaining | Derived automatically alongside Project Day |
 | Calendar vs working days | Must be resolved **before** PR2 implementation |
 | Original programme | Immutable; weekly mark-ups are separate non-destructive versions |
 | UI language | Progress Date Line, Progress Drop-Line, Mark Up Programme — no technical jargon in UI |
 | Status colours | Green / Amber / Red communicate Complete / In Progress / Delayed–At Risk only |
-| Site Diary Project Day | **Implemented display** on Site Diary Project card when programme dates exist. Do not remove without explicit approval. Progress Report programme upload remains future work. |
+| Site Diary Project Day No. | **Implemented display** on Site Diary when programme dates exist (live copy may still say Project Day until the authorised label phase). Do not remove without explicit approval. Progress Report programme upload remains future work. |
 | Calendar day basis (V1) | Initial Project Day uses **calendar days** (`lib/project-day.js`). Working-days mode not implemented. |
 | Spec | `docs/PROGRESS_REPORT_PROGRAMME_ARCHITECTURE.md` |
 | Roadmap | PR1–PR8 in `docs/PRODUCT_ROADMAP.md` |
@@ -88,6 +88,27 @@ When Progress Programme work is authorised:
 4. Do not require daily manual entry of Project Day — it must be calculated automatically from project dates.  
 5. Do not merge programme markup into the Photo Workspace evidence model without an explicit architecture decision.  
 6. Do not break Site Diary save / open-existing routing while adding project dates.
+
+---
+
+## E. Site Diary audit — approved specification (2026-09-06)
+
+**Phase 0 records the specification. Implementation is subsequent authorised phases. This is not a declaration that the live PDF is complete.**
+
+| Decision | Contract |
+|----------|----------|
+| Setup hierarchy | `SITE_DIARY_SCREEN_CONTRACT.md` §2 — Name adjacent to Reference; Cover after Principal Contractor; **Continue to Today's Report** |
+| Labels | Project Commencement Date; Project Completion Date; Project Day No.; Project Week No.; Reporting Organisation; Shift Pattern; Author of Diary |
+| Cover management | Neutral **Change or remove cover photo**; red only on confirmed Remove |
+| Compact IA | Compact workbench header; utilitarian rows; later visual system must not inflate; company `brand_color` authoritative |
+| Red rule | Routine Edit/Remove/Change are neutral |
+| Weather | Conditions + numeric Temperature with built-in °C |
+| H&S / RFI / VAR UX | Save → compact row; deliberate + Add another; no automatic blank second form |
+| Project-level refs | `H&S-001` `RFI-001` `VAR-001` `Delay-001` `LP-001` `DEL-001` — database-transaction allocated; external refs separate |
+| Deliveries | First-class project records with status (Delivered / Part delivered / Delivery refused / Unable to offload) **before** DEL↔LP↔H&S↔Delay links |
+| Labour | Only matching diary-date rows eligible by default; do not import other dates |
+| PDF | Populated workbench data must flow into PDF; company branding authoritative; PHOTO-001; 1/4/6 layouts; no empty caption clutter |
+| Branding | Do not replace reporting-company colour with diary violet or Zlog orange |
 
 ---
 

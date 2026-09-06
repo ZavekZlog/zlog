@@ -1,15 +1,17 @@
 # Site Diary PDF & Share Checkpoint Contract
 
-**Version:** 1.0.0  
-**Date Updated:** 2026-08-22  
-**Reason Updated:** Anti-regression hardening from phone-verified checkpoint  
-**User Decision:** APPROVED — encode `ab65437` as protected restore point  
-**Previous Version:** — (new)  
+**Version:** 1.1.0  
+**Date Updated:** 2026-09-06  
+**Reason Updated:** Site Diary audit — page-1 information architecture / completeness superseded; repeated header, footer, PHOTO-001, and Save/Share remain  
+**User Decision:** APPROVED — Phase 0 contracts; PDF implementation is a later authorised phase  
+**Previous Version:** 1.0.0  
 
 **Known-good baseline (protected restore point):** `ab65437`  
 **Commit message:** `checkpoint: lock verified PDF header and share recovery`  
 
 This contract is **append-only**. It encodes behaviour manually verified on a real Android phone at the baseline above. Automated tests linked in `docs/contracts/APPROVED_BEHAVIOUR_REGISTRY.json` prove **source wiring only** — they do **not** replace phone acceptance.
+
+**2026-09-06 supersession (page-1 IA only):** The approved **page-1 information architecture, masthead identity, and completeness of workbench data in the PDF** now live in `docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md` §4L. That audit specification **supersedes** item 1 below as the approved page-1 *content/layout target*. Items 2–13 (repeated coloured header, content clearance, footer, Android generation, orientation isolation, Save/Share, data/photos) remain in force. Reporting-company `brand_color` / logo remain authoritative. PHOTO-001 no-crop/contain remains in force.
 
 ---
 
@@ -28,7 +30,7 @@ This contract is **append-only**. It encodes behaviour manually verified on a re
 
 ### PDF (1–6)
 
-1. **Page-1 appearance** — The approved page-1 Site Diary PDF appearance must remain unchanged unless explicitly requested.
+1. **Page-1 appearance** — Superseded as the approved page-1 *information architecture* by the 2026-09-06 audit (`SITE_DIARY_SCREEN_CONTRACT.md` §4L). Until that implementation phase, do not casually restyle page 1 outside an authorised PDF task. The ab65437 chrome (repeated header, footer) remains protected.
 2. **Repeated header** — The coloured PDF header/banner must remain visibly present at the top of **every** physical PDF page.
 3. **Content clearance** — PDF page content must begin below the repeated header and must not obscure it.
 4. **Footer** — Existing footer behaviour must remain intact.

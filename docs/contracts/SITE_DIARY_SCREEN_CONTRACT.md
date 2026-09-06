@@ -1,13 +1,14 @@
 # Site Diary — Screen Contract
 
 **Layer:** B — Screen  
-**Version:** 1.21.0
-**Date Updated:** 2026-09-05
-**Reason Updated:** Setup hierarchy is Project Details first, then Reporting Company, Reporting On Behalf Of, Author, Cover Photo
-**User Decision:** APPROVED — Android visual test of new setup section order
-**Previous Version:** 1.20.3
+**Version:** 1.22.0
+**Date Updated:** 2026-09-06
+**Reason Updated:** Record the real-phone Site Diary UX / generated-PDF audit as the approved specification (Phase 0 — contracts only)
+**User Decision:** APPROVED — architecture map with three amendments (Deliveries as first-class DEL records; transactional DB reference allocation; labour date filter unchanged)
+**Previous Version:** 1.21.0
 
-**Status:** Binding production contract  
+**Status:** Binding approved specification. Live UI, PDF, and schema may still show the superseded 1.21.0 presentation until subsequent authorised implementation phases. Do not treat live 1.21.0 copy, setup order, or PDF omissions as the approved target.
+
 **Routes:**
 
 - Hub: `/dashboard/diary` (Today’s Report: Start a new diary / Use a previous diary)
@@ -19,7 +20,9 @@
 
 **Supersedes (v1.1.x §5 dashboard entry):** Dashboard Site Diary opens the **hub** (`/dashboard/diary`), not setup directly.
 
-**Supersedes (v1.1.x §2 setup sequence):** Locked hierarchy is Project Details → Reporting Company → Reporting On Behalf Of → Author → Cover Photo (Project Name is first inside Project Details; Project Manager remains inside Project Details only).
+**Supersedes (v1.1.x §2 and v1.21.0 setup sequence):** The locked project/report setup hierarchy is §2 below. Project Name and Project Reference are physically adjacent. Cover Photo sits after Principal Contractor and before programme dates. Reporting Organisation / on-behalf-of / Author follow Project Manager and Site Manager.
+
+**Supersedes (v1.21.0 setup CTAs):** **Continue to Site Diary** and **Continue to Today's Diary** are replaced by the single locked CTA **Continue to Today's Report**.
 
 Parent: `docs/PROTECTED_PRODUCT_DECISIONS.md`  
 Behaviour summary: `docs/PROTECTED_SITE_DIARY_CONTRACT.md`  
@@ -66,45 +69,47 @@ For an existing diary opened on its saved Report Date of today:
 - Title: **Project & Report Details**
 - Load all saved report-specific values and linked project/reusable values before display.
 - The user may scan and continue without re-entering or reconfirming unchanged values.
-- Primary CTA: **Continue to Today's Diary**
+- Primary CTA: **Continue to Today's Report**
 - Continue updates and opens the **same report ID** in the editable workbench (`?compose=1`).
 - Opening this screen must not create a report or reset any diary content.
 
-### PROJECT DETAILS
+Locked title pattern: **Site Diary — [Report Date]**.
 
-1. **Project Name** — single control for project choice:
+Project details below the cover photo use a compact professional tabular structure, not large form-card spacing.
+
+### Locked setup hierarchy (exact order)
+
+1. **Site Diary — [Report Date]** (page title / identity; Report Date remains the diary date control)
+2. **Project Name** — single control for project choice:
    - Select / choose an **existing** project name → load that project’s remembered project fields from `public.projects` and retain `project_id`
    - Type a **new** project name → create a new project on Continue (no leak from a prior selection)
-2. **Project Address**
-3. **Project Manager** — must remain inside Project Details
-4. **Working Days per Week**
-5. **Current Phase** — diary/report-specific; starts blank for a genuinely new diary and never hydrates from the project
-6. **Project Description** — once implemented (not in live schema yet)
-7. **Project Start Date**
-8. **Planned Completion Date**
-9. **Shift** — options exactly: **Day**, **Back**, **Night**
-10. **Report Date**
-11. **Project Reference** where currently approved on this screen
+3. **Project Reference** — immediately beneath Project Name; the two stay physically adjacent
+4. **Project Address**
+5. **Principal Contractor** — approved identity field. Live schema has `projects.client_name` (PDF currently labelled Client). Do not invent a column in this phase; implementation maps or adds only in an authorised schema phase
+6. **Cover Photo** — full image visible; original aspect ratio; contain/fit; never crop (PHOTO-001). PDF page 1 cover remains approximately 20% of A4
+7. **Project Commencement Date** (supersedes **Project Start Date** / **Commencement Date**)
+8. **Project Completion Date** (supersedes **Planned Completion Date**)
+9. **Project Manager** — `projects.client_pm`; UI label unchanged
+10. **Site Manager** — approved identity field; not in live schema. Do not invent a column until an authorised schema phase
+11. **Reporting Organisation** (supersedes **Reporting Company** as the setup label) — from the signed-in user’s company branding profile when available, including logo
+12. **Reporting on behalf of**
+13. **Author of Diary** (Author Name) — from explicitly saved profile author name only (`users.full_name` / auth `user_metadata.full_name`); never from email, username, or a previous diary
+14. **Author Role** — free text from explicit profile job title when present; never invent a role
+15. **Working Days per Week**
+16. **Shift Pattern** — options remain exactly **Day**, **Back**, **Night** (daily `daily_reports.shift`)
 
-### REPORTING COMPANY
+**Current Phase** remains a diary-specific field (`daily_reports.current_phase`) on saved review / workbench context. It is **not** in this locked setup stack. It starts blank for a genuinely new diary and never hydrates from the project.
 
-12. **Reporting Company Name** — from the signed-in user’s company branding profile when available  
-13. **Reporting Company Logo** — branding / logo for who is producing the report
+**Project Description** remains omitted until schema is approved.
 
-### REPORTING ON BEHALF OF
+### Cover-photo management
 
-14. **Reporting On Behalf Of** — client / main contractor / organisation; on a genuinely new diary, prefill the signed-in user’s most recently used value and keep it fully editable
+- Neutral framed control: **Change or remove cover photo**
+- On tap: **Change photo** / **Remove photo**
+- Red is used only for the confirmed destructive **Remove** action
+- Permanent red **Remove cover photo** text is superseded
 
-### AUTHOR
-
-15. **Author Name** — from explicitly saved profile author name only (`users.full_name` / auth `user_metadata.full_name`); never from email, username, or a previous diary  
-16. **Author Role** — free text from explicit profile job title when present; never invent a role
-
-### COVER PHOTO
-
-Cover photo remains on this setup screen after Author.
-
-New-diary primary CTA: **Continue to Site Diary**
+New-diary and existing-diary primary CTA: **Continue to Today's Report**
 
 ### UI language (mandatory)
 
@@ -149,7 +154,7 @@ Protected interactions:
 - Summary optional
 - Plant / daily content isolated by report ID
 - Temporary Works & Scaffolding Checks records and explicit applicable / N/A choice reload by report ID
-- Project association retained; Project Day visible when dates exist
+- Project association retained; **Project Day No.** (and **Project Week No.** where shown) visible when dates exist. Supersedes the **Project Day** / **Project Week** labels. Calculation remains programme-derived (`lib/project-day.js`); this contract does not change the calendar-day basis
 - Shift reloads from `daily_reports.shift`
 - Saved work areas show their saved photos and captions by default, using the area’s saved 1 / 4 / 6 review density.
 - Saved work areas remain in review presentation until **Edit** is chosen; the blank Add Work Area editor is not presented as part of a saved area.
@@ -183,7 +188,7 @@ Reached by tapping a Saved Diaries row. This is a finished historical record, no
 
 Supersedes v1.12.0 “exactly one — Edit This Diary”. Share Report remains on the viewer.
 
-Permits and deliveries are named in hub copy but are **not** saved diary fields today; the viewer does not invent them.
+Permits are named in hub copy but are **not** saved diary fields today; the viewer does not invent them. Deliveries are approved as future first-class `DEL-001` project records (§4I) — do not invent delivery rows in the viewer until that phase.
 
 ### Temporary Works & Scaffolding Checks
 
@@ -252,6 +257,154 @@ action permitted to write a file to the device.
 
 Any change that routes Save PDF straight to the browser download path is a **regression**, not a
 simplification. Gate: `lib/diary-share-workflow.test.js`.
+
+---
+
+## 4C. Compact workbench header and daily IA (approved; not yet implemented)
+
+Internal Site Diary workbench header must become materially more compact than the current shell:
+
+- Reduce Zlog wordmark dominance and vertical padding/dead space
+- **Back** remains left
+- **Site Diary** visually centred/balanced
+- Compact project summary: project name + date / shift / Project Day No. context
+- Smaller integrated reporting-company logo
+- Compact framed **Review / Edit Project & Report Details**
+- Transition quickly into **Today’s Site Diary**
+
+Dashboard branding may remain stronger; the diary workbench is a focused working tool.
+
+Daily workbench information architecture (utilitarian rows, not oversized glowing cards / huge empty states / oversized dashed Add controls):
+
+- Approximately 52–60px minimum row height
+- Approximately 12–16px internal padding
+- Clear section title; concise current value/status; small framed + Add / Edit controls
+- Subtle dividers/perimeter lines
+- Sections expand only when content exists or the user is actively editing
+
+A later approved visual/branding presentation layer may skin this structure. It must **not** inflate the compact IA. Reporting-company `brand_color` / logo remain the colour source for that layer — not diary violet and not Zlog orange.
+
+## 4D. App-wide red-management rule
+
+Routine **Edit** / **Remove** / **Change** / delete-entry controls must not appear as permanent red text.
+
+Use compact neutral framed secondary controls.
+
+Reserve red for:
+
+- actual destructive confirmation/action
+- genuine warning/severity states
+
+Apply consistently across H&S, RFIs, Variations, photos, and other editable records.
+
+## 4E. Weather
+
+Replace the single free-text weather control with:
+
+- compact **Conditions** text field
+- compact numeric **Temperature** field with a fixed built-in unit/suffix such as **°C**
+
+The user enters only the number. Do not require typing °, degrees, or C.
+
+Example output: `Sunny, hot, humid, 33°C`
+
+Until an authorised schema phase, implementation may compose this into existing `daily_reports.weather`.
+
+## 4F. Site Summary
+
+Site Summary is legitimate narrative content.
+
+- Large textarea while actively editing
+- Collapse to a compact preview once saved
+
+Principle: large enough while editing; compact once saved.
+
+## 4G. H&S / RFI / Variation saved-item UX
+
+Current “+ Add …” that immediately opens another full blank form under an incomplete item is superseded.
+
+Approved pattern:
+
+1. Complete item → save → collapse into a compact saved row
+2. Explicit **+ Add another H&S incident / observation** (and the RFI / Variation equivalents)
+3. A new item opens only when deliberately requested
+
+Example compact row:
+
+`H&S-007 · OPEN`  
+`Rat droppings discovered under raised access floor`  
+`Assigned: Project Manager · 2 evidence photos`  
+`[Edit] [Remove]` — neutral framed; red only on confirmed Remove
+
+Expanded Description and Action Taken must be fully readable — no clipped narrow inputs.
+
+Live storage remains diary JSONB (`hs_incidents`, `rfis`, `variations`) until the authorised project-record phase. The UX pattern applies to that live storage first; persistent project-level refs follow §4H.
+
+## 4H. Future project-level persistent sequential refs (not implemented in Phase 0)
+
+Approved Zlog references, project-wide, not restarted each diary:
+
+- `H&S-001`
+- `RFI-001`
+- `VAR-001`
+- `Delay-001`
+- `LP-001`
+- `DEL-001`
+
+Allocation must be **transactional on the database**. Concurrent users must not receive duplicate references. Client-side read/increment/write numbering is forbidden.
+
+External/client/consultant reference remains a separate optional field. It must never overwrite the Zlog ref.
+
+## 4I. Linked-record architecture intent (not implemented in Phase 0)
+
+- **H&S evidence photos:** + Add photo / Attach existing photo. Reuse canonical Zlog photo assets (`report_photos` / same storage object). Do not duplicate image files into an H&S silo. The same canonical image may be linked to an H&S item and a photo work area. PHOTO-001 remains in force. Future H&S Report consumes the same evidence links.
+- **H&S ↔ Delay:** optional “Did this incident cause or contribute to delay?” No / Yes. Yes shows minimal delay-impact fields and creates/links the **same** Delay record used by Causes of Delays. Visible both ways (`H&S-007 ↔ Delay-003`). Do not duplicate the event into two independent forms.
+- **Deliveries:** first-class persistent Delivery records with project ownership, `DEL-001` refs, and status capable of at least: Delivered · Part delivered · Delivery refused · Unable to offload. Delivery records **must exist before** implementing relationships such as `DEL-018 ↔ LP-004 ↔ H&S-012 ↔ Delay-006`.
+- **Lifting plans:** compact persistent `LP-001` records; a relevant delivery may ask whether a lifting operation is required and then link existing/new plan.
+- **RIDDOR / escalation:** structured fields (incident type, accident report, escalated to, RIDDOR assessment enum, submission, references, other statutory notification). Zlog must not make a definitive legal RIDDOR decision from free text alone. Prompts such as “This incident may require RIDDOR assessment. Escalate for review.” are permitted later.
+
+Do not implement these tables or links in Phase 0.
+
+## 4J. Action Required
+
+Reintroduce a professional Action Required summary. Do not require the Site Manager to duplicate entries manually.
+
+Zlog should derive/suggest Action Required from open/outstanding structured records (H&S, RFIs, Variations, Delays, failed/held deliveries, Temporary Works / scaffold actions, plant/certification issues, other explicit outstanding follow-up).
+
+The user must be able to review/edit the suggested summary before finalising the diary.
+
+A restrained soft-red/attention-tinted report box is appropriate because it represents genuine outstanding attention, not a destructive UI action.
+
+Live `daily_reports.actions` remains the current free-text store until derivation is implemented.
+
+## 4K. Labour date filter (unchanged; already correct)
+
+Only sign-in / labour-sheet rows whose work date matches the Site Diary report date are eligible by default.
+
+Rows for other dates remain excluded unless the user deliberately includes them in review and applies them to the labour summary.
+
+Do **not** import all dates.
+
+OCR / review rows are not labour until the user applies them to the labour summary. A PDF that says **No labour recorded** after a two-date sheet is correct when matching rows were never applied.
+
+## 4L. PDF content and identity (approved; not yet implemented)
+
+This supersedes the ab65437 freeze of **page-1 information architecture / visual appearance** as the approved page-1 target. Repeated coloured header, footer, Save/Share behaviour, and PHOTO-001 remain protected (`docs/contracts/SITE_DIARY_PDF_CHECKPOINT_CONTRACT.md`).
+
+**Must:**
+
+- Complete populated workbench data must flow into the PDF, including H&S, RFIs, Variations, Visitors, Delays, Action Required, labour (report-date applied rows only), non-hire Plant (`report_plant`) and equipment on hire
+- Consistent masthead on every page: reporting-company identity/logo + **Site Diary** + Project Name + date + Project Reference where practical
+- Page-specific section title beneath the masthead (e.g. Site Records, Area: Foyer, Declaration & Signature)
+- Reporting-company `brand_color` remains authoritative for PDF chrome; do not replace it with diary violet or Zlog orange
+- Zlog identity remains secondary (footer **Produced with Zlog · Page X of Y**)
+- Banner spans the full usable content width rather than appearing cut short/inset unnecessarily
+- PHOTO-001: no crop; contain/fit; original aspect ratio
+- Dynamic 1 / 4 / 6 photo page layouts; a leftover single photo must not occupy one cell of an empty 4-up grid
+- Empty caption placeholders (`—`) must not clutter the report
+- Signature page receives professional polish while preserving declaration/signature content
+
+Preserve existing page-1 data points (project identity, address, reference, report date, PM, reporting organisation, author, on-behalf-of, author role, commencement/completion, shift, weather, Project Day No., Project Week No.) while moving to the new hierarchy.
 
 ---
 

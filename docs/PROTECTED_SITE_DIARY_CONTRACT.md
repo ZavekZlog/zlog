@@ -1,10 +1,10 @@
 # Protected Site Diary Contract
 
-**Version:** 1.13.2
-**Date Updated:** 2026-08-20
-**Reason Updated:** Saved-diary primary action is Share Report; workbench PrimaryCTA family unchanged
-**User Decision:** APPROVED — Share Report native share handoff
-**Previous Version:** 1.13.1
+**Version:** 1.14.0
+**Date Updated:** 2026-09-06
+**Reason Updated:** Site Diary UX / PDF audit — approved specification (Phase 0 contracts)
+**User Decision:** APPROVED — architecture map with Deliveries, transactional refs, labour date filter unchanged
+**Previous Version:** 1.13.2
 
 **Status:** Binding behavioural summary for Site Diary  
 **Authority:** Production product contract. Detail and control order live in **`docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md`**. Do not remove, rename, relocate, disable, or silently change protected behaviours unless the user explicitly requests that exact change.
@@ -59,9 +59,10 @@ Stored once on `public.projects`, referenced by diaries via `project_id` (not co
 | Working Days per Week | `projects.working_days_per_week` |
 | Current Phase | `daily_reports.current_phase` — diary-specific; blank on a genuinely new diary |
 | Project Description | When implemented (not in live schema yet — do not invent) |
-| Project Start Date | `projects.start_date` — loads with Planned Completion Date; blank setup field never erases it |
-| Planned Completion Date | `projects.planned_completion_date` — loads with Project Start Date; blank setup field never erases it |
-| Project Day X of Y | Calculated display from programme dates (`lib/project-day.js`) |
+| Project Commencement Date | `projects.start_date` — loads with Project Completion Date; blank setup field never erases it. Label supersedes **Project Start Date** |
+| Project Completion Date | `projects.planned_completion_date` — loads with Project Commencement Date; blank setup field never erases it. Label supersedes **Planned Completion Date** |
+| Principal Contractor / Site Manager | Approved identity fields. Live schema has `client_name` only for client/contractor identity; Site Manager is not live. No column invention in Phase 0 |
+| Project Day No. / Project Week No. | Calculated display from programme dates (`lib/project-day.js`). Labels supersede **Project Day** / **Project Week** |
 
 Selecting **New project — type the name below** clears every project-level field immediately.
 
@@ -88,13 +89,13 @@ Stored on the diary/report (`daily_reports`), **not** on `public.projects`:
 
 ---
 
-## 4. Shift (protected UI)
+## 4. Shift Pattern (protected UI)
 
 | Requirement | Contract |
 |-------------|----------|
-| Visibility | Mandatory visible Shift selector on **Site Diary setup** |
+| Visibility | Mandatory visible **Shift Pattern** selector on **Site Diary setup** |
 | Options | **Day**, **Back**, **Night** only (product options) |
-| Position | After Project Information / programme dates; **before** Report Author |
+| Position | Locked setup hierarchy in `SITE_DIARY_SCREEN_CONTRACT.md` §2 (after Author Role and Working Days per Week). Live UI may still show the pre-audit position until the authorised implementation phase |
 | Persistence | Written to `daily_reports.shift` on Continue / save |
 | Reload | Existing saved shift reloads in View and Edit |
 | Regression | Must not disappear during unrelated refactors |
@@ -105,10 +106,9 @@ Canonical helpers: `lib/diary-setup-shift.js` (`SITE_DIARY_SHIFT_OPTIONS`, setup
 
 ## 5. Author (setup order)
 
-1. Reporting Company (company name + logo)
-2. Reporting On Behalf Of
-3. **Author Name** + **Author Role**
-4. Project Details (including Project Manager, Shift, Report Date, …)
+Locked hierarchy: `docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md` §2.
+
+**Author of Diary** and **Author Role** sit after Reporting Organisation and Reporting on behalf of, and before Working Days per Week and Shift Pattern.
 
 Author Name comes from the signed-in profile only on scratch / Use for today — never from a previous diary.
 
@@ -168,6 +168,18 @@ visitors, permits, delivery notes, or any other report-owned content.
 
 - Summary is **optional**.
 - A diary can be saved without entering Summary.
+- Approved presentation: large while editing; compact preview once saved.
+
+## 8A. Weather, red-management, compact IA, records, PDF
+
+Detail: `docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md` §4C–§4L.
+
+- Weather: Conditions + numeric Temperature with built-in °C
+- Routine Edit / Remove / Change controls are neutral; red is reserved for destructive confirmation or genuine warning/severity
+- H&S / RFI / Variation: save → compact row; deliberate + Add another; no automatic blank second form
+- Labour: only rows matching the diary date are eligible by default; do not import other dates
+- Future project-level refs (`H&S-001` … `DEL-001`) are database-transaction allocated
+- Populated workbench data must flow into the PDF; reporting-company brand colour remains authoritative; PHOTO-001 preserved
 
 ---
 

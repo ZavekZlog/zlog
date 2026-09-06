@@ -1,11 +1,11 @@
 # Project Model Contract
 
 **Layer:** C — Feature  
-**Version:** 1.3.0
-**Date Updated:** 2026-08-14
-**Reason Updated:** Protect project-owned values from blank diary writes and move Current Phase to individual diaries
-**User Decision:** BATCH 1 PROJECT OWNERSHIP AND BLANK-FIELD PROTECTION
-**Previous Version:** 1.2.0
+**Version:** 1.4.0
+**Date Updated:** 2026-09-06
+**Reason Updated:** Site Diary audit — Project Commencement / Completion labels; Project Day No. / Week No.; Principal Contractor and Site Manager as approved future identity fields
+**User Decision:** APPROVED — Phase 0 contract amendments
+**Previous Version:** 1.3.0
 
 **Status:** Binding for implemented project sticky / programme behaviour  
 
@@ -28,11 +28,13 @@ Do **not** load daily diary content by `project_id` alone — daily content is i
 | Project Address | `site_address` | Load and save against the selected project |
 | Project Manager | `client_pm` | Project-specific; column name frozen; UI label is Project Manager |
 | Working Days per Week | `working_days_per_week` | Existing project uses its saved 1–7 value; genuinely new project defaults to 5 |
-| Project Start Date | `start_date` | Project-level; hydrates with Planned Completion Date, never from another diary |
-| Planned Completion Date | `planned_completion_date` | Project-level; hydrates with Project Start Date, never from another diary |
+| Project Start Date | `start_date` | Project-level. **Approved UI label: Project Commencement Date.** Hydrates with Project Completion Date, never from another diary |
+| Planned Completion Date | `planned_completion_date` | Project-level. **Approved UI label: Project Completion Date.** Hydrates with Project Commencement Date, never from another diary |
+| Principal Contractor | — | Approved setup identity. Live `client_name` may be mapped or a column added only in an authorised schema phase |
+| Site Manager | — | Approved setup identity. Not in live schema. Do not invent until authorised |
 | Project Description | — | **Not in live schema** — do not invent until approved |
-| Project Reference | `project_reference` | Project-specific job / contract reference |
-| Project Day X of Y | calculated | `lib/project-day.js`; display on diary Project card when dates exist |
+| Project Reference | `project_reference` | Project-specific job / contract reference. Must sit immediately beneath Project Name on setup |
+| Project Day No. / Project Week No. | calculated | `lib/project-day.js`. Labels supersede **Project Day** / **Project Week**. Display when dates exist |
 
 `Current Phase` is not project-level. It is stored on
 `public.daily_reports.current_phase` for the individual diary.

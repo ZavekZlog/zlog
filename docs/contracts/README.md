@@ -1,10 +1,10 @@
 # Contract hierarchy (commercial product)
 
-**Version:** 1.5.3  
-**Date Updated:** 2026-08-22  
-**Reason Updated:** Add SITE_DIARY_PDF_CHECKPOINT_CONTRACT (ab65437 restore point)  
-**User Decision:** APPROVED — anti-regression hardening from phone-verified checkpoint  
-**Previous Version:** 1.5.2  
+**Version:** 1.6.0  
+**Date Updated:** 2026-09-06  
+**Reason Updated:** Site Diary audit Phase 0 — screen contract v1.22.0 is the approved specification  
+**User Decision:** APPROVED — contract amendments only  
+**Previous Version:** 1.5.3  
 
 Zlog is a **commercial product**, not a prototype. Approved screens, flows, controls, wording, ordering, persistence and interactions are production contracts.
 
@@ -16,7 +16,7 @@ Zlog is a **commercial product**, not a prototype. Approved screens, flows, cont
 | **0b. Global UI** | **`docs/contracts/GLOBAL_UI_TEXT_FIT_CONTRACT.md`** | Intentional design + text fit + mobile visual QA |
 | **0c. Release Gate** | **`docs/ZLOG_RELEASE_GATE.md`** | Mandatory Visual/Mobile/Functional/Regression/UX/Commercial QA |
 | **A. Product** | `docs/PROTECTED_PRODUCT_DECISIONS.md` | Global decisions across Zlog |
-| **B. Screen** | `docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md` | Site Diary structure, order, controls, states, transitions |
+| **B. Screen** | `docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md` **v1.22.0** | Site Diary structure, order, controls, states, transitions. Live UI may lag until authorised implementation phases. |
 | **C. Feature** | `docs/contracts/PROJECT_MODEL_CONTRACT.md` | Project sticky / programme / ownership |
 | **C. Feature** | `docs/contracts/REPORT_BRANDING_CONTRACT.md` | Report branding association |
 | **C. Feature** | `docs/contracts/PHOTO_WORKSPACE_CONTRACT.md` | Photo / location evidence (implemented freeze) |

@@ -1,11 +1,11 @@
 # Report Branding Contract
 
 **Layer:** C — Feature  
-**Version:** 1.0.0  
-**Date Updated:** 2026-08-07  
-**Reason Updated:** Initial feature contract for report branding association  
-**User Decision:** Governance hardening — report branding contract  
-**Previous Version:** none  
+**Version:** 1.1.0  
+**Date Updated:** 2026-09-06  
+**Reason Updated:** Site Diary audit — reporting-company brand_color / logo remain authoritative for redesigned app/PDF  
+**User Decision:** APPROVED — do not replace company branding with diary violet or Zlog orange  
+**Previous Version:** 1.0.0  
 
 **Status:** Binding for implemented Site Diary branding  
 
@@ -39,4 +39,20 @@ Company profiles live in `company_brandings` (user-owned). A profile may be mark
 
 ## Setup
 
-Setup exposes **Company / Client Logo** (upload / replace / remove) and stores paths/ids onto the draft on Continue — not onto `public.projects`.
+Setup exposes **Reporting Organisation** name and logo (upload / replace / remove) and stores paths/ids onto the draft on Continue — not onto `public.projects`. Live setup copy may still say Reporting Company until the authorised implementation phase.
+
+## Colour authority (2026-09-06)
+
+Reporting-company colour comes from `company_brandings.brand_color` snapshotted onto `daily_reports.brand_color` (with `brand_logo_url` / `branding_id`). PDF uses `resolvePdfReportBrandColor` then `resolvePdfAccent`.
+
+That company colour remains **authoritative** for the redesigned app compact IA and PDF chrome.
+
+Do **not**:
+
+- invent a replacement palette
+- paint report chrome with diary module violet (`REPORT_THEMES.diary` / `#8B5CF6`)
+- paint report chrome with Zlog orange (`#FF5000` / `--action`)
+
+Zlog identity stays secondary (compact workbench wordmark; PDF footer **Produced with Zlog**). Dashboard branding may remain stronger.
+
+Later presentation work must apply the reporting-company colour to the compact redesigned structure without inflating it.

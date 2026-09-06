@@ -1,6 +1,6 @@
 {
-  "version": "1.1.19",
-  "updated": "2026-09-04",
+  "version": "1.1.20",
+  "updated": "2026-09-06",
   "description": "Critical approved behaviours linked to executable tests. manualQA:true means automation cannot honestly claim full coverage. Source contracts are NOT screenshot visual tests.",
   "behaviours": [
     {
@@ -433,7 +433,7 @@
     },
     {
       "id": "UI-COPY-001",
-      "description": "Approved UI terminology remains present (Site Diary, Sign out, Project & Report Details, Continue to Today's Diary, …)",
+      "description": "Approved UI terminology remains present (Site Diary, Sign out, Project & Report Details, Continue to Today's Report, …)",
       "area": "copy",
       "tests": [
         "scripts/check-approved-copy.test.js"
@@ -474,7 +474,7 @@
     },
     {
       "id": "PDF-035",
-      "description": "Checkpoint ab65437 — page-1 PDF appearance preserved; content clears the repeated header; PdfFooter behaviour intact",
+      "description": "Checkpoint ab65437 — repeated PdfHeader/footer/content clearance remain protected. Page-1 information architecture is superseded as the approved target by SITE_DIARY_SCREEN_CONTRACT.md §4L (2026-09-06 audit).",
       "area": "pdf",
       "tests": [
         "lib/diary-checkpoint-ab65437-contract.test.js",
@@ -541,6 +541,18 @@
       ],
       "manualQA": true,
       "manualQANote": "Android must confirm a no-edit Save & Share is dramatically faster: finalizeReportSkipped/labour/plant/photos skipped when unchanged, while a genuine edit still persists that domain."
+    },
+    {
+      "id": "DIARY-AUDIT-001",
+      "description": "2026-09-06 Site Diary audit approved specification is recorded in contracts (setup hierarchy, locked labels, compact IA, red rule, weather, saved-item UX, project-level refs, linked records, Action Required, PDF completeness, labour date filter). Live UI/PDF may lag until authorised implementation phases.",
+      "area": "site-diary",
+      "tests": [
+        "lib/diary-audit-contract.test.js",
+        "lib/diary-site-diary-contract.test.js",
+        "scripts/check-approved-copy.test.js"
+      ],
+      "manualQA": true,
+      "manualQANote": "Phase 0 is contracts only. Phone QA of the new hierarchy waits for authorised implementation phases. This registry entry must not be treated as PDF-complete."
     },
     {
       "id": "PHOTO-001",

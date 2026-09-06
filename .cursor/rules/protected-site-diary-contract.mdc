@@ -20,16 +20,20 @@ Follow **commercial-product-governance** (alwaysApply): classify Level 1–4; if
 
 ## Hard stops
 
-- Setup **Shift** (Day / Back / Night) after programme dates, before Author Name — never drop during unrelated work
-- Author Role directly beneath Author Name
+- Follow `docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md` **v1.22.0** as the approved setup hierarchy and locked labels. Live UI may still show the pre-audit 1.21.0 sequence until an authorised implementation phase
+- Setup **Shift Pattern** options remain Day / Back / Night — never drop during unrelated work
+- Author Role directly beneath Author of Diary / Author Name
+- Project Name and Project Reference stay physically adjacent in the approved specification
 - Project-level vs report-level ownership split
 - Start from scratch must not inherit prior diary/project/session state
 - Select existing project → sticky from `public.projects` only (no diary content copy) — see backlog ZLOG-003 until fixed
 - View open = no DB write; Edit = same ID; Basis = new ID
-- Branding not forced in normal Edit
-- Summary optional
+- Branding not forced in normal Edit; reporting-company `brand_color` / logo remain authoritative (not diary violet, not Zlog orange)
+- Summary optional; large while editing, compact when saved (approved presentation)
 - No Recent Diaries list on open report page
 - Do not alter photo / annotation / location-walk during unrelated setup work
+- PHOTO-001 no-crop / contain remains in force
+- Labour: only matching diary-date rows are eligible by default; do not import all dates
 
 ## After editing
 

@@ -1,7 +1,7 @@
 {
-  "version": "1.4.8",
-  "updated": "2026-09-03",
-  "description": "Approved application UI terminology. Protects labels from accidental replacement. Does NOT freeze dynamic report content. This is a source-string contract — NOT a visual test.",
+  "version": "1.5.0",
+  "updated": "2026-09-06",
+  "description": "Approved application UI terminology. Protects labels from accidental replacement. Does NOT freeze dynamic report content. This is a source-string contract — NOT a visual test. 2026-09-06: superseded setup CTAs and audit labels are locked on SITE_DIARY_SCREEN_CONTRACT.md until the authorised implementation phase updates live UI.",
   "terms": [
     {
       "id": "COPY-SITE-DIARY",
@@ -46,14 +46,10 @@
       ]
     },
     {
-      "id": "COPY-CONTINUE-TODAYS-DIARY",
-      "label": "Continue to Today's Diary",
-      "files": ["app/dashboard/diary/setup/page.jsx"]
-    },
-    {
-      "id": "COPY-CONTINUE-TO-SITE-DIARY",
-      "label": "Continue to Site Diary",
-      "files": ["app/dashboard/diary/setup/page.jsx"]
+      "id": "COPY-CONTINUE-TODAYS-REPORT",
+      "label": "Continue to Today's Report",
+      "files": ["docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md"],
+      "notes": "Locked setup CTA (2026-09-06). Supersedes Continue to Site Diary and Continue to Today's Diary. Live setup may still show the old strings until the authorised implementation phase."
     },
     {
       "id": "COPY-VIEW-SAVED-DIARIES",
@@ -95,9 +91,10 @@
       "notes": "ZlogBackControl visible label — not every occurrence of the English word."
     },
     {
-      "id": "COPY-REPORTING-COMPANY",
-      "label": "Reporting Company",
-      "files": ["app/dashboard/diary/setup/page.jsx"]
+      "id": "COPY-REPORTING-ORGANISATION",
+      "label": "Reporting Organisation",
+      "files": ["docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md"],
+      "notes": "Locked setup label (2026-09-06). Supersedes Reporting Company as the approved setup heading. Live setup may still say Reporting Company until implementation."
     },
     {
       "id": "COPY-PROJECT-REFERENCE",
@@ -108,6 +105,51 @@
       "id": "COPY-REPORT-DATE",
       "label": "Report Date",
       "files": ["app/dashboard/diary/setup/page.jsx"]
+    },
+    {
+      "id": "COPY-PROJECT-COMMENCEMENT-DATE",
+      "label": "Project Commencement Date",
+      "files": ["docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md"]
+    },
+    {
+      "id": "COPY-PROJECT-COMPLETION-DATE",
+      "label": "Project Completion Date",
+      "files": ["docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md"]
+    },
+    {
+      "id": "COPY-PROJECT-DAY-NO",
+      "label": "Project Day No.",
+      "files": ["docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md"]
+    },
+    {
+      "id": "COPY-PROJECT-WEEK-NO",
+      "label": "Project Week No.",
+      "files": ["docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md"]
+    },
+    {
+      "id": "COPY-CHANGE-OR-REMOVE-COVER",
+      "label": "Change or remove cover photo",
+      "files": ["docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md"]
+    },
+    {
+      "id": "COPY-SHIFT-PATTERN",
+      "label": "Shift Pattern",
+      "files": ["docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md"]
+    },
+    {
+      "id": "COPY-AUTHOR-OF-DIARY",
+      "label": "Author of Diary",
+      "files": ["docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md"]
+    },
+    {
+      "id": "COPY-PRINCIPAL-CONTRACTOR",
+      "label": "Principal Contractor",
+      "files": ["docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md"]
+    },
+    {
+      "id": "COPY-SITE-MANAGER",
+      "label": "Site Manager",
+      "files": ["docs/contracts/SITE_DIARY_SCREEN_CONTRACT.md"]
     },
     {
       "id": "COPY-TEMPORARY-WORKS",

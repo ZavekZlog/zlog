@@ -1,11 +1,11 @@
 # Photo Workspace Contract (implemented freeze)
 
 **Layer:** C — Feature  
-**Version:** 1.5.0
-**Date Updated:** 2026-09-03
-**Reason Updated:** Rotate is edit/capture-session only — bake into canonical report.jpg at durable persist; PDF pass-through for newly prepared photos
-**User Decision:** ROTATION IS EDIT-SESSION ONLY — canonical saved report.jpg is final orientation; persisted rotation metadata is 0; PDF must not rotate newly prepared photos
-**Previous Version:** 1.4.0
+**Version:** 1.6.0
+**Date Updated:** 2026-09-06
+**Reason Updated:** Site Diary audit — H&S evidence may link canonical photos; PHOTO-001 unchanged; 1/4/6 layouts and empty-caption clutter are PDF contract
+**User Decision:** APPROVED — Phase 0; no photo implementation
+**Previous Version:** 1.5.0
 
 **Status:** Binding freeze for currently implemented photo / location evidence  
 
@@ -42,6 +42,10 @@ This feature contract covers **already implemented** Site Diary photo, annotatio
     - A reopened saved diary must display those pixels as-is — it must not rotate again.
     - PDF for newly prepared saved photos (`processing_version` = pipeline v1 and rotation 0) is JPEG pass-through: no `flattenPhotoSrcForPdf`, no orientation bake, no PDF-time rotation. Target: `photoBakeCount = 0`.
     - Legacy rows that still have non-zero `rotation_degrees` keep the defensive flatten/rotate path. Do not rewrite historical assets unless the user edits and saves them again.
+
+12. **H&S evidence linking (approved intent; not implemented in Phase 0).** H&S records may **+ Add photo** or **Attach existing photo**. Links must reuse canonical Zlog photo assets (same `report_photos` row / storage object). Do not duplicate image files into an H&S-specific silo. The same canonical image may be linked to an H&S item and a photo work area. Future H&S Report consumes the same evidence links. PHOTO-001 applies. Report-level photo ownership (§2) remains until an authorised project-media phase.
+
+13. **PDF photo pages (approved; not implemented in Phase 0).** Dynamic 1 / 4 / 6 layouts must respect the chosen layout. A leftover single photo must not sit in one cell of an empty 4-up grid. Empty caption placeholders must not clutter the report. Detail: `SITE_DIARY_SCREEN_CONTRACT.md` §4L.
 
 ---
 
