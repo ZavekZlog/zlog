@@ -161,6 +161,8 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   ensureReportPreview = null,
   /** Clears diary page missing-name Share error when Area name becomes valid. */
   onAreaNameValidationResolved = null,
+  /** Parent invalidates a prepared Share PDF when create-flow draft becomes dirty. */
+  onDraftDirtyChange = null,
 }, ref) {
   const copy = {
     sectionIntro: '',
@@ -242,6 +244,10 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     walkRef.current = next
     onChange(next)
   }, [onChange])
+
+  const dismissStaleAreaSavedAck = useCallback(() => {
+    setPhase((prev) => (prev === 'after_save' ? 'review' : prev))
+  }, [])
 
   /**
    * Phase B: attach shadowPrepare by stable photo id.
@@ -525,23 +531,27 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     })
   }
 
+  const photoWorkspaceDraftDirty = hasUnsavedPhotoWorkspaceDraft({
+    phase,
+    nameDraft,
+    descriptionDraft,
+    draftPhotos,
+  })
+
+  useEffect(() => {
+    onDraftDirtyChange?.(photoWorkspaceDraftDirty)
+  }, [onDraftDirtyChange, photoWorkspaceDraftDirty])
+
   // Warn before leave/refresh when create-flow has unsaved local work (online-first; no IndexedDB).
   useEffect(() => {
-    const dirty =
-      phase === 'create'
-      && (
-        Boolean(nameDraft.trim())
-        || Boolean(descriptionDraft.trim())
-        || draftPhotos.length > 0
-      )
-    if (!dirty) return undefined
+    if (!photoWorkspaceDraftDirty) return undefined
     const onBeforeUnload = (event) => {
       event.preventDefault()
       event.returnValue = ''
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [phase, nameDraft, descriptionDraft, draftPhotos.length])
+  }, [photoWorkspaceDraftDirty])
 
   const openViewer = (groupId, index) => {
     setWalkError('')
@@ -565,13 +575,8 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   useImperativeHandle(ref, () => ({
     openFirstIncompletePhoto,
     commitUnsavedAreaForShare,
-    hasUnsavedAreaForShare: () => hasUnsavedPhotoWorkspaceDraft({
-      phase,
-      nameDraft,
-      descriptionDraft,
-      draftPhotos,
-    }),
-  }), [openFirstIncompletePhoto, commitUnsavedAreaForShare, phase, nameDraft, descriptionDraft, draftPhotos])
+    hasUnsavedAreaForShare: () => photoWorkspaceDraftDirty,
+  }), [openFirstIncompletePhoto, commitUnsavedAreaForShare, photoWorkspaceDraftDirty])
 
   const closeViewer = () => {
     const scrollY = viewer?.scrollY || 0
@@ -582,6 +587,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   }
 
   const patchPhoto = (groupId, photoId, patch) => {
+    if (groupId !== '__draft__') dismissStaleAreaSavedAck()
     if (groupId === '__draft__') {
       setDraftPhotos((prev) => prev.map((p) => (p.id === photoId ? { ...p, ...patch } : p)))
       return
@@ -596,6 +602,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   }
 
   const rotatePhoto = (groupId, photoId) => {
+    if (groupId !== '__draft__') dismissStaleAreaSavedAck()
     const bump = (photo) => ({
       ...photo,
       rotationDegrees: normalizeRotationDegrees((Number(photo.rotationDegrees) || 0) + 90),
@@ -614,6 +621,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   }
 
   const removePhoto = (groupId, photoId) => {
+    if (groupId !== '__draft__') dismissStaleAreaSavedAck()
     const revoke = (target) => {
       if (target?.file && target.preview) {
         try { URL.revokeObjectURL(target.preview) } catch { /* ignore */ }

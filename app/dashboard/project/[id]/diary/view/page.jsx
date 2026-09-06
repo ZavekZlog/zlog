@@ -11,7 +11,7 @@
  * (app/dashboard/project/[id]/diary/page.jsx) and are unchanged.
  */
 
-import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { CopyPlus, Pencil, Share2, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -45,13 +45,6 @@ import {
   snapshotUserActivation,
 } from '@/lib/diary-share'
 import { emitShareDiag } from '@/lib/share-diag-beacon'
-import {
-  formatShareTimingLines,
-  getShareTimingSnapshot,
-  markShareTiming,
-  startShareTimingRun,
-  subscribeShareTiming,
-} from '@/lib/diary-share-timing-diag'
 import { runShareCapabilityProbe } from '@/lib/share-capability-probe'
 import {
   fingerprintFromSavedDiaryView,
@@ -63,40 +56,6 @@ const DIARY_ACCENT = REPORT_THEMES.diary.accent
 function logSavedDiaryOpen(event, detail) {
   if (process.env.NODE_ENV === 'production') return
   console.info('[zlog:saved-open]', event, detail)
-}
-
-/** TEMPORARY — development-only Android timing readout. Hidden in production builds. */
-function ShareTimingDiagPanel() {
-  const snap = useSyncExternalStore(
-    subscribeShareTiming,
-    getShareTimingSnapshot,
-    getShareTimingSnapshot,
-  )
-  const lines = formatShareTimingLines(snap)
-  return (
-    <div
-      data-share-timing-diag="temporary"
-      style={{
-        marginTop: 12,
-        padding: '10px 12px',
-        borderRadius: 8,
-        border: '1px dashed color-mix(in srgb, var(--text) 35%, transparent)',
-        background: 'color-mix(in srgb, var(--text) 6%, transparent)',
-        fontSize: 12,
-        lineHeight: 1.4,
-        color: 'var(--text-2)',
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-word',
-      }}
-    >
-      <p style={{ margin: '0 0 8px', fontWeight: 700, color: 'var(--text)', fontSize: 12 }}>
-        SHARE TIMING DIAGNOSTIC — TEMPORARY
-      </p>
-      {lines.map((line, i) => (
-        <div key={`${i}-${line.slice(0, 24)}`}>{line || '\u00a0'}</div>
-      ))}
-    </div>
-  )
 }
 
 const reviewActionStyle = {
@@ -657,13 +616,6 @@ function SavedDiaryViewer() {
         reportId: view.reportId,
         projectId: view.projectId,
       })
-      if (process.env.NODE_ENV !== 'production') {
-        startShareTimingRun({
-          reportId: view.reportId || null,
-          fromPdfCache: false,
-        })
-        markShareTiming('tap')
-      }
       try {
         const prepared = await prepareSiteDiaryPdf({
           projectId: view.projectId,
@@ -717,14 +669,6 @@ function SavedDiaryViewer() {
     const tapStartedAt = Date.now()
     const prepared = pdfReadyRef.current
     const fromCache = true
-    if (process.env.NODE_ENV !== 'production' && !getShareTimingSnapshot()) {
-      startShareTimingRun({
-        reportId: view?.reportId || null,
-        fromPdfCache: true,
-      })
-      markShareTiming('tap')
-      markShareTiming('file_ready')
-    }
     emitShareDiag('cta-tap', {
       surface: 'saved-diary-view',
       cta: 'Share Report',
@@ -948,7 +892,6 @@ function SavedDiaryViewer() {
               {shareLabel}
             </span>
           </PrimaryCTA>
-          {process.env.NODE_ENV !== 'production' ? <ShareTimingDiagPanel /> : null}
           {editHref ? (
             <SecondaryButton
               type="button"

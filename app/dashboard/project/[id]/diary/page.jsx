@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import SignaturePad from 'signature_pad'
 import { createClient } from '@/lib/supabase/client'
@@ -41,7 +41,12 @@ import {
   flattenAreaGroups,
   groupPhotosByArea,
 } from '@/lib/ai-annotation/area-groups'
-import { isMissingWorkAreaNamePageError } from '@/lib/photo-workspace/commit-unsaved-area'
+import {
+  isMissingWorkAreaNamePageError,
+  isUnfinishedAreaFallbackPageError,
+  SHARE_UNSAVED_AREA_INCOMPLETE_MESSAGE,
+  visibleDiaryUnfinishedAreaPageError,
+} from '@/lib/photo-workspace/commit-unsaved-area'
 import { hasAnnotations } from '@/lib/photo-annotations'
 import {
   createBlankDiaryDraft,
@@ -61,9 +66,10 @@ import {
 import {
   DIARY_AUTOSAVE_DEBOUNCE_MS,
   autosavePayloadsEqual,
-  autosaveStatusAfterResult,
   autosaveStatusMessage,
+  dismissAutosaveSuccessStatus,
   shouldShowDiaryAutosaveStatus,
+  visibleDiaryAutosaveStatusCopy,
   shouldShowManualSaveConfirmation,
   buildDiaryAutosavePayload,
   classifyAutosaveFailure,
@@ -135,15 +141,6 @@ import {
   snapshotUserActivation,
 } from '@/lib/diary-share'
 import { emitShareDiag } from '@/lib/share-diag-beacon'
-import {
-  startShareTimingRun,
-  markShareTiming,
-  patchShareTimingCounts,
-  bumpShareTimingCount,
-  subscribeShareTiming,
-  getShareTimingSnapshot,
-  formatShareTimingLines,
-} from '@/lib/diary-share-timing-diag'
 import { mapWithConcurrency } from '@/lib/diary-pdf-photos'
 import { batchSignedUrlsForStoragePaths } from '@/lib/diary-share-pdf-assets'
 import { prewarmDiaryPdfSessionAssets } from '@/lib/diary-pdf-asset-prewarm'
@@ -306,7 +303,7 @@ const DIARY_SAVE_SHARE_ACTION_STYLE = {
   marginTop: 8,
 }
 
-/** Green Saved ✓ linger after user returns from native share (~3s). */
+/** Green Shared ✓ linger after native share returns (~3s). */
 const POST_SAVE_SHARE_DELAY_MS = 3200
 
 const COVER_UPLOAD_FAIL_MESSAGE =
@@ -439,40 +436,6 @@ function dataUrlToBlob(dataUrl) {
 /** Android-safe bound — never unbounded parallel storage uploads on Share. */
 const SHARE_PHOTO_UPLOAD_CONCURRENCY = 2
 
-/** TEMPORARY — development-only Android timing readout. Hidden in production builds. */
-function ShareTimingDiagPanel() {
-  const snap = useSyncExternalStore(
-    subscribeShareTiming,
-    getShareTimingSnapshot,
-    getShareTimingSnapshot,
-  )
-  const lines = formatShareTimingLines(snap)
-  return (
-    <div
-      data-share-timing-diag="temporary"
-      style={{
-        marginTop: 12,
-        padding: '10px 12px',
-        borderRadius: 8,
-        border: '1px dashed color-mix(in srgb, var(--text) 35%, transparent)',
-        background: 'color-mix(in srgb, var(--text) 6%, transparent)',
-        fontSize: 12,
-        lineHeight: 1.4,
-        color: 'var(--text-2)',
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-word',
-      }}
-    >
-      <p style={{ margin: '0 0 8px', fontWeight: 700, color: 'var(--text)', fontSize: 12 }}>
-        SAVE & SHARE DIAGNOSTIC — TEMPORARY
-      </p>
-      {lines.map((line, i) => (
-        <div key={`${i}-${line.slice(0, 24)}`}>{line || '\u00a0'}</div>
-      ))}
-    </div>
-  )
-}
-
 /** Upload transparent overlay PNG; returns storage path or null. */
 async function uploadOverlayPng(supabase, { userId, reportId, sequence, dataUrl }) {
   const blob = dataUrlToBlob(dataUrl)
@@ -533,7 +496,7 @@ export default function SiteDiaryPage() {
   const pdfBackgroundPrepareRunRef = useRef(null)
   const backgroundPrepareLiveRef = useRef({})
   const [shareReady, setShareReady] = useState(false)
-  const invalidatePreparedSharePdf = useCallback(() => {
+  const invalidatePreparedSharePdf = useCallback((reason) => {
     shareReadyPdfRef.current = null
     pdfPrepareGenerationRef.current = bumpPdfPrepareGeneration(pdfPrepareGenerationRef.current)
     setShareReady((prev) => (prev ? false : prev))
@@ -542,7 +505,24 @@ export default function SiteDiaryPage() {
   }, [])
   const [hydrateComplete, setHydrateComplete] = useState(false)
   const [autosaveStatus, setAutosaveStatus] = useState(null)
+  const [shareCompletionKind, setShareCompletionKind] = useState(null)
+  const dismissAutosaveSuccessClaim = useCallback(() => {
+    setAutosaveStatus((prev) => dismissAutosaveSuccessStatus(prev))
+  }, [])
   const persistUiErrorRef = useRef('')
+  const photoWorkspaceDraftDirtyRef = useRef(false)
+  const handlePhotoWorkspaceDraftDirtyChange = useCallback((dirty) => {
+    const next = dirty === true
+    const wasDirty = photoWorkspaceDraftDirtyRef.current
+    photoWorkspaceDraftDirtyRef.current = next
+    if (next && !wasDirty) {
+      invalidatePreparedSharePdf('draft-dirty')
+      return
+    }
+    if (!next && wasDirty) {
+      pdfBackgroundPrepareSchedulerRef.current?.schedule()
+    }
+  }, [invalidatePreparedSharePdf])
   const finalSaveInProgressRef = useRef(false)
   const ackedSnapshotRef = useRef(null)
   const lastPersistedReportRef = useRef(null)
@@ -562,13 +542,16 @@ export default function SiteDiaryPage() {
   useEffect(() => {
     saveLockRef.current = false
     completingRef.current = false
-    invalidatePreparedSharePdf()
+    invalidatePreparedSharePdf('report-edit-reset')
     setSaving(false)
     setJustSaved(false)
+    setShareCompletionKind(null)
     setShowSaveBanner(false)
     setReportIsDraft(null)
     setHydrateComplete(false)
     persistUiErrorRef.current = ''
+    setError('')
+    photoWorkspaceDraftDirtyRef.current = false
     finalSaveInProgressRef.current = false
     setAutosaveStatus(null)
     setLoadDiagnostic('')
@@ -1741,7 +1724,7 @@ export default function SiteDiaryPage() {
           lastPersistedReportRef.current,
           result.acked,
         )
-        paintAutosaveStatus(autosaveStatusAfterResult(result))
+        paintAutosaveStatus(null)
         return result
       }
 
@@ -1880,10 +1863,11 @@ export default function SiteDiaryPage() {
   }, [flushPendingAutosave, performAutosave])
 
   const handleLocationWalkChange = useCallback((next) => {
-    invalidatePreparedSharePdf()
+    dismissAutosaveSuccessClaim()
+    invalidatePreparedSharePdf('committed-diary-change')
     setLocationWalk(next)
     setPhotos(flattenAreaGroups(next))
-  }, [invalidatePreparedSharePdf])
+  }, [dismissAutosaveSuccessClaim, invalidatePreparedSharePdf])
 
   const handleAreaNameValidationResolved = useCallback(() => {
     const refMsg = persistUiErrorRef.current
@@ -1951,7 +1935,7 @@ export default function SiteDiaryPage() {
     const file = accepted[0]
     if (!file) return
     coverRemovedRef.current = false
-    invalidatePreparedSharePdf()
+    invalidatePreparedSharePdf('committed-diary-change')
     // New local cover replaces any previous failed upload banner.
     if (persistUiErrorRef.current === COVER_UPLOAD_FAIL_MESSAGE) {
       persistUiErrorRef.current = ''
@@ -2125,7 +2109,8 @@ export default function SiteDiaryPage() {
     }
 
     const onEndStroke = () => {
-      invalidatePreparedSharePdf()
+      dismissAutosaveSuccessClaim()
+      invalidatePreparedSharePdf('committed-diary-change')
       if (pad.isEmpty()) {
         setSignature(null)
         rebindPadIfNeeded()
@@ -2148,14 +2133,15 @@ export default function SiteDiaryPage() {
 
     endStrokeHandlerRef.current = onEndStroke
     pad.addEventListener('endStroke', onEndStroke)
-  }, [invalidatePreparedSharePdf, teardownSignaturePad])
+  }, [dismissAutosaveSuccessClaim, invalidatePreparedSharePdf, teardownSignaturePad])
 
   useEffect(() => () => {
     teardownSignaturePad()
   }, [teardownSignaturePad])
 
   const clearSignaturePad = () => {
-    invalidatePreparedSharePdf()
+    dismissAutosaveSuccessClaim()
+    invalidatePreparedSharePdf('committed-diary-change')
     signaturePadRef.current?.clear()
     setSignature((prev) => {
       if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
@@ -2168,7 +2154,8 @@ export default function SiteDiaryPage() {
   }
 
   const resignSignature = () => {
-    invalidatePreparedSharePdf()
+    dismissAutosaveSuccessClaim()
+    invalidatePreparedSharePdf('committed-diary-change')
     setSignature((prev) => {
       if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
       return null
@@ -2227,7 +2214,7 @@ export default function SiteDiaryPage() {
       || completingRef.current
       || finalSaveInProgressRef.current,
     )
-    if (!shouldRunBackgroundPdfPrepare({
+    const prepareInput = {
       hydrateComplete: live.hydrateComplete,
       writable: live.writable,
       reportId: live.reportId,
@@ -2235,7 +2222,8 @@ export default function SiteDiaryPage() {
       shareInProgress,
       hasUnsavedArea: locationWalkRef.current?.hasUnsavedAreaForShare?.() === true,
       alreadyHasCurrentFile: Boolean(shareReadyPdfRef.current?.file),
-    })) {
+    }
+    if (!shouldRunBackgroundPdfPrepare(prepareInput)) {
       return
     }
 
@@ -2245,9 +2233,15 @@ export default function SiteDiaryPage() {
       return
     }
 
-    if (pdfPrepareGenerationRef.current !== startedGeneration) return
-    if (String(backgroundPrepareLiveRef.current.reportId || '') !== String(startedReportId || '')) return
-    if (locationWalkRef.current?.hasUnsavedAreaForShare?.() === true) return
+    if (pdfPrepareGenerationRef.current !== startedGeneration) {
+      return
+    }
+    if (String(backgroundPrepareLiveRef.current.reportId || '') !== String(startedReportId || '')) {
+      return
+    }
+    if (locationWalkRef.current?.hasUnsavedAreaForShare?.() === true) {
+      return
+    }
     if (
       backgroundPrepareLiveRef.current.saving
       || saveLockRef.current
@@ -2258,8 +2252,12 @@ export default function SiteDiaryPage() {
     }
 
     const labourPayload = labourFormToPersistRows(live.labourRows, live.reportId)
-    if (!labourPersistRowsEqual(labourPayload, lastPersistedLabourRef.current)) return
-    if (signatureRef.current?.file) return
+    if (!labourPersistRowsEqual(labourPayload, lastPersistedLabourRef.current)) {
+      return
+    }
+    if (signatureRef.current?.file) {
+      return
+    }
 
     const persistedRow = lastPersistedReportRef.current
     const persistedTwPayload = temporaryWorksPayload(
@@ -2281,7 +2279,9 @@ export default function SiteDiaryPage() {
         row.scaffoldTag,
       ]),
     )
-    if (twIdentity(liveTwPayload) !== twIdentity(persistedTwPayload)) return
+    if (twIdentity(liveTwPayload) !== twIdentity(persistedTwPayload)) {
+      return
+    }
 
     const walk = live.locationWalk || []
     const userId = authUserIdRef.current
@@ -2305,7 +2305,9 @@ export default function SiteDiaryPage() {
       })),
     )
     if (photoIdentity(livePhotos) !== photoIdentity(lastPersistedPhotosRef.current)) {
-      if (!userId || !live.reportId) return
+      if (!userId || !live.reportId) {
+        return
+      }
       for (const group of walk) {
         if (!group?.id) continue
         const result = await persistSaveAreaGroup(supabase, {
@@ -2314,14 +2316,22 @@ export default function SiteDiaryPage() {
           savedGroup: group,
           locationWalk: walk,
         })
-        if (!result.ok) return
-        if (pdfPrepareGenerationRef.current !== startedGeneration) return
+        if (!result.ok) {
+          return
+        }
+        if (pdfPrepareGenerationRef.current !== startedGeneration) {
+          return
+        }
       }
       lastPersistedPhotosRef.current = livePhotos
     }
 
-    if (pdfPrepareGenerationRef.current !== startedGeneration) return
-    if (String(backgroundPrepareLiveRef.current.reportId || '') !== String(startedReportId || '')) return
+    if (pdfPrepareGenerationRef.current !== startedGeneration) {
+      return
+    }
+    if (String(backgroundPrepareLiveRef.current.reportId || '') !== String(startedReportId || '')) {
+      return
+    }
     if (
       backgroundPrepareLiveRef.current.saving
       || saveLockRef.current
@@ -2469,9 +2479,10 @@ export default function SiteDiaryPage() {
       makeKey: makeUuid,
     })
     setLabourRows(nextRows.length > 0 ? nextRows : [emptyLabour()])
-    invalidatePreparedSharePdf()
+    dismissAutosaveSuccessClaim()
+    invalidatePreparedSharePdf('committed-diary-change')
     setScanError('')
-  }, [invalidatePreparedSharePdf, scanOperatives, labourGroupBy])
+  }, [dismissAutosaveSuccessClaim, invalidatePreparedSharePdf, scanOperatives, labourGroupBy])
 
   const retrySignInScan = useCallback(() => {
     if (scanLastFile) {
@@ -2491,21 +2502,23 @@ export default function SiteDiaryPage() {
   }, [clearScanPreview])
 
   const updateLabour = (key, field, value) => {
-    invalidatePreparedSharePdf()
+    dismissAutosaveSuccessClaim()
+    invalidatePreparedSharePdf('committed-diary-change')
     setLabourRows((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)))
   }
 
   const updatePlant = (key, field, value) => {
+    dismissAutosaveSuccessClaim()
     setPlantRows((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)))
   }
 
   const updateEquipmentHire = (key, field, value) => {
-    invalidatePreparedSharePdf()
+    invalidatePreparedSharePdf('committed-diary-change')
     setEquipmentHireRows((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)))
   }
 
   const removeCoverPhoto = () => {
-    invalidatePreparedSharePdf()
+    invalidatePreparedSharePdf('committed-diary-change')
     if (coverPhoto?.file && coverPhoto.preview) URL.revokeObjectURL(coverPhoto.preview)
     coverRemovedRef.current = true
     loadedCoverPathRef.current = null
@@ -2571,6 +2584,8 @@ export default function SiteDiaryPage() {
 
   const handleEnterEditMode = () => {
     if (!editingReportId) return
+    setError('')
+    persistUiErrorRef.current = ''
     setJustSaved(false)
     setShowSaveBanner(false)
     const href = isTodaysDiary(reportDate)
@@ -2794,11 +2809,11 @@ export default function SiteDiaryPage() {
       saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
     }
 
-    const finishAfterSuccessfulShare = () => {
+    const finishAfterSuccessfulShare = (completionKind = 'shared') => {
       saveLockRef.current = false
       completingRef.current = false
       finalSaveInProgressRef.current = false
-      invalidatePreparedSharePdf()
+      invalidatePreparedSharePdf('committed-diary-change')
       flushSync(() => {
         setSaving(false)
         setAutosaveStatus(null)
@@ -2807,11 +2822,13 @@ export default function SiteDiaryPage() {
       })
       if (saveNavTimerRef.current) clearTimeout(saveNavTimerRef.current)
       flushSync(() => {
+        setShareCompletionKind(completionKind === 'downloaded' ? 'downloaded' : 'shared')
         setJustSaved(true)
         setShowSaveBanner(false)
       })
       saveNavTimerRef.current = setTimeout(() => {
         setJustSaved(false)
+        setShareCompletionKind(null)
         saveNavTimerRef.current = null
       }, POST_SAVE_SHARE_DELAY_MS)
       saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
@@ -2827,9 +2844,6 @@ export default function SiteDiaryPage() {
         )
       const tapUserActivation = snapshotUserActivation()
       const tapStartedAt = Date.now()
-      if (process.env.NODE_ENV !== 'production') {
-        markShareTiming('share_now_tap')
-      }
       saveLockRef.current = true
       flushSync(() => {
         setSaving(true)
@@ -2857,7 +2871,7 @@ export default function SiteDiaryPage() {
             shareAborted: Boolean(shareResult.aborted),
           })
           if (shareResult.ok) {
-            finishAfterSuccessfulShare()
+            finishAfterSuccessfulShare('shared')
             return
           }
           failSave(
@@ -2866,9 +2880,6 @@ export default function SiteDiaryPage() {
               : (shareResult.message || 'We couldn’t open the share sheet. Try again.'),
           )
           return
-        }
-        if (process.env.NODE_ENV !== 'production') {
-          markShareTiming('download_fallback_called')
         }
         const downloaded = await downloadSiteDiaryPdf({
           blob: prepared.blob,
@@ -2889,7 +2900,7 @@ export default function SiteDiaryPage() {
           })
           return
         }
-        finishAfterSuccessfulShare()
+        finishAfterSuccessfulShare('downloaded')
       } catch (err) {
         failSave(err?.message || 'We couldn’t share the PDF. Try again.')
       }
@@ -2897,7 +2908,10 @@ export default function SiteDiaryPage() {
 
     // Second tap — native share from the already-prepared file only (no PDF prepare).
     // Also the one-tap path when background prepare already stored a current File.
-    if (shareReadyPdfRef.current?.file && !saving) {
+    // Unfinished photo-area drafts must never reuse a previously prepared PDF.
+    if (locationWalkRef.current?.hasUnsavedAreaForShare?.() === true) {
+      invalidatePreparedSharePdf('draft-dirty')
+    } else if (shareReadyPdfRef.current?.file && !saving) {
       await sharePreparedFile(shareReadyPdfRef.current)
       return
     }
@@ -2926,13 +2940,6 @@ export default function SiteDiaryPage() {
     pdfBackgroundPrepareSchedulerRef.current?.cancel()
     await pdfBackgroundPrepareSchedulerRef.current?.waitUntilIdle?.()
     shareReadyPdfRef.current = null
-    if (process.env.NODE_ENV !== 'production') {
-      startShareTimingRun({
-        reportId: editingReportId || null,
-        fromPdfCache: false,
-      })
-      markShareTiming('tap')
-    }
     flushSync(() => {
       setShareReady(false)
       setSaving(true)
@@ -2950,9 +2957,6 @@ export default function SiteDiaryPage() {
       }
 
       await flushPendingAutosave()
-      if (process.env.NODE_ENV !== 'production') {
-        markShareTiming('autosave_flush_done')
-      }
 
       // Commit the active unsaved work area (same as Save Area) before persist.
       // Draft photos outside locationWalk must never be silently omitted from Share.
@@ -2961,7 +2965,7 @@ export default function SiteDiaryPage() {
       if (areaFlush && areaFlush.ok === false) {
         failSave(
           areaFlush.message
-            || 'Finish this work area (name and photos), or clear it, before Save & Share.',
+            || SHARE_UNSAVED_AREA_INCOMPLETE_MESSAGE,
         )
         document.querySelector('[data-photo-workspace]')?.scrollIntoView?.({
           behavior: 'smooth',
@@ -2978,12 +2982,6 @@ export default function SiteDiaryPage() {
           })
         }
       }
-      if (process.env.NODE_ENV !== 'production') {
-        patchShareTimingCounts({
-          unsavedAreaCommitted: Boolean(areaFlush?.committed),
-        })
-        markShareTiming('area_flush_done')
-      }
 
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       diarySaveLog('auth check', {
@@ -2993,9 +2991,6 @@ export default function SiteDiaryPage() {
       if (!user) {
         markSessionExpired()
         return
-      }
-      if (process.env.NODE_ENV !== 'production') {
-        markShareTiming('auth_done')
       }
 
       const pendingId = makeUuid()
@@ -3007,14 +3002,6 @@ export default function SiteDiaryPage() {
       })
       let signatureUrl = signature?.storagePath || null
       let requiredCoverPath = null
-      const coverUploadNeeded = Boolean(coverPlan.needsUpload && coverPlan.file)
-      const signatureUploadNeeded = Boolean(signature?.file)
-      if (process.env.NODE_ENV !== 'production') {
-        patchShareTimingCounts({
-          coverUploadNeeded,
-          signatureUploadNeeded,
-        })
-      }
 
       let localPreparedCoverBlob =
         coverPhotoRef.current?.preparedBlob instanceof Blob
@@ -3087,9 +3074,6 @@ export default function SiteDiaryPage() {
         }
         signatureUrl = signaturePath
       }
-      if (process.env.NODE_ENV !== 'production') {
-        markShareTiming('cover_signature_done')
-      }
 
       const reportPayload = applyCoverPhotoPatch(
         {
@@ -3145,9 +3129,6 @@ export default function SiteDiaryPage() {
                     sequence: photo.sequence_number,
                     dataUrl: photo.overlayPreview,
                   })
-                  if (process.env.NODE_ENV !== 'production') {
-                    bumpShareTimingCount('overlayUploadCount')
-                  }
                 } else {
                   overlayPath = null
                 }
@@ -3258,14 +3239,6 @@ export default function SiteDiaryPage() {
           updateExistingPhotos.push(result.patch)
         }
       }
-      if (process.env.NODE_ENV !== 'production') {
-        patchShareTimingCounts({
-          photoCount: sequenced.length,
-          newUploadCount: photoRecords.length,
-          durablePhotoCount: updateExistingPhotos.length,
-        })
-        markShareTiming('photo_persist_done')
-      }
 
       const saved = await finalizeSiteDiarySave(supabase, {
         reportId: editingReportId,
@@ -3288,9 +3261,6 @@ export default function SiteDiaryPage() {
       if (!saved?.id || saved.id !== editingReportId) {
         failSave('We couldn’t save your Site Diary. Check your connection and try again.')
         return
-      }
-      if (process.env.NODE_ENV !== 'production') {
-        markShareTiming('finalize_done')
       }
 
       if (requiredCoverPath && !coverPhotoPersistedOnRow(saved.row, requiredCoverPath)) {
@@ -3421,6 +3391,22 @@ export default function SiteDiaryPage() {
     }
   }, [])
 
+  /* eslint-disable react-hooks/set-state-in-effect -- drop stale unfinished-area Share fallback when no live draft */
+  useEffect(() => {
+    if (!isUnfinishedAreaFallbackPageError(error)) return
+    if (locationWalkRef.current?.hasUnsavedAreaForShare?.() === true) return
+    if (isUnfinishedAreaFallbackPageError(persistUiErrorRef.current)) {
+      persistUiErrorRef.current = ''
+    }
+    setError('')
+  }, [error])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const visiblePageError = visibleDiaryUnfinishedAreaPageError(
+    error,
+    locationWalkRef.current?.hasUnsavedAreaForShare?.() === true,
+  )
+
   if (loading && !loadDiagnostic) {
     return (
       <PremiumShell
@@ -3456,7 +3442,7 @@ export default function SiteDiaryPage() {
             lineHeight: 1.45,
           }}
         >
-          {error || DIARY_WORKBENCH_LOAD_FAILED_COPY}
+          {visiblePageError || DIARY_WORKBENCH_LOAD_FAILED_COPY}
           {process.env.NODE_ENV !== 'production' ? (
             <p style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.4, color: 'var(--text-2)', whiteSpace: 'pre-wrap' }}>
               {loadDiagnostic}
@@ -3478,9 +3464,9 @@ export default function SiteDiaryPage() {
         accent={REPORT_THEMES.diary.accent}
         maxWidth={720}
       >
-        {(startError || error) && (
+        {(startError || visiblePageError) && (
           <div style={{ background: 'rgba(220,50,50,0.1)', border: '1px solid rgba(220,50,50,0.3)', color: '#ff6b6b', padding: '12px 14px', fontSize: 14, marginBottom: 16, borderRadius: 10 }}>
-            {startError || error}
+            {startError || visiblePageError}
           </div>
         )}
 
@@ -3588,6 +3574,14 @@ export default function SiteDiaryPage() {
     || diaryHubHref({ projectId })
     || '/dashboard/diary'
 
+  const autosaveStatusCopy = visibleDiaryAutosaveStatusCopy({
+    error: visiblePageError,
+    saving,
+    justSaved,
+    autosaveStatus,
+    finalSaveInProgress: saving || justSaved,
+  })
+
   return (
     <PremiumShell
       title="Site Diary"
@@ -3595,7 +3589,7 @@ export default function SiteDiaryPage() {
       accent={REPORT_THEMES.diary.accent}
       maxWidth={720}
     >
-      {error && (
+      {visiblePageError && (
         <div
           style={{
             background: 'rgba(220,50,50,0.1)',
@@ -3609,7 +3603,7 @@ export default function SiteDiaryPage() {
             whiteSpace: 'pre-line',
           }}
         >
-          {error}
+          {visiblePageError}
         </div>
       )}
       {showSaveBanner && (
@@ -3638,7 +3632,7 @@ export default function SiteDiaryPage() {
             animation: 'zlog-save-banner 3s ease forwards',
           }}
         >
-          Saved ✓
+          Shared ✓
         </div>
       )}
       {justSaved && isDiaryViewMode && (
@@ -3784,7 +3778,8 @@ export default function SiteDiaryPage() {
           <BrandingSelector
             value={brandingSelection}
             onChange={(next) => {
-              invalidatePreparedSharePdf()
+              dismissAutosaveSuccessClaim()
+              invalidatePreparedSharePdf('committed-diary-change')
               setBrandingSelection(next)
             }}
             accent={DIARY_ACCENT}
@@ -4029,7 +4024,8 @@ export default function SiteDiaryPage() {
                             type="button"
                             style={{ ...removeRowStyle, marginBottom: 0, padding: '4px 6px' }}
                             onClick={() => {
-                              invalidatePreparedSharePdf()
+                              dismissAutosaveSuccessClaim()
+                              invalidatePreparedSharePdf('committed-diary-change')
                               setLabourRows((rows) => rows.filter((r) => r.key !== row.key))
                             }}
                             aria-label="Remove labour row"
@@ -4046,7 +4042,8 @@ export default function SiteDiaryPage() {
           </div>
 
           <button type="button" style={addRowButtonStyle} onClick={() => {
-            invalidatePreparedSharePdf()
+            dismissAutosaveSuccessClaim()
+            invalidatePreparedSharePdf('committed-diary-change')
             setLabourRows((rows) => [...rows, emptyLabour()])
           }}>
             + Add labour row
@@ -4057,7 +4054,10 @@ export default function SiteDiaryPage() {
           {plantRows.map((row) => (
             <div key={row.key} style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               {plantRows.length > 1 && (
-                <button type="button" style={removeRowStyle} onClick={() => setPlantRows((rows) => rows.filter((r) => r.key !== row.key))}>
+                <button type="button" style={removeRowStyle} onClick={() => {
+                  dismissAutosaveSuccessClaim()
+                  setPlantRows((rows) => rows.filter((r) => r.key !== row.key))
+                }}>
                   Remove row
                 </button>
               )}
@@ -4079,7 +4079,10 @@ export default function SiteDiaryPage() {
               <input style={{ ...cellInputStyle, width: '100%' }} value={row.notes} onChange={(e) => updatePlant(row.key, 'notes', e.target.value)} placeholder="Optional notes" />
             </div>
           ))}
-          <button type="button" style={addRowButtonStyle} onClick={() => setPlantRows((rows) => [...rows, emptyPlant()])}>
+          <button type="button" style={addRowButtonStyle} onClick={() => {
+            dismissAutosaveSuccessClaim()
+            setPlantRows((rows) => [...rows, emptyPlant()])
+          }}>
             + Add plant row
           </button>
         </GlassSection>
@@ -4092,7 +4095,7 @@ export default function SiteDiaryPage() {
                   type="button"
                   style={removeRowStyle}
                   onClick={() => {
-                    invalidatePreparedSharePdf()
+                    invalidatePreparedSharePdf('committed-diary-change')
                     setEquipmentHireRows((rows) => rows.filter((r) => r.key !== row.key))
                   }}
                 >
@@ -4148,7 +4151,7 @@ export default function SiteDiaryPage() {
             type="button"
             style={addRowButtonStyle}
             onClick={() => {
-              invalidatePreparedSharePdf()
+              invalidatePreparedSharePdf('committed-diary-change')
               setEquipmentHireRows((rows) => [...rows, emptyEquipmentHire()])
             }}
           >
@@ -4162,11 +4165,13 @@ export default function SiteDiaryPage() {
           applicable={temporaryWorksApplicable}
           rows={temporaryWorks}
           onApplicableChange={(value) => {
-            invalidatePreparedSharePdf()
+            dismissAutosaveSuccessClaim()
+            invalidatePreparedSharePdf('committed-diary-change')
             setTemporaryWorksApplicable(value)
           }}
           onRowsChange={(rows) => {
-            invalidatePreparedSharePdf()
+            dismissAutosaveSuccessClaim()
+            invalidatePreparedSharePdf('committed-diary-change')
             setTemporaryWorks(rows)
           }}
         />
@@ -4229,6 +4234,7 @@ export default function SiteDiaryPage() {
           onContinue={continueToSignature}
           ensureReportPreview={ensureReportPreviewForViewer}
           onAreaNameValidationResolved={handleAreaNameValidationResolved}
+          onDraftDirtyChange={handlePhotoWorkspaceDraftDirtyChange}
         />
 
         <div
@@ -4288,7 +4294,7 @@ export default function SiteDiaryPage() {
           className="zlog-diary-save-share-action"
           style={DIARY_SAVE_SHARE_ACTION_STYLE}
         >
-          {error && (
+          {visiblePageError && (
             <div
               role="status"
               aria-live="polite"
@@ -4304,10 +4310,10 @@ export default function SiteDiaryPage() {
                 color: '#ff6b6b',
               }}
             >
-              {error}
+              {visiblePageError}
             </div>
           )}
-          {shouldShowManualSaveConfirmation({ error, saving, justSaved }) ? (
+          {shouldShowManualSaveConfirmation({ error: visiblePageError, saving, justSaved }) ? (
             <div
               role="status"
               aria-live="polite"
@@ -4324,16 +4330,16 @@ export default function SiteDiaryPage() {
                 color: '#4ade80',
               }}
             >
-              Saved ✓
+              {shareCompletionKind === 'downloaded' ? 'PDF downloaded ✓' : 'Shared ✓'}
             </div>
           ) : null}
           {shouldShowDiaryAutosaveStatus({
-            error,
+            error: visiblePageError,
             saving,
             justSaved,
             autosaveStatus,
             finalSaveInProgress: saving || justSaved,
-          }) ? (
+          }) && autosaveStatusMessage(autosaveStatus) && autosaveStatusCopy ? (
             <p
               role="status"
               aria-live="polite"
@@ -4347,10 +4353,10 @@ export default function SiteDiaryPage() {
                     : 'color-mix(in srgb, var(--text) 72%, var(--text-2))',
               }}
             >
-              {autosaveStatusMessage(autosaveStatus)}
+              {autosaveStatusCopy}
             </p>
           ) : null}
-          {shareReady && !saving && !error ? (
+          {shareReady && !saving && !visiblePageError ? (
             <p
               role="status"
               aria-live="polite"
@@ -4403,7 +4409,6 @@ export default function SiteDiaryPage() {
               )}
             </span>
           </PrimaryCTA>
-          {process.env.NODE_ENV !== 'production' ? <ShareTimingDiagPanel /> : null}
         </div>
         ) : null}
         <style>{`
