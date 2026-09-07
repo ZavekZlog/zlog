@@ -28,7 +28,7 @@ import {
 import { REPORT_THEMES } from '@/lib/report-theme'
 import {
   labourAggregateTotals,
-  labourRowsFromOperatives,
+  applyOperativesToLabourSummary,
 } from '@/lib/labour-from-register'
 import { fileToVisionDataUrl, parseSignInSheetImage } from '@/lib/parse-signin-sheet'
 import { BrandingSelector, brandingPayload } from '@/components/branding/BrandingSelector'
@@ -55,6 +55,11 @@ import {
   updateDiarySetupFields,
 } from '@/lib/diary-draft'
 import { DiarySaveError, DIARY_SAVE_LOG, finalizeSiteDiarySave } from '@/lib/diary-save'
+import {
+  LABOUR_APPLY_SAVE_FAIL_MESSAGE,
+  labourApplySavedNotice,
+  persistAppliedLabourRows,
+} from '@/lib/diary-labour-apply'
 import {
   labourFormToPersistRows,
   labourPersistRowsEqual,
@@ -644,9 +649,16 @@ export default function SiteDiaryPage() {
   const [labourGroupBy, setLabourGroupBy] = useState('trade_company')
   const [scanLoading, setScanLoading] = useState(false)
   const [scanError, setScanError] = useState('')
+  const [scanApplyError, setScanApplyError] = useState('')
+  const [scanApplyNotice, setScanApplyNotice] = useState('')
+  const [scanApplySaving, setScanApplySaving] = useState(false)
+  const [scanApplySaved, setScanApplySaved] = useState(false)
+  const labourApplyInFlightRef = useRef(false)
   const [scanMeta, setScanMeta] = useState({ matched: 0, ignored: 0, extracted: 0 })
   const [scanWarnings, setScanWarnings] = useState([])
   const [scanOperatives, setScanOperatives] = useState([])
+  const scanOperativesRef = useRef(scanOperatives)
+  scanOperativesRef.current = scanOperatives
   const [scanLastFile, setScanLastFile] = useState(null)
   const [scanSheetPreview, setScanSheetPreview] = useState(null)
   const [plantRows, setPlantRows] = useState([emptyPlant()])
@@ -2434,6 +2446,10 @@ export default function SiteDiaryPage() {
     setLabourMode('scan')
     setScanLoading(true)
     setScanError('')
+    setScanApplyError('')
+    setScanApplyNotice('')
+    setScanApplySaving(false)
+    setScanApplySaved(false)
     setScanWarnings([])
     setScanOperatives([])
     setScanLastFile(file)
@@ -2473,16 +2489,69 @@ export default function SiteDiaryPage() {
     }
   }, [reportDate, labourGroupBy, clearScanPreview])
 
-  const applyScanOperativesToLabour = useCallback(() => {
-    const nextRows = labourRowsFromOperatives(scanOperatives, {
+  const applyScanOperativesToLabour = useCallback((event) => {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+    if (typeof event?.nativeEvent?.stopImmediatePropagation === 'function') {
+      event.nativeEvent.stopImmediatePropagation()
+    }
+    if (labourApplyInFlightRef.current) return
+    const result = applyOperativesToLabourSummary(scanOperativesRef.current, {
       groupBy: labourGroupBy,
       makeKey: makeUuid,
     })
-    setLabourRows(nextRows.length > 0 ? nextRows : [emptyLabour()])
+    if (!result.ok) {
+      setScanApplySaved(false)
+      setScanApplyNotice('')
+      setScanApplyError(result.message)
+      return
+    }
+    labourApplyInFlightRef.current = true
+    flushSync(() => {
+      setScanApplySaving(true)
+      setScanApplySaved(false)
+      setScanApplyError('')
+      setScanApplyNotice('')
+      setLabourRows(result.rows)
+    })
     dismissAutosaveSuccessClaim()
     invalidatePreparedSharePdf('committed-diary-change')
-    setScanError('')
-  }, [dismissAutosaveSuccessClaim, invalidatePreparedSharePdf, scanOperatives, labourGroupBy])
+
+    const finishApply = () => {
+      labourApplyInFlightRef.current = false
+      setScanApplySaving(false)
+    }
+
+    if (!editingReportId) {
+      setScanApplyNotice(
+        result.totals.hours > 0
+          ? `Labour summary now shows ${result.totals.operatives} ${result.totals.operatives === 1 ? 'operative' : 'operatives'} · ${result.totals.hours} hrs.`
+          : `Labour summary now shows ${result.totals.operatives} ${result.totals.operatives === 1 ? 'operative' : 'operatives'}. Check sign-in and sign-out times to add hours.`,
+      )
+      finishApply()
+      return
+    }
+
+    void persistAppliedLabourRows(supabase, editingReportId, result.rows)
+      .then((labourPayload) => {
+        lastPersistedLabourRef.current = labourPayload
+        setScanApplySaved(true)
+        setScanApplyNotice(labourApplySavedNotice(result.totals))
+      })
+      .catch(() => {
+        setScanApplySaved(false)
+        setScanApplyError(LABOUR_APPLY_SAVE_FAIL_MESSAGE)
+      })
+      .finally(() => {
+        finishApply()
+      })
+  }, [
+    dismissAutosaveSuccessClaim,
+    editingReportId,
+    invalidatePreparedSharePdf,
+    labourGroupBy,
+    supabase,
+  ])
 
   const retrySignInScan = useCallback(() => {
     if (scanLastFile) {
@@ -2493,6 +2562,10 @@ export default function SiteDiaryPage() {
   const startManualLabour = useCallback(() => {
     setLabourMode('manual')
     setScanError('')
+    setScanApplyError('')
+    setScanApplyNotice('')
+    setScanApplySaving(false)
+    setScanApplySaved(false)
     setScanMeta({ matched: 0, ignored: 0, extracted: 0 })
     setScanWarnings([])
     setScanOperatives([])
@@ -3929,12 +4002,21 @@ export default function SiteDiaryPage() {
               {!scanLoading && scanOperatives.length > 0 && (
                 <SignInOperativeReview
                   operatives={scanOperatives}
-                  onChange={setScanOperatives}
+                  onChange={(next) => {
+                    setScanApplyError('')
+                    setScanApplyNotice('')
+                    setScanApplySaved(false)
+                    setScanOperatives(next)
+                  }}
                   onApply={applyScanOperativesToLabour}
                   onRetry={scanLastFile ? retrySignInScan : undefined}
                   warnings={scanWarnings}
                   reportDate={reportDate}
-                  disabled={scanLoading}
+                  applying={scanApplySaving}
+                  appliedSaved={scanApplySaved}
+                  disabled={scanLoading || scanApplySaving}
+                  applyError={scanApplyError}
+                  applyNotice={scanApplyNotice}
                 />
               )}
             </div>

@@ -33,7 +33,10 @@ export function SignInOperativeReview({
   warnings = [],
   reportDate,
   applying = false,
+  appliedSaved = false,
   disabled = false,
+  applyError = '',
+  applyNotice = '',
 }) {
   const list = Array.isArray(operatives) ? operatives : []
 
@@ -73,6 +76,16 @@ export function SignInOperativeReview({
   }
 
   const includedCount = list.filter((r) => r.included !== false).length
+
+  const handleApply = (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (typeof event.nativeEvent?.stopImmediatePropagation === 'function') {
+      event.nativeEvent.stopImmediatePropagation()
+    }
+    if (disabled || applying || appliedSaved || includedCount === 0) return
+    if (typeof onApply === 'function') onApply(event)
+  }
 
   return (
     <div style={{ marginTop: 14 }}>
@@ -224,8 +237,9 @@ export function SignInOperativeReview({
         )}
         <button
           type="button"
-          disabled={disabled || applying || includedCount === 0}
-          onClick={onApply}
+          form="zlog-labour-ocr-apply-disconnected"
+          disabled={disabled || applying || appliedSaved || includedCount === 0}
+          onClick={handleApply}
           style={{
             marginLeft: 'auto',
             padding: '9px 14px',
@@ -233,14 +247,30 @@ export function SignInOperativeReview({
             border: '1px solid color-mix(in srgb, var(--action) 55%, transparent)',
             background: 'color-mix(in srgb, var(--action) 18%, transparent)',
             color: 'var(--text)',
-            cursor: includedCount === 0 ? 'not-allowed' : 'pointer',
+            cursor: (disabled || applying || appliedSaved || includedCount === 0) ? 'not-allowed' : 'pointer',
             fontSize: 13,
             fontWeight: 600,
+            touchAction: 'manipulation',
+            WebkitTapHighlightColor: 'transparent',
           }}
         >
-          {applying ? 'Applying…' : `Apply ${includedCount} to labour summary`}
+          {applying
+            ? 'Applying…'
+            : appliedSaved
+              ? '✓ Applied and saved'
+              : `Apply ${includedCount} to labour summary`}
         </button>
       </div>
+      {applyError ? (
+        <p role="alert" style={{ margin: '10px 0 0', fontSize: 13, color: '#ff6b6b', lineHeight: 1.45 }}>
+          {applyError}
+        </p>
+      ) : null}
+      {applyNotice && !applyError ? (
+        <p role="status" style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--text)', lineHeight: 1.45 }}>
+          {applyNotice}
+        </p>
+      ) : null}
     </div>
   )
 }
