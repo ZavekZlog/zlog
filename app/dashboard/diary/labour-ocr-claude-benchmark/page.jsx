@@ -6,14 +6,19 @@
  * No Apply / no database writes.
  */
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
 import { PremiumShell, PrimaryCTA, inputStyle, labelStyle, DIARY_ACCENT } from '@/lib/premium-ui'
 import {
   CLAUDE_OCR_BENCHMARK_MODEL,
   CLAUDE_OCR_BENCHMARK_CONSENSUS_MODEL,
+  CLAUDE_BENCHMARK_BREAK_NONE,
+  CLAUDE_BENCHMARK_BREAK_OPTIONS,
+  applyBulkBreakDeductionToMatchedOperatives,
+  applyIndividualBreakDeductionOverride,
   fileToOriginalClaudeBenchmarkImage,
   parseSignInSheetImageClaudeBenchmark,
+  sumClaudeBenchmarkMatchedHours,
 } from '@/lib/parse-signin-sheet-claude-benchmark'
 import { todayIsoDate } from '@/lib/report-setup'
 
@@ -24,6 +29,8 @@ export default function LabourOcrClaudeBenchmarkPage() {
   const [preview, setPreview] = useState(null)
   const [imageMeta, setImageMeta] = useState(null)
   const [result, setResult] = useState(null)
+  const [bulkBreakDeduction, setBulkBreakDeduction] = useState(CLAUDE_BENCHMARK_BREAK_NONE)
+  const [breakReviewOperatives, setBreakReviewOperatives] = useState([])
 
   const safeRows = useMemo(() => {
     const operatives = Array.isArray(result?.operatives) ? result.operatives : []
@@ -40,22 +47,64 @@ export default function LabourOcrClaudeBenchmarkPage() {
     }))
   }, [result])
 
+  /** Matched included rows with break deduction + net hours (benchmark review only). */
+  const matchedBreakRows = useMemo(() => {
+    return (Array.isArray(breakReviewOperatives) ? breakReviewOperatives : []).filter(
+      (row) => row?.dateStatus === 'match' && row?.included !== false,
+    )
+  }, [breakReviewOperatives])
+
+  const matchedGrossTotal = useMemo(
+    () => sumClaudeBenchmarkMatchedHours(breakReviewOperatives, 'gross'),
+    [breakReviewOperatives],
+  )
+  const matchedNetTotal = useMemo(
+    () => sumClaudeBenchmarkMatchedHours(breakReviewOperatives, 'net'),
+    [breakReviewOperatives],
+  )
+
   /** Temporary Company/Trade consensus review — matched rows only; on-screen, never logged. */
   const companyTradeConsensusRows = useMemo(() => {
-    const operatives = Array.isArray(result?.operatives) ? result.operatives : []
-    return operatives
-      .filter((row) => row?.dateStatus === 'match')
-      .map((row) => ({
-        source_row: row?.source_row ?? null,
-        date: row?.work_date ?? null,
-        company_raw: row?.company_raw ?? row?.company ?? null,
-        company_reviewed: row?.company_reviewed ?? row?.company ?? null,
-        trade_raw: row?.trade_raw ?? row?.trade ?? null,
-        trade_reviewed: row?.trade_reviewed ?? row?.trade ?? null,
-        trade_normalized: row?.trade_normalized ?? null,
-        needs_review: row?.needs_review === true,
-      }))
+    return matchedBreakRows.map((row) => ({
+      source_row: row?.source_row ?? null,
+      date: row?.work_date ?? null,
+      company_raw: row?.company_raw ?? row?.company ?? null,
+      company_reviewed: row?.company_reviewed ?? row?.company ?? null,
+      trade_raw: row?.trade_raw ?? row?.trade ?? null,
+      trade_reviewed: row?.trade_reviewed ?? row?.trade ?? null,
+      trade_normalized: row?.trade_normalized ?? null,
+      needs_review: row?.needs_review === true,
+      time_in: row?.time_in ?? null,
+      time_out: row?.time_out ?? null,
+      gross_hours: row?.gross_hours ?? row?.hours ?? null,
+      break_deduction: row?.break_deduction ?? CLAUDE_BENCHMARK_BREAK_NONE,
+      net_hours: row?.net_hours ?? row?.hours ?? null,
+    }))
+  }, [matchedBreakRows])
+
+  useEffect(() => {
+    if (!result || !Array.isArray(result.operatives)) {
+      setBreakReviewOperatives([])
+      setBulkBreakDeduction(CLAUDE_BENCHMARK_BREAK_NONE)
+      return
+    }
+    setBulkBreakDeduction(CLAUDE_BENCHMARK_BREAK_NONE)
+    setBreakReviewOperatives(
+      applyBulkBreakDeductionToMatchedOperatives(result.operatives, CLAUDE_BENCHMARK_BREAK_NONE),
+    )
   }, [result])
+
+  const handleBulkBreakChange = useCallback((nextValue) => {
+    const value = nextValue || CLAUDE_BENCHMARK_BREAK_NONE
+    setBulkBreakDeduction(value)
+    setBreakReviewOperatives((prev) => applyBulkBreakDeductionToMatchedOperatives(prev, value))
+  }, [])
+
+  const handleRowBreakChange = useCallback((sourceRow, nextValue) => {
+    setBreakReviewOperatives((prev) =>
+      applyIndividualBreakDeductionOverride(prev, sourceRow, nextValue || CLAUDE_BENCHMARK_BREAK_NONE),
+    )
+  }, [])
 
   const handleFiles = useCallback(
     async (files) => {
@@ -71,6 +120,8 @@ export default function LabourOcrClaudeBenchmarkPage() {
       setResult(null)
       setPreview(null)
       setImageMeta(null)
+      setBreakReviewOperatives([])
+      setBulkBreakDeduction(CLAUDE_BENCHMARK_BREAK_NONE)
 
       try {
         // Step B: original uploaded bytes only — no 1600px / 0.82 resize-reencode.
@@ -246,6 +297,34 @@ export default function LabourOcrClaudeBenchmarkPage() {
               }}
             >
               <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+                Break deduction
+              </p>
+              <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.45 }}>
+                Applied to each included operative. Individual rows can be adjusted if required.
+              </p>
+              <label style={{ ...labelStyle, display: 'block', marginBottom: 6 }}>
+                Break for all matched rows
+              </label>
+              <select
+                value={bulkBreakDeduction}
+                onChange={(e) => handleBulkBreakChange(e.target.value)}
+                style={{ ...inputStyle, marginBottom: 12, maxWidth: 220 }}
+              >
+                {CLAUDE_BENCHMARK_BREAK_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--text)', lineHeight: 1.45 }}>
+                Matched labour total: {matchedNetTotal} net hrs
+                <span style={{ color: 'var(--text-2)' }}>
+                  {' '}
+                  (gross {matchedGrossTotal} hrs)
+                </span>
+              </p>
+
+              <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
                 Company / Trade consensus (matched rows)
               </p>
               <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.45 }}>
@@ -269,6 +348,27 @@ export default function LabourOcrClaudeBenchmarkPage() {
                     <div style={{ fontWeight: 600, marginBottom: 4 }}>
                       source_row {row.source_row ?? 'null'} · {row.date ?? 'no date'}
                     </div>
+                    <div>
+                      Time In: {row.time_in ?? 'null'} · Time Out: {row.time_out ?? 'null'}
+                    </div>
+                    <div>
+                      Gross hours: {row.gross_hours ?? 'null'} · Net hours:{' '}
+                      {row.net_hours ?? 'null'}
+                    </div>
+                    <label style={{ display: 'block', marginTop: 8, marginBottom: 4 }}>
+                      Break deduction
+                    </label>
+                    <select
+                      value={row.break_deduction}
+                      onChange={(e) => handleRowBreakChange(row.source_row, e.target.value)}
+                      style={{ ...inputStyle, maxWidth: 180, marginBottom: 8 }}
+                    >
+                      {CLAUDE_BENCHMARK_BREAK_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
                     <div>Raw Company: {row.company_raw ?? 'null'}</div>
                     <div>Reviewed Company: {row.company_reviewed ?? 'null'}</div>
                     <div>Raw Trade: {row.trade_raw ?? 'null'}</div>
