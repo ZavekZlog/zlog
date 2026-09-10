@@ -1,19 +1,21 @@
 'use client'
 
 import { Barlow } from 'next/font/google'
-import { Mic, ClipboardList, MapPinned, Check, type LucideIcon } from 'lucide-react'
+import { Mic } from 'lucide-react'
 
 const barlow = Barlow({
   subsets: ['latin'],
   weight: ['500'],
 })
 
-const FEATURES: { Icon: LucideIcon; label: string }[] = [
-  { Icon: Mic, label: 'Voice input' },
-  { Icon: ClipboardList, label: 'Site diaries' },
-  { Icon: MapPinned, label: 'Site surveys' },
-  { Icon: Check, label: 'Snag lists' },
+const FEATURES: { src: string; label: string }[] = [
+  { src: '/landing-icons/zlog-voice-input.svg', label: 'Voice input' },
+  { src: '/landing-icons/zlog-site-diaries.svg', label: 'Site diaries' },
+  { src: '/landing-icons/zlog-inspections.svg', label: 'Inspections' },
+  { src: '/landing-icons/zlog-progress.svg', label: 'Progress' },
 ]
+
+const FEATURE_ICON_SIZE = 40
 
 export function LandingFeatureStrip() {
   return (
@@ -37,7 +39,6 @@ export function LandingFeatureStrip() {
       }}
     >
       {FEATURES.map((feature, index) => {
-        const Icon = feature.Icon
         return (
           <div
             key={feature.label}
@@ -46,7 +47,7 @@ export function LandingFeatureStrip() {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 8,
+              gap: 6,
               width: '100%',
               height: '100%',
               minWidth: 0,
@@ -57,8 +58,8 @@ export function LandingFeatureStrip() {
               ...(index > 0
                 ? {
                     backgroundImage:
-                      'linear-gradient(color-mix(in srgb, var(--edge) 90%, transparent), color-mix(in srgb, var(--edge) 90%, transparent))',
-                    backgroundSize: '1px calc(100% - 24px)',
+                      'linear-gradient(color-mix(in srgb, var(--text) 16%, transparent), color-mix(in srgb, var(--text) 16%, transparent))',
+                    backgroundSize: '1px calc(100% - 28px)',
                     backgroundPosition: 'left center',
                     backgroundRepeat: 'no-repeat',
                   }
@@ -67,19 +68,28 @@ export function LandingFeatureStrip() {
           >
             <span
               style={{
-                color: 'var(--text)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                width: 30,
-                height: 30,
+                width: FEATURE_ICON_SIZE,
+                height: FEATURE_ICON_SIZE,
                 flexShrink: 0,
                 lineHeight: 1,
-                filter:
-                  'drop-shadow(0 1px 2px color-mix(in srgb, var(--ink), transparent 25%)) drop-shadow(0 0 6px color-mix(in srgb, var(--ink), transparent 40%))',
               }}
             >
-              <Icon size={30} strokeWidth={1.75} aria-hidden />
+              <img
+                src={feature.src}
+                alt=""
+                width={FEATURE_ICON_SIZE}
+                height={FEATURE_ICON_SIZE}
+                style={{
+                  width: FEATURE_ICON_SIZE,
+                  height: FEATURE_ICON_SIZE,
+                  objectFit: 'contain',
+                  objectPosition: 'center',
+                  display: 'block',
+                }}
+              />
             </span>
             <span
               style={{
@@ -89,6 +99,7 @@ export function LandingFeatureStrip() {
                 color: 'var(--text)',
                 lineHeight: 1.3,
                 textAlign: 'center',
+                textShadow: '0 1px 2px rgba(11, 13, 18, 0.95), 0 0 8px rgba(11, 13, 18, 0.85)',
                 width: '100%',
                 maxWidth: '100%',
                 minWidth: 0,

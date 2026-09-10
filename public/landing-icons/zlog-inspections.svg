@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="zlog-pale" x1="18%" y1="12%" x2="86%" y2="88%">
+      <stop offset="0%" stop-color="#F7F3EC"/>
+      <stop offset="55%" stop-color="#F3EEE6"/>
+      <stop offset="100%" stop-color="#E8DFD2"/>
+    </linearGradient>
+    <linearGradient id="zlog-navy" x1="18%" y1="12%" x2="86%" y2="88%">
+      <stop offset="0%" stop-color="#323C4C"/>
+      <stop offset="55%" stop-color="#2B3544"/>
+      <stop offset="100%" stop-color="#232B38"/>
+    </linearGradient>
+    <linearGradient id="zlog-orange" x1="18%" y1="12%" x2="86%" y2="88%">
+      <stop offset="0%" stop-color="#E14610"/>
+      <stop offset="40%" stop-color="#DB3D06"/>
+      <stop offset="100%" stop-color="#C43805"/>
+    </linearGradient>
+  </defs>
+  <rect x="11.5" y="12" width="31" height="38.5" rx="5.5" fill="url(#zlog-navy)" stroke="#1A2430" stroke-width="3" stroke-linejoin="round"/>
+  <rect x="15.5" y="18.5" width="23" height="28" rx="3" fill="url(#zlog-pale)" stroke="#1A2430" stroke-width="2.6" stroke-linejoin="round"/>
+  <rect x="20.5" y="7.5" width="13" height="9" rx="2.4" fill="url(#zlog-navy)" stroke="#1A2430" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M47.6 47.6 L55.4 55.4" stroke="#1A2430" stroke-width="5.2" stroke-linecap="round"/>
+  <path d="M47.6 47.6 L55.4 55.4" stroke="#2B3544" stroke-width="2.6" stroke-linecap="round"/>
+  <circle cx="40" cy="40" r="12.4" fill="url(#zlog-pale)" stroke="#1A2430" stroke-width="3"/>
+  <path d="M34.6 40.4 L38.2 43.8 L45.2 35.4" stroke="url(#zlog-orange)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

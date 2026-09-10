@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="zlog-pale" x1="18%" y1="12%" x2="86%" y2="88%">
+      <stop offset="0%" stop-color="#F7F3EC"/>
+      <stop offset="55%" stop-color="#F3EEE6"/>
+      <stop offset="100%" stop-color="#E8DFD2"/>
+    </linearGradient>
+    <linearGradient id="zlog-pale-lo" x1="18%" y1="12%" x2="86%" y2="88%">
+      <stop offset="0%" stop-color="#EDE6DA"/>
+      <stop offset="100%" stop-color="#DDD3C4"/>
+    </linearGradient>
+    <linearGradient id="zlog-orange" x1="18%" y1="12%" x2="86%" y2="88%">
+      <stop offset="0%" stop-color="#E14610"/>
+      <stop offset="40%" stop-color="#DB3D06"/>
+      <stop offset="100%" stop-color="#C43805"/>
+    </linearGradient>
+  </defs>
+  <rect x="24" y="40" width="16" height="16.5" rx="5" fill="url(#zlog-pale-lo)" stroke="#1A2430" stroke-width="3" stroke-linejoin="round"/>
+  <rect x="16" y="7.5" width="32" height="36" rx="16" fill="url(#zlog-pale)" stroke="#1A2430" stroke-width="3" stroke-linejoin="round"/>
+  <rect x="16" y="25.5" width="32" height="7" rx="2.2" fill="url(#zlog-orange)" stroke="#1A2430" stroke-width="2.4"/>
+  <circle cx="24.5" cy="16.5" r="1.4" fill="#1A2430"/>
+  <circle cx="32" cy="16.5" r="1.4" fill="#1A2430"/>
+  <circle cx="39.5" cy="16.5" r="1.4" fill="#1A2430"/>
+  <circle cx="24.5" cy="21.2" r="1.4" fill="#1A2430"/>
+  <circle cx="32" cy="21.2" r="1.4" fill="#1A2430"/>
+  <circle cx="39.5" cy="21.2" r="1.4" fill="#1A2430"/>
+</svg>

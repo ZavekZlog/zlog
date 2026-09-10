@@ -14,40 +14,126 @@ const barlow = Barlow({
   weight: ['400', '500', '600'],
 })
 
+const landingTrialCtaStyle = {
+  fontFamily: barlow.style.fontFamily,
+  minHeight: 48,
+  height: 48,
+  background:
+    'linear-gradient(180deg, #C43C10 0%, #AF330B 5%, #AF330B 78%, #7E2408 90%, #3A1005 100%)',
+  boxShadow:
+    'inset 0 1px 0 rgba(244, 242, 239, 0.12), inset 0 0 0 2px #1A0A06, inset 0 -6px 8px rgba(11, 13, 18, 0.40), 0 1px 2px rgba(11, 13, 18, 0.36)',
+  border: '1px solid #241006',
+}
+
 export default function Home() {
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        background: 'var(--ink)',
-        color: 'var(--text)',
-      }}
-    >
-      <main
-        style={{
-          flex: 1,
-          width: '100%',
-          maxWidth: '420px',
-          margin: '0 auto',
-          padding: '32px 24px 28px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          textAlign: 'center',
-        }}
-      >
-        <div
-          style={{
-            position: 'relative',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '10px',
-            width: '100%',
-          }}
-        >
+    <div className="zlog-landing">
+      <style>{`
+        .zlog-landing {
+          min-height: 100vh;
+          min-height: 100dvh;
+          min-height: 100svh;
+          display: flex;
+          flex-direction: column;
+          background: var(--ink);
+          color: var(--text);
+        }
+        .zlog-landing-main {
+          flex: 1;
+          width: 100%;
+          max-width: 420px;
+          margin: 0 auto;
+          padding: 32px 24px 28px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+        }
+        .zlog-landing-hero {
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 10px;
+          width: 100%;
+        }
+        .zlog-landing-hero-z-wrap {
+          position: relative;
+          width: 77%;
+          line-height: 0;
+        }
+        .zlog-landing-hero-z {
+          position: relative;
+          width: 100%;
+          height: auto;
+          object-fit: contain;
+        }
+        .zlog-landing-wordmark {
+          margin: 0 0 8px;
+        }
+        .zlog-landing-headline {
+          margin: 0 0 8px;
+          max-width: 12em;
+        }
+        .zlog-landing-slogan {
+          margin: 0 0 32px;
+        }
+        .zlog-landing-actions {
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          margin-bottom: 28px;
+        }
+        .zlog-landing-silhouette {
+          width: 100%;
+          margin-top: auto;
+          line-height: 0;
+          position: relative;
+          background: var(--ink);
+          padding-bottom: 52px;
+        }
+        @media (max-width: 480px) {
+          .zlog-landing-main {
+            padding: 16px 24px 8px;
+          }
+          .zlog-landing-hero {
+            margin-bottom: 4px;
+          }
+          .zlog-landing-hero-z-wrap {
+            width: min(61.1%, 23.5svh);
+          }
+          .zlog-landing-wordmark {
+            margin: 0 0 6px;
+          }
+          .zlog-landing-headline {
+            margin: 0 0 6px;
+            max-width: 12em;
+          }
+          .zlog-landing-slogan {
+            margin: 0 0 24px;
+          }
+          .zlog-landing-actions {
+            gap: 8px;
+            margin-bottom: 10px;
+          }
+          .zlog-landing-silhouette {
+            padding-bottom: 16px;
+            margin-bottom: 12px;
+          }
+        }
+        .zlog-landing-trial-cta > span[aria-hidden]:first-of-type {
+          height: 9% !important;
+          background: linear-gradient(180deg, rgba(244, 242, 239, 0.11) 0%, transparent 100%) !important;
+        }
+        .zlog-landing-login {
+          min-height: 44px;
+          height: 44px;
+          padding: 6px 20px;
+        }
+      `}</style>
+      <main className="zlog-landing-main">
+        <div className="zlog-landing-hero">
           <div
             aria-hidden
             style={{
@@ -62,24 +148,27 @@ export default function Home() {
               filter: 'blur(60px)',
             }}
           />
-          <Image
-            src="/z-medium.png"
-            alt=""
-            width={420}
-            height={420}
-            priority
-            style={{
-              position: 'relative',
-              width: '91%',
-              height: 'auto',
-              objectFit: 'contain',
-            }}
-          />
+          <div className="zlog-landing-hero-z-wrap">
+            <Image
+              className="zlog-landing-hero-z"
+              src="/z-medium.png"
+              alt=""
+              width={420}
+              height={420}
+              priority
+              style={{
+                position: 'relative',
+                width: '100%',
+                height: 'auto',
+                objectFit: 'contain',
+              }}
+            />
+          </div>
         </div>
 
         <h1
+          className="zlog-landing-wordmark"
           style={{
-            margin: '0 0 8px',
             fontFamily: spaceGrotesk.style.fontFamily,
             fontSize: '104px',
             fontWeight: 700,
@@ -93,23 +182,22 @@ export default function Home() {
         </h1>
 
         <p
+          className="zlog-landing-headline"
           style={{
-            margin: '0 0 8px',
             fontFamily: spaceGrotesk.style.fontFamily,
             fontSize: '21px',
             fontWeight: 600,
             letterSpacing: '-0.02em',
             color: 'var(--text)',
             lineHeight: 1.3,
-            maxWidth: '340px',
           }}
         >
           Construction reporting. Done properly.
         </p>
 
         <p
+          className="zlog-landing-slogan"
           style={{
-            margin: '0 0 36px',
             fontFamily: barlow.style.fontFamily,
             fontSize: '17px',
             fontWeight: 600,
@@ -118,67 +206,15 @@ export default function Home() {
             lineHeight: 1.5,
           }}
         >
-          See it{' '}
-          <span style={{ color: 'var(--text-dim)' }}>|</span>{' '}
-          Say it{' '}
-          <span style={{ color: 'var(--text-dim)' }}>|</span>{' '}
+          See it. Say it.{' '}
           <span style={{ color: '#DB3D06', fontWeight: 700 }}>Logged.</span>
         </p>
 
-        <h2
-          style={{
-            margin: '0 0 8px',
-            fontFamily: spaceGrotesk.style.fontFamily,
-            fontSize: '25px',
-            fontWeight: 600,
-            lineHeight: 1.28,
-            color: 'var(--text)',
-            maxWidth: '320px',
-          }}
-        >
-          Built for the people who run the site.
-        </h2>
-
-        <p
-          style={{
-            margin: '0 0 6px',
-            fontFamily: barlow.style.fontFamily,
-            fontSize: '17px',
-            fontWeight: 500,
-            lineHeight: 1.35,
-            color: 'color-mix(in srgb, var(--text) 88%, var(--text-2))',
-            maxWidth: '340px',
-          }}
-        >
-          Professional, company-branded reports.
-        </p>
-
-        <p
-          style={{
-            margin: '0 0 22px',
-            fontFamily: barlow.style.fontFamily,
-            fontSize: '15px',
-            fontWeight: 400,
-            lineHeight: 1.4,
-            color: 'var(--text-2)',
-            maxWidth: '320px',
-          }}
-        >
-          Type it or say it. Zlog does the rest.
-        </p>
-
-        <div
-          style={{
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-            marginBottom: '28px',
-          }}
-        >
+        <div className="zlog-landing-actions">
           <PrimaryCTA
             href="/signup"
-            style={{ fontFamily: barlow.style.fontFamily }}
+            className="zlog-landing-trial-cta"
+            style={landingTrialCtaStyle}
           >
             <span
               style={{
@@ -208,14 +244,12 @@ export default function Home() {
 
           <Link
             href="/login"
+            className="zlog-landing-login"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
               width: '100%',
-              minHeight: '46px',
-              height: '46px',
-              padding: '8px 20px',
               borderRadius: '12px',
               background: 'transparent',
               border: '1px solid var(--text-dim)',
@@ -232,16 +266,7 @@ export default function Home() {
         </div>
       </main>
 
-      <div
-        style={{
-          width: '100%',
-          marginTop: 'auto',
-          lineHeight: 0,
-          position: 'relative',
-          background: 'var(--ink)',
-          paddingBottom: 52,
-        }}
-      >
+      <div className="zlog-landing-silhouette">
         <div
           style={{
             overflow: 'hidden',
@@ -262,6 +287,7 @@ export default function Home() {
             alt=""
             width={1200}
             height={300}
+            loading="eager"
             style={{
               width: '100%',
               height: 'auto',
