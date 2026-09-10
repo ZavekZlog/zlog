@@ -131,10 +131,67 @@ export default function Home() {
           height: 44px;
           padding: 6px 20px;
         }
+        @keyframes zlog-landing-enter-z {
+          from { opacity: 0.88; transform: scale(0.985); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes zlog-landing-enter-glow {
+          from { opacity: 0.55; }
+          to { opacity: 1; }
+        }
+        @keyframes zlog-landing-enter-wordmark {
+          from { opacity: 0; transform: translateY(3px); }
+          to { opacity: 1; transform: translateY(-2px); }
+        }
+        @keyframes zlog-landing-enter-copy {
+          from { opacity: 0; transform: translateY(7px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes zlog-landing-enter-band {
+          from { transform: translateY(6px); }
+          to { transform: translateY(0); }
+        }
+        @keyframes zlog-landing-enter-band-content {
+          from { opacity: 0.15; }
+          to { opacity: 1; }
+        }
+        .zlog-landing-hero-glow {
+          animation: zlog-landing-enter-glow 450ms cubic-bezier(0.33, 0, 0.2, 1) backwards;
+        }
+        .zlog-landing-hero-z-wrap {
+          animation: zlog-landing-enter-z 450ms cubic-bezier(0.33, 0, 0.2, 1) backwards;
+        }
+        .zlog-landing-wordmark {
+          animation: zlog-landing-enter-wordmark 400ms cubic-bezier(0.33, 0, 0.2, 1) 200ms backwards;
+        }
+        .zlog-landing-headline,
+        .zlog-landing-slogan,
+        .zlog-landing-actions {
+          animation: zlog-landing-enter-copy 450ms cubic-bezier(0.33, 0, 0.2, 1) 300ms backwards;
+        }
+        .zlog-landing-silhouette {
+          animation: zlog-landing-enter-band 400ms cubic-bezier(0.33, 0, 0.2, 1) 450ms backwards;
+        }
+        .zlog-landing-silhouette .zlog-landing-feature-strip {
+          animation: zlog-landing-enter-band-content 400ms cubic-bezier(0.33, 0, 0.2, 1) 450ms backwards;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .zlog-landing-hero-glow,
+          .zlog-landing-hero-z-wrap,
+          .zlog-landing-wordmark,
+          .zlog-landing-headline,
+          .zlog-landing-slogan,
+          .zlog-landing-actions,
+          .zlog-landing-silhouette,
+          .zlog-landing-silhouette .zlog-landing-feature-strip {
+            animation: none;
+          }
+        }
       `}</style>
       <main className="zlog-landing-main">
         <div className="zlog-landing-hero">
           <div
+            className="zlog-landing-hero-glow"
             aria-hidden
             style={{
               position: 'absolute',

@@ -20,6 +20,7 @@ const FEATURE_ICON_SIZE = 40
 export function LandingFeatureStrip() {
   return (
     <div
+      className="zlog-landing-feature-strip"
       style={{
         position: 'absolute',
         left: 0,
