@@ -212,6 +212,7 @@ export default function Home() {
               alt=""
               width={420}
               height={420}
+              sizes="(max-width: 480px) min(61.1vw, 23.5svh), 286px"
               priority
               style={{
                 position: 'relative',
