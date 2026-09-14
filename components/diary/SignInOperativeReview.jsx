@@ -1,16 +1,27 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { countSignInTradeHoursReviewRows } from '@/lib/labour-from-register'
 import {
   addSignInTradeHoursRow,
+  formatSignInOperativeLabourLine,
   formatSignInTradeHoursReviewStatus,
+  operativesForSignInTradeReviewRow,
   parseSignInTradeHoursInput,
+  parseSignInTradeWorkersInput,
   renameSignInTradeHoursRow,
   setSignInTradeHoursRowHours,
+  setSignInTradeHoursRowWorkers,
   formatLabourHoursForDisplay,
+  scanDerivedSignInTradeHoursReviewRow,
+  signInAddTradeUsesPointerDownActivation,
   totalSignInTradeHoursReview,
 } from '@/lib/sign-in-trade-hours-review'
+
+/** User-facing Labour review must not surface other-date exclusion as a warning. */
+function isOtherDateLabourScanWarning(message) {
+  return /dated differently from/i.test(String(message ?? ''))
+}
 
 const cell = {
   width: '100%',
@@ -30,8 +41,10 @@ const cell = {
  */
 export function SignInOperativeReview({
   reviewRows = [],
-  otherDateCount = 0,
+  scanOperatives = [],
   onReviewRowsChange,
+  onOperativeLabourExclusion,
+  onOperativeMoveToVisitors,
   onApply,
   warnings = [],
   reportDate: _reportDate,
@@ -45,6 +58,9 @@ export function SignInOperativeReview({
   applyEnabled = true,
 }) {
   const rows = Array.isArray(reviewRows) ? reviewRows : []
+  const visibleWarnings = (Array.isArray(warnings) ? warnings : []).filter(
+    (w) => !isOtherDateLabourScanWarning(w),
+  )
   const { resolvedTradeCount, needsReviewCount } = countSignInTradeHoursReviewRows(rows)
   const applyBlocked = applyEnabled === false
   const applyNeedsReviewBlocked = needsReviewCount > 0
@@ -56,6 +72,16 @@ export function SignInOperativeReview({
     0,
   )
   const [hoursDraftByKey, setHoursDraftByKey] = useState({})
+  const [workersDraftByKey, setWorkersDraftByKey] = useState({})
+  const [adjustPeopleRowKey, setAdjustPeopleRowKey] = useState(null)
+  const [rowMenuOpenKey, setRowMenuOpenKey] = useState(null)
+  const operatives = Array.isArray(scanOperatives) ? scanOperatives : []
+
+  useEffect(() => {
+    if (adjustPeopleRowKey && !rows.some((row) => row.key === adjustPeopleRowKey)) {
+      setAdjustPeopleRowKey(null)
+    }
+  }, [rows, adjustPeopleRowKey])
 
   const emit = (nextRows) => {
     if (typeof onReviewRowsChange === 'function') onReviewRowsChange(nextRows)
@@ -65,7 +91,29 @@ export function SignInOperativeReview({
     emit(renameSignInTradeHoursRow(rows, rowKey, value))
   }
 
+  const handleWorkersCommit = (rowKey, raw) => {
+    const row = rows.find((r) => r.key === rowKey)
+    if (scanDerivedSignInTradeHoursReviewRow(row)) return
+    const parsed = parseSignInTradeWorkersInput(raw)
+    if (!parsed.ok && String(raw ?? '').trim() && String(raw).trim() !== '—') {
+      setWorkersDraftByKey((prev) => {
+        const next = { ...prev }
+        delete next[rowKey]
+        return next
+      })
+      return
+    }
+    emit(setSignInTradeHoursRowWorkers(rows, rowKey, raw))
+    setWorkersDraftByKey((prev) => {
+      const next = { ...prev }
+      delete next[rowKey]
+      return next
+    })
+  }
+
   const handleHoursCommit = (rowKey, raw) => {
+    const row = rows.find((r) => r.key === rowKey)
+    if (scanDerivedSignInTradeHoursReviewRow(row)) return
     const parsed = parseSignInTradeHoursInput(raw)
     if (!parsed.ok && String(raw ?? '').trim() && String(raw).trim() !== '—') {
       // Invalid entry: revert draft to current reviewed value; do not accept.
@@ -82,6 +130,17 @@ export function SignInOperativeReview({
       delete next[rowKey]
       return next
     })
+  }
+
+  const handleAddTrade = () => {
+    if (disabled) return
+    emit(addSignInTradeHoursRow(rows))
+  }
+
+  const handleAddTradePointerDown = (event) => {
+    if (!signInAddTradeUsesPointerDownActivation(event.pointerType, disabled)) return
+    event.preventDefault()
+    handleAddTrade()
   }
 
   const handleApply = (event) => {
@@ -119,11 +178,10 @@ export function SignInOperativeReview({
         Labour from sign-in sheet
       </div>
       <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.45 }}>
-        Labour is summarised by trade for this diary date. Correct any trade or hours if needed.
-        The sign-in sheet photo is the source record.
+        Use ⋯ to separate visitors from production workers.
       </p>
 
-      {warnings?.length > 0 && (
+      {visibleWarnings.length > 0 && (
         <ul
           style={{
             margin: '0 0 12px',
@@ -136,19 +194,12 @@ export function SignInOperativeReview({
             lineHeight: 1.45,
           }}
         >
-          {warnings.map((w) => (
+          {visibleWarnings.map((w) => (
             <li key={w} style={{ marginBottom: 4 }}>
               {w}
             </li>
           ))}
         </ul>
-      )}
-
-      {otherDateCount > 0 && (
-        <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.45 }}>
-          {otherDateCount} row{otherDateCount === 1 ? '' : 's'} from another date are not included
-          in these totals.
-        </p>
       )}
 
       <div
@@ -162,7 +213,7 @@ export function SignInOperativeReview({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1fr) 56px minmax(72px, 88px)',
+            gridTemplateColumns: 'minmax(0, 1fr) 56px minmax(72px, 88px) 36px',
             gap: 8,
             padding: '8px 12px',
             borderBottom: '1px solid var(--edge)',
@@ -176,6 +227,7 @@ export function SignInOperativeReview({
           <span>Trade</span>
           <span style={{ textAlign: 'right' }}>Workers</span>
           <span style={{ textAlign: 'right' }}>Hours on site</span>
+          <span aria-hidden="true" />
         </div>
 
         {rows.length === 0 ? (
@@ -184,18 +236,33 @@ export function SignInOperativeReview({
           </p>
         ) : (
           rows.map((t) => {
+            const workersDraft =
+              workersDraftByKey[t.key] !== undefined
+                ? workersDraftByKey[t.key]
+                : Number.isFinite(Number(t.workers))
+                  ? String(Math.trunc(Number(t.workers)))
+                  : '0'
             const hoursDraft =
               hoursDraftByKey[t.key] !== undefined
                 ? hoursDraftByKey[t.key]
                 : t.hoursComplete && t.hours != null
                   ? String(t.hours)
                   : ''
+            const rowIds = Array.isArray(t.rowIds) ? t.rowIds : []
+            const scanDerived = scanDerivedSignInTradeHoursReviewRow(t)
+            const canAdjustPeople = rowIds.length > 0
+            const bucketOperatives = canAdjustPeople
+              ? operativesForSignInTradeReviewRow(operatives, rowIds).filter(
+                  (row) => row && row.movedToVisitors !== true,
+                )
+              : []
+            const adjustOpen = adjustPeopleRowKey === t.key
             return (
+              <div key={t.key}>
               <div
-                key={t.key}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'minmax(0, 1fr) 56px minmax(72px, 88px)',
+                  gridTemplateColumns: 'minmax(0, 1fr) 56px minmax(72px, 88px) 36px',
                   gap: 8,
                   padding: '10px 12px',
                   borderTop: '1px solid rgba(255,255,255,0.06)',
@@ -228,38 +295,287 @@ export function SignInOperativeReview({
                     </p>
                   ) : null}
                 </div>
-                <div
-                  aria-label={`Workers for ${t.trade || 'trade'}`}
-                  style={{
-                    paddingTop: 8,
-                    textAlign: 'right',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: 'var(--text)',
-                  }}
-                >
-                  {Number.isFinite(Number(t.workers)) ? Math.trunc(Number(t.workers)) : 0}
+                <div>
+                  <input
+                    style={{ ...cell, marginBottom: 0, textAlign: 'right', fontWeight: 600 }}
+                    value={workersDraft}
+                    disabled={disabled}
+                    readOnly={scanDerived}
+                    tabIndex={scanDerived ? -1 : undefined}
+                    inputMode="numeric"
+                    aria-label={`Workers for ${t.trade || 'trade'}`}
+                    aria-readonly={scanDerived ? true : undefined}
+                    onChange={
+                      scanDerived
+                        ? undefined
+                        : (e) => {
+                            const next = e.target.value
+                            setWorkersDraftByKey((prev) => ({ ...prev, [t.key]: next }))
+                          }
+                    }
+                    onBlur={
+                      scanDerived
+                        ? undefined
+                        : (e) => handleWorkersCommit(t.key, e.target.value)
+                    }
+                    onKeyDown={
+                      scanDerived
+                        ? undefined
+                        : (e) => {
+                            if (e.key === 'Enter') {
+                              e.currentTarget.blur()
+                            }
+                          }
+                    }
+                  />
                 </div>
                 <div>
                   <input
                     style={{ ...cell, marginBottom: 0, textAlign: 'right', fontWeight: 600 }}
-                    value={hoursDraft}
+                    value={
+                      scanDerived && t.hoursComplete && t.hours != null
+                        ? formatLabourHoursForDisplay(t.hours)
+                        : hoursDraft
+                    }
                     disabled={disabled}
+                    readOnly={scanDerived}
+                    tabIndex={scanDerived ? -1 : undefined}
                     inputMode="decimal"
                     aria-label={`Hours on site for ${t.trade || 'trade'}`}
+                    aria-readonly={scanDerived ? true : undefined}
                     placeholder="—"
-                    onChange={(e) => {
-                      const next = e.target.value
-                      setHoursDraftByKey((prev) => ({ ...prev, [t.key]: next }))
-                    }}
-                    onBlur={(e) => handleHoursCommit(t.key, e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.currentTarget.blur()
-                      }
-                    }}
+                    onChange={
+                      scanDerived
+                        ? undefined
+                        : (e) => {
+                            const next = e.target.value
+                            setHoursDraftByKey((prev) => ({ ...prev, [t.key]: next }))
+                          }
+                    }
+                    onBlur={
+                      scanDerived
+                        ? undefined
+                        : (e) => handleHoursCommit(t.key, e.target.value)
+                    }
+                    onKeyDown={
+                      scanDerived
+                        ? undefined
+                        : (e) => {
+                            if (e.key === 'Enter') {
+                              e.currentTarget.blur()
+                            }
+                          }
+                    }
                   />
                 </div>
+                <div style={{ position: 'relative', paddingTop: 4 }}>
+                  {canAdjustPeople ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={disabled}
+                        aria-label={`More actions for ${t.trade || 'trade'}`}
+                        aria-expanded={rowMenuOpenKey === t.key}
+                        onClick={() => {
+                          setRowMenuOpenKey((prev) => (prev === t.key ? null : t.key))
+                        }}
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 8,
+                          border: '1px solid var(--edge)',
+                          background: 'var(--ink)',
+                          color: 'var(--text-2)',
+                          fontSize: 18,
+                          lineHeight: 1,
+                          cursor: disabled ? 'not-allowed' : 'pointer',
+                          padding: 0,
+                        }}
+                      >
+                        ⋯
+                      </button>
+                      {rowMenuOpenKey === t.key ? (
+                        <div
+                          role="menu"
+                          style={{
+                            position: 'absolute',
+                            right: 0,
+                            top: '100%',
+                            zIndex: 4,
+                            marginTop: 4,
+                            minWidth: 148,
+                            borderRadius: 10,
+                            border: '1px solid var(--edge)',
+                            background: 'var(--plate)',
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <button
+                            type="button"
+                            role="menuitem"
+                            disabled={disabled}
+                            onClick={() => {
+                              setRowMenuOpenKey(null)
+                              setAdjustPeopleRowKey(t.key)
+                            }}
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              textAlign: 'left',
+                              padding: '10px 12px',
+                              border: 'none',
+                              background: 'transparent',
+                              color: 'var(--text)',
+                              fontSize: 13,
+                              cursor: disabled ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            Review people
+                          </button>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
+                </div>
+              </div>
+              {adjustOpen && bucketOperatives.length > 0 ? (
+                <div
+                  style={{
+                    margin: '0 12px 10px',
+                    padding: '10px 12px',
+                    borderRadius: 10,
+                    border: '1px solid var(--edge)',
+                    background: 'var(--ink)',
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: '0 0 8px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: 'var(--text)',
+                    }}
+                  >
+                    People on {t.trade || 'this trade'}
+                  </p>
+                  <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                    {bucketOperatives.map((op) => {
+                      const excluded = op.excludedFromLabour === true
+                      const line = formatSignInOperativeLabourLine(op, t.trade)
+                      return (
+                        <li
+                          key={String(op.id)}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 6,
+                            padding: '8px 0',
+                            borderTop: '1px solid rgba(255,255,255,0.06)',
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: 12,
+                              color: excluded ? 'var(--text-2)' : 'var(--text)',
+                              lineHeight: 1.45,
+                            }}
+                          >
+                            {line}
+                            {excluded ? ' · Excluded from labour' : ''}
+                          </span>
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 6,
+                              alignItems: 'flex-start',
+                            }}
+                          >
+                            <button
+                              type="button"
+                              disabled={disabled || excluded}
+                              onClick={() => {
+                                if (typeof onOperativeMoveToVisitors !== 'function') return
+                                onOperativeMoveToVisitors({
+                                  reviewRowKey: t.key,
+                                  operativeId: op.id,
+                                  tradeLabel: t.trade || '',
+                                })
+                                const remainingAfterMove = bucketOperatives.filter(
+                                  (row) => String(row.id) !== String(op.id),
+                                )
+                                if (remainingAfterMove.length <= 1) {
+                                  setAdjustPeopleRowKey(null)
+                                }
+                              }}
+                              style={{
+                                padding: '6px 10px',
+                                borderRadius: 8,
+                                border: '1px solid var(--edge)',
+                                background: 'var(--plate)',
+                                color: 'var(--text)',
+                                fontSize: 12,
+                                cursor: disabled || excluded ? 'not-allowed' : 'pointer',
+                              }}
+                            >
+                              Move to Visitors
+                            </button>
+                            <button
+                              type="button"
+                              disabled={disabled}
+                              onClick={() => {
+                                if (typeof onOperativeLabourExclusion !== 'function') return
+                                onOperativeLabourExclusion({
+                                  reviewRowKey: t.key,
+                                  operativeId: op.id,
+                                  exclude: !excluded,
+                                })
+                                if (excluded) return
+                                const remaining = bucketOperatives.filter(
+                                  (row) =>
+                                    String(row.id) !== String(op.id)
+                                    && row.excludedFromLabour !== true,
+                                )
+                                if (remaining.length <= 1) {
+                                  setAdjustPeopleRowKey(null)
+                                }
+                              }}
+                              style={{
+                                padding: '6px 10px',
+                                borderRadius: 8,
+                                border: '1px solid var(--edge)',
+                                background: 'var(--plate)',
+                                color: 'var(--text)',
+                                fontSize: 12,
+                                cursor: disabled ? 'not-allowed' : 'pointer',
+                              }}
+                            >
+                              {excluded ? 'Include in labour' : 'Exclude from labour'}
+                            </button>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => setAdjustPeopleRowKey(null)}
+                    style={{
+                      marginTop: 4,
+                      padding: 0,
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-2)',
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
+              ) : null}
               </div>
             )
           })
@@ -268,7 +584,7 @@ export function SignInOperativeReview({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1fr) 56px minmax(72px, 88px)',
+            gridTemplateColumns: 'minmax(0, 1fr) 56px minmax(72px, 88px) 36px',
             gap: 8,
             padding: '10px 12px',
             borderTop: '1px solid var(--edge)',
@@ -299,7 +615,8 @@ export function SignInOperativeReview({
       <button
         type="button"
         disabled={disabled}
-        onClick={() => emit(addSignInTradeHoursRow(rows))}
+        onPointerDown={handleAddTradePointerDown}
+        onClick={handleAddTrade}
         style={{
           marginTop: 10,
           width: '100%',
@@ -314,6 +631,8 @@ export function SignInOperativeReview({
           letterSpacing: '0.02em',
           cursor: disabled ? 'not-allowed' : 'pointer',
           fontFamily: 'inherit',
+          touchAction: 'manipulation',
+          WebkitTapHighlightColor: 'transparent',
         }}
       >
         + Add trade

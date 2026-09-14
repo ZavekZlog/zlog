@@ -23,7 +23,11 @@ import {
   SIGN_IN_SHEET_EVIDENCE_SAVE_FAIL_MESSAGE,
   signInSheetPathFromReport,
 } from '@/lib/diary-sign-in-sheet-evidence'
-import { initSignInTradeHoursReviewFromOperatives } from '@/lib/sign-in-trade-hours-review'
+import {
+  applyOperativeLabourExclusionToReview,
+  applyOperativeMoveToVisitorsFromReview,
+  initSignInTradeHoursReviewFromOperatives,
+} from '@/lib/sign-in-trade-hours-review'
 import { applyTradeHoursReviewToLabourSummary } from '@/lib/labour-from-register'
 import {
   LABOUR_APPLY_SAVE_FAIL_MESSAGE,
@@ -50,6 +54,8 @@ export function useSiteDiaryLabour({
   invalidatePreparedSharePdf,
   makeUuid,
   signedUrlForPath,
+  visitors = '',
+  onVisitorsChange,
 }) {
   const [labourMode, setLabourMode] = useState('manual')
   const [scanLoading, setScanLoading] = useState(false)
@@ -437,6 +443,68 @@ export function useSiteDiaryLabour({
     setScanTradeHoursReview(next)
   }, [])
 
+  const handleOperativeLabourExclusion = useCallback(
+    ({ reviewRowKey, operativeId, exclude }) => {
+      const result = applyOperativeLabourExclusionToReview({
+        operatives: scanOperatives,
+        reviewRows: scanTradeHoursReviewRef.current,
+        reviewRowKey,
+        operativeId,
+        exclude: exclude === true,
+      })
+      if (!result.ok) {
+        setScanApplySaved(false)
+        setScanApplyNotice('')
+        setScanApplyError(
+          result.conflict
+            || 'Could not update labour for that person. Try again.',
+        )
+        return
+      }
+      setScanApplyError('')
+      setScanApplyNotice('')
+      setScanApplySaved(false)
+      setScanOperatives(result.operatives)
+      setScanTradeHoursReview(result.reviewRows)
+    },
+    [scanOperatives],
+  )
+
+  const handleOperativeMoveToVisitors = useCallback(
+    ({ reviewRowKey, operativeId, tradeLabel }) => {
+      const result = applyOperativeMoveToVisitorsFromReview({
+        operatives: scanOperatives,
+        reviewRows: scanTradeHoursReviewRef.current,
+        reviewRowKey,
+        operativeId,
+        existingVisitorsText: visitors,
+        tradeLabel: tradeLabel || '',
+      })
+      if (!result.ok) {
+        setScanApplySaved(false)
+        setScanApplyNotice('')
+        if (result.reason === 'already-moved') {
+          setScanApplyError('')
+          return
+        }
+        setScanApplyError(
+          result.conflict
+            || 'Could not move that person to Visitors. Try again.',
+        )
+        return
+      }
+      setScanApplyError('')
+      setScanApplyNotice('')
+      setScanApplySaved(false)
+      setScanOperatives(result.operatives)
+      setScanTradeHoursReview(result.reviewRows)
+      if (typeof onVisitorsChange === 'function') {
+        onVisitorsChange(result.visitorsText)
+      }
+    },
+    [scanOperatives, visitors, onVisitorsChange],
+  )
+
   return {
     labourMode,
     setLabourMode,
@@ -449,6 +517,7 @@ export function useSiteDiaryLabour({
     scanApplySaved,
     scanMeta,
     scanWarnings,
+    scanOperatives,
     scanTradeHoursReview,
     scanTradeHoursOtherDateCount,
     scanTradeHoursReviewReady,
@@ -467,5 +536,7 @@ export function useSiteDiaryLabour({
     hasSignInSheetEvidenceOnForm,
     hydrateSignInFromReport,
     handleScanTradeHoursReviewChange,
+    handleOperativeLabourExclusion,
+    handleOperativeMoveToVisitors,
   }
 }

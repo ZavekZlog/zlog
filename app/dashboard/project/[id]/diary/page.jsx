@@ -615,6 +615,12 @@ export default function SiteDiaryPage() {
     handlePdfVisibleTextInput(invalidatePreparedSharePdf, setSiteSummary, event)
   }
   const [labourRows, setLabourRows] = useState([emptyLabour()])
+  const [visitors, setVisitors] = useState('')
+  const handleVisitorsFromLabourScan = useCallback((text) => {
+    dismissAutosaveSuccessClaim()
+    invalidatePreparedSharePdf('committed-diary-change')
+    setVisitors(text)
+  }, [dismissAutosaveSuccessClaim, invalidatePreparedSharePdf])
   const labourScan = useSiteDiaryLabour({
     reportDate,
     editingReportId,
@@ -628,6 +634,8 @@ export default function SiteDiaryPage() {
     invalidatePreparedSharePdf,
     makeUuid,
     signedUrlForPath,
+    visitors,
+    onVisitorsChange: handleVisitorsFromLabourScan,
   })
   const [plantRows, setPlantRows] = useState([emptyPlant()])
   const [equipmentHireRows, setEquipmentHireRows] = useState([emptyEquipmentHire()])
@@ -636,7 +644,6 @@ export default function SiteDiaryPage() {
   const [variations, setVariations] = useState([])
   const [temporaryWorksApplicable, setTemporaryWorksApplicable] = useState(null)
   const [temporaryWorks, setTemporaryWorks] = useState([])
-  const [visitors, setVisitors] = useState('')
   const [delaysIssues, setDelaysIssues] = useState('')
   const [actionsRequired, setActionsRequired] = useState('')
   const [photos, setPhotos] = useState([])
@@ -3698,8 +3705,8 @@ export default function SiteDiaryPage() {
           scanApplySaving={labourScan.scanApplySaving}
           scanApplySaved={labourScan.scanApplySaved}
           scanWarnings={labourScan.scanWarnings}
+          scanOperatives={labourScan.scanOperatives}
           scanTradeHoursReview={labourScan.scanTradeHoursReview}
-          scanTradeHoursOtherDateCount={labourScan.scanTradeHoursOtherDateCount}
           scanTradeHoursReviewReady={labourScan.scanTradeHoursReviewReady}
           scanOcrProvider={labourScan.scanOcrProvider}
           scanApplyEnabled={labourScan.scanApplyEnabled}
@@ -3714,6 +3721,8 @@ export default function SiteDiaryPage() {
           startManualLabour={labourScan.startManualLabour}
           hasSignInSheetEvidenceOnForm={labourScan.hasSignInSheetEvidenceOnForm}
           handleScanTradeHoursReviewChange={labourScan.handleScanTradeHoursReviewChange}
+          handleOperativeLabourExclusion={labourScan.handleOperativeLabourExclusion}
+          handleOperativeMoveToVisitors={labourScan.handleOperativeMoveToVisitors}
           labourRows={labourRows}
           labourTotals={labourTotals}
           updateLabour={updateLabour}

@@ -15,8 +15,8 @@ export function SiteDiaryLabourSection({
   scanApplySaving,
   scanApplySaved,
   scanWarnings,
+  scanOperatives,
   scanTradeHoursReview,
-  scanTradeHoursOtherDateCount,
   scanTradeHoursReviewReady,
   scanOcrProvider,
   scanApplyEnabled,
@@ -31,6 +31,8 @@ export function SiteDiaryLabourSection({
   startManualLabour,
   hasSignInSheetEvidenceOnForm,
   handleScanTradeHoursReviewChange,
+  handleOperativeLabourExclusion,
+  handleOperativeMoveToVisitors,
   labourRows,
   labourTotals,
   updateLabour,
@@ -178,8 +180,10 @@ export function SiteDiaryLabourSection({
             <SignInOperativeReview
               key={`signin-review-${signInSheetPickerKey}`}
               reviewRows={scanTradeHoursReview}
-              otherDateCount={scanTradeHoursOtherDateCount}
+              scanOperatives={scanOperatives}
               onReviewRowsChange={handleScanTradeHoursReviewChange}
+              onOperativeLabourExclusion={handleOperativeLabourExclusion}
+              onOperativeMoveToVisitors={handleOperativeMoveToVisitors}
               onApply={applyScanOperativesToLabour}
               warnings={scanWarnings}
               reportDate={reportDate}
