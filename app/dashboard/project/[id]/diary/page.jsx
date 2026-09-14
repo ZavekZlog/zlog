@@ -26,14 +26,11 @@ import {
   recentEntryActionButtonStyle,
 } from '@/lib/premium-ui'
 import { REPORT_THEMES } from '@/lib/report-theme'
-import {
-  labourAggregateTotals,
-  applyOperativesToLabourSummary,
-} from '@/lib/labour-from-register'
-import { fileToVisionDataUrl, parseSignInSheetImage } from '@/lib/parse-signin-sheet'
+import { labourAggregateTotals } from '@/lib/labour-from-register'
+import { createEmptyLabourRow, mapLabourRowsFromDb } from '@/lib/site-diary-labour-form'
+import { useSiteDiaryLabour } from '@/components/diary/useSiteDiaryLabour'
+import { SiteDiaryLabourSection } from '@/components/diary/SiteDiaryLabourSection'
 import { BrandingSelector, brandingPayload } from '@/components/branding/BrandingSelector'
-import { ImageSourceButtons } from '@/components/ImageSourceButtons'
-import { SignInOperativeReview } from '@/components/diary/SignInOperativeReview'
 import { DiaryDailyRecordSections } from '@/components/diary/DiaryDailyRecordSections'
 import { DiaryTemporaryWorksSection } from '@/components/diary/DiaryTemporaryWorksSection'
 import { PhotoWorkspace } from '@/components/photo-workspace'
@@ -55,11 +52,6 @@ import {
   updateDiarySetupFields,
 } from '@/lib/diary-draft'
 import { DiarySaveError, DIARY_SAVE_LOG, finalizeSiteDiarySave } from '@/lib/diary-save'
-import {
-  LABOUR_APPLY_SAVE_FAIL_MESSAGE,
-  labourApplySavedNotice,
-  persistAppliedLabourRows,
-} from '@/lib/diary-labour-apply'
 import {
   labourFormToPersistRows,
   labourPersistRowsEqual,
@@ -213,14 +205,7 @@ const makeUuid = () => {
   return `${Date.now().toString(16)}-4000-8000-${Math.random().toString(16).slice(2, 14)}`;
 };
 
-const emptyLabour = () => ({
-  key: makeUuid(),
-  trade: '',
-  company: '',
-  headcount: '',
-  hours: '',
-  notes: '',
-})
+const emptyLabour = () => createEmptyLabourRow(makeUuid())
 
 const emptyPlant = () => ({
   key: makeUuid(),
@@ -374,17 +359,6 @@ const PHOTO_LAYOUT_SECTIONS = [
   },
 ]
 
-function labourFromDbRow(row) {
-  return {
-    key: makeUuid(),
-    trade: row.trade ?? '',
-    company: row.company ?? '',
-    headcount: row.count != null ? String(row.count) : '',
-    hours: row.hours != null ? String(row.hours) : '',
-    notes: row.notes ?? '',
-  }
-}
-
 function plantFromDbRow(row) {
   return {
     key: makeUuid(),
@@ -410,10 +384,6 @@ const carriedFieldNoteStyle = {
   color: CARRIED_AMBER,
   margin: '0 0 8px',
   letterSpacing: '0.04em',
-}
-
-function labourRowHasData(row) {
-  return Boolean(row.trade.trim() || row.company.trim() || row.headcount || row.hours || row.notes.trim())
 }
 
 async function signedUrlForPath(supabase, path) {
@@ -645,22 +615,20 @@ export default function SiteDiaryPage() {
     handlePdfVisibleTextInput(invalidatePreparedSharePdf, setSiteSummary, event)
   }
   const [labourRows, setLabourRows] = useState([emptyLabour()])
-  const [labourMode, setLabourMode] = useState('manual') // 'scan' | 'manual'
-  const [labourGroupBy, setLabourGroupBy] = useState('trade_company')
-  const [scanLoading, setScanLoading] = useState(false)
-  const [scanError, setScanError] = useState('')
-  const [scanApplyError, setScanApplyError] = useState('')
-  const [scanApplyNotice, setScanApplyNotice] = useState('')
-  const [scanApplySaving, setScanApplySaving] = useState(false)
-  const [scanApplySaved, setScanApplySaved] = useState(false)
-  const labourApplyInFlightRef = useRef(false)
-  const [scanMeta, setScanMeta] = useState({ matched: 0, ignored: 0, extracted: 0 })
-  const [scanWarnings, setScanWarnings] = useState([])
-  const [scanOperatives, setScanOperatives] = useState([])
-  const scanOperativesRef = useRef(scanOperatives)
-  scanOperativesRef.current = scanOperatives
-  const [scanLastFile, setScanLastFile] = useState(null)
-  const [scanSheetPreview, setScanSheetPreview] = useState(null)
+  const labourScan = useSiteDiaryLabour({
+    reportDate,
+    editingReportId,
+    projectId,
+    supabase,
+    updateDiarySetupFields,
+    labourRows,
+    setLabourRows,
+    lastPersistedLabourRef,
+    dismissAutosaveSuccessClaim,
+    invalidatePreparedSharePdf,
+    makeUuid,
+    signedUrlForPath,
+  })
   const [plantRows, setPlantRows] = useState([emptyPlant()])
   const [equipmentHireRows, setEquipmentHireRows] = useState([emptyEquipmentHire()])
   const [hsIncidents, setHsIncidents] = useState([])
@@ -1190,18 +1158,11 @@ export default function SiteDiaryPage() {
           if (cancelled) return
         }
 
-        if (labour?.length) {
-          setLabourRows(labour.map((row) => ({
-            key: makeUuid(),
-            trade: row.trade || '',
-            company: row.company || '',
-            headcount: row.count != null ? String(row.count) : '',
-            hours: row.hours != null ? String(row.hours) : '',
-            notes: row.notes || '',
-          })))
-        } else {
-          setLabourRows([emptyLabour()])
-        }
+        const mappedLabour = mapLabourRowsFromDb(labour, makeUuid)
+        setLabourRows(mappedLabour.length ? mappedLabour : [emptyLabour()])
+
+        await labourScan.hydrateSignInFromReport(existing, () => cancelled)
+
         // Always replace plant rows from this report only (never merge prior diary state).
         setPlantRows(hydratePlantFormRows(plant, makeUuid))
         if (progressiveCompose || progressiveEdit) {
@@ -2179,8 +2140,6 @@ export default function SiteDiaryPage() {
   photosRef.current = photos
   const signatureRef = useRef(signature)
   signatureRef.current = signature
-  const scanSheetPreviewRef = useRef(scanSheetPreview)
-  scanSheetPreviewRef.current = scanSheetPreview
   useEffect(() => () => {
     photosRef.current.forEach((p) => {
       if (p.preview) URL.revokeObjectURL(p.preview)
@@ -2190,9 +2149,6 @@ export default function SiteDiaryPage() {
     }
     if (signatureRef.current?.file && signatureRef.current.preview) {
       URL.revokeObjectURL(signatureRef.current.preview)
-    }
-    if (scanSheetPreviewRef.current && String(scanSheetPreviewRef.current).startsWith('blob:')) {
-      URL.revokeObjectURL(scanSheetPreviewRef.current)
     }
   }, [])
 
@@ -2424,155 +2380,6 @@ export default function SiteDiaryPage() {
     pdfBackgroundPrepareSchedulerRef.current?.schedule()
     return undefined
   }, [hydrateComplete, isDiaryEditMode, editingReportId, sessionExpired])
-
-  const clearScanPreview = useCallback(() => {
-    setScanSheetPreview((prev) => {
-      if (prev && String(prev).startsWith('blob:')) {
-        try { URL.revokeObjectURL(prev) } catch { /* ignore */ }
-      }
-      return null
-    })
-  }, [])
-
-  const handleSignInSheetFiles = useCallback(async (files) => {
-    const file = files?.[0]
-    // Camera cancel / empty picker — do not touch loading or draft state
-    if (!file || !(file instanceof Blob)) return
-    if (!reportDate) {
-      setScanError('Set the report date before scanning a sign-in sheet.')
-      return
-    }
-
-    setLabourMode('scan')
-    setScanLoading(true)
-    setScanError('')
-    setScanApplyError('')
-    setScanApplyNotice('')
-    setScanApplySaving(false)
-    setScanApplySaved(false)
-    setScanWarnings([])
-    setScanOperatives([])
-    setScanLastFile(file)
-    clearScanPreview()
-    let previewUrl = null
-    try {
-      const dataUrl = await fileToVisionDataUrl(file)
-      previewUrl = dataUrl
-      setScanSheetPreview(previewUrl)
-
-      const result = await parseSignInSheetImage({
-        dataUrl,
-        reportDate,
-        groupBy: labourGroupBy,
-      })
-
-      const operatives = Array.isArray(result.operatives) ? result.operatives : []
-      setScanOperatives(operatives)
-      setScanWarnings(Array.isArray(result.warnings) ? result.warnings : [])
-      setScanMeta({
-        matched: result.matchedCount || 0,
-        ignored: result.ignoredCount || 0,
-        extracted: result.extractedCount || operatives.length,
-      })
-
-      if (!operatives.length) {
-        setScanError('No attendee rows were read from this sheet. Try another photo or enter labour manually.')
-      }
-    } catch (err) {
-      setScanSheetPreview(null)
-      setScanError(err?.message || 'Failed to scan sign-in sheet')
-      setScanMeta({ matched: 0, ignored: 0, extracted: 0 })
-      setScanOperatives([])
-      setScanWarnings([])
-    } finally {
-      setScanLoading(false)
-    }
-  }, [reportDate, labourGroupBy, clearScanPreview])
-
-  const applyScanOperativesToLabour = useCallback((event) => {
-    event?.preventDefault?.()
-    event?.stopPropagation?.()
-    if (typeof event?.nativeEvent?.stopImmediatePropagation === 'function') {
-      event.nativeEvent.stopImmediatePropagation()
-    }
-    if (labourApplyInFlightRef.current) return
-    const result = applyOperativesToLabourSummary(scanOperativesRef.current, {
-      groupBy: labourGroupBy,
-      makeKey: makeUuid,
-    })
-    if (!result.ok) {
-      setScanApplySaved(false)
-      setScanApplyNotice('')
-      setScanApplyError(result.message)
-      return
-    }
-    labourApplyInFlightRef.current = true
-    flushSync(() => {
-      setScanApplySaving(true)
-      setScanApplySaved(false)
-      setScanApplyError('')
-      setScanApplyNotice('')
-      setLabourRows(result.rows)
-    })
-    dismissAutosaveSuccessClaim()
-    invalidatePreparedSharePdf('committed-diary-change')
-
-    const finishApply = () => {
-      labourApplyInFlightRef.current = false
-      setScanApplySaving(false)
-    }
-
-    if (!editingReportId) {
-      setScanApplyNotice(
-        result.totals.hours > 0
-          ? `Labour summary now shows ${result.totals.operatives} ${result.totals.operatives === 1 ? 'operative' : 'operatives'} · ${result.totals.hours} hrs.`
-          : `Labour summary now shows ${result.totals.operatives} ${result.totals.operatives === 1 ? 'operative' : 'operatives'}. Check sign-in and sign-out times to add hours.`,
-      )
-      finishApply()
-      return
-    }
-
-    void persistAppliedLabourRows(supabase, editingReportId, result.rows)
-      .then((labourPayload) => {
-        lastPersistedLabourRef.current = labourPayload
-        setScanApplySaved(true)
-        setScanApplyNotice(labourApplySavedNotice(result.totals))
-      })
-      .catch(() => {
-        setScanApplySaved(false)
-        setScanApplyError(LABOUR_APPLY_SAVE_FAIL_MESSAGE)
-      })
-      .finally(() => {
-        finishApply()
-      })
-  }, [
-    dismissAutosaveSuccessClaim,
-    editingReportId,
-    invalidatePreparedSharePdf,
-    labourGroupBy,
-    supabase,
-  ])
-
-  const retrySignInScan = useCallback(() => {
-    if (scanLastFile) {
-      handleSignInSheetFiles([scanLastFile])
-    }
-  }, [scanLastFile, handleSignInSheetFiles])
-
-  const startManualLabour = useCallback(() => {
-    setLabourMode('manual')
-    setScanError('')
-    setScanApplyError('')
-    setScanApplyNotice('')
-    setScanApplySaving(false)
-    setScanApplySaved(false)
-    setScanMeta({ matched: 0, ignored: 0, extracted: 0 })
-    setScanWarnings([])
-    setScanOperatives([])
-    setScanLastFile(null)
-    clearScanPreview()
-    setLabourRows((rows) => (rows.some(labourRowHasData) ? rows : [emptyLabour()]))
-  }, [clearScanPreview])
 
   const updateLabour = (key, field, value) => {
     dismissAutosaveSuccessClaim()
@@ -3878,6 +3685,47 @@ export default function SiteDiaryPage() {
           />
         </GlassSection>
 
+        <SiteDiaryLabourSection
+          accent={DIARY_ACCENT}
+          reportDate={reportDate}
+          labourMode={labourScan.labourMode}
+          setLabourMode={labourScan.setLabourMode}
+          setScanError={labourScan.setScanError}
+          scanLoading={labourScan.scanLoading}
+          scanError={labourScan.scanError}
+          scanApplyError={labourScan.scanApplyError}
+          scanApplyNotice={labourScan.scanApplyNotice}
+          scanApplySaving={labourScan.scanApplySaving}
+          scanApplySaved={labourScan.scanApplySaved}
+          scanWarnings={labourScan.scanWarnings}
+          scanTradeHoursReview={labourScan.scanTradeHoursReview}
+          scanTradeHoursOtherDateCount={labourScan.scanTradeHoursOtherDateCount}
+          scanTradeHoursReviewReady={labourScan.scanTradeHoursReviewReady}
+          scanOcrProvider={labourScan.scanOcrProvider}
+          scanApplyEnabled={labourScan.scanApplyEnabled}
+          scanLastFile={labourScan.scanLastFile}
+          scanSheetPreview={labourScan.scanSheetPreview}
+          scanSignInPreviewLoadError={labourScan.scanSignInPreviewLoadError}
+          signInSheetPickerKey={labourScan.signInSheetPickerKey}
+          handleSignInSheetFiles={labourScan.handleSignInSheetFiles}
+          applyScanOperativesToLabour={labourScan.applyScanOperativesToLabour}
+          retrySignInScan={labourScan.retrySignInScan}
+          removeSignInSheetEvidence={labourScan.removeSignInSheetEvidence}
+          startManualLabour={labourScan.startManualLabour}
+          hasSignInSheetEvidenceOnForm={labourScan.hasSignInSheetEvidenceOnForm}
+          handleScanTradeHoursReviewChange={labourScan.handleScanTradeHoursReviewChange}
+          labourRows={labourRows}
+          labourTotals={labourTotals}
+          updateLabour={updateLabour}
+          emptyLabour={emptyLabour}
+          addRowButtonStyle={addRowButtonStyle}
+          cellInputStyle={cellInputStyle}
+          removeRowStyle={removeRowStyle}
+          dismissAutosaveSuccessClaim={dismissAutosaveSuccessClaim}
+          invalidatePreparedSharePdf={invalidatePreparedSharePdf}
+          setLabourRows={setLabourRows}
+        />
+
         <DiaryDailyRecordSections
           accent={DIARY_ACCENT}
           disabled={isDiaryViewMode}
@@ -3899,237 +3747,6 @@ export default function SiteDiaryPage() {
             placeholder="Overall progress, key activities, and notable events today…"
             rows={5}
           />
-        </GlassSection>
-
-        <GlassSection title="Labour" accent={DIARY_ACCENT}>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-              gap: 10,
-              marginBottom: 14,
-            }}
-          >
-            <button
-              type="button"
-              className="zlog-secondary-btn"
-              onClick={() => {
-                setLabourMode('scan')
-                setScanError('')
-              }}
-              style={{
-                ...addRowButtonStyle,
-                textTransform: 'none',
-                letterSpacing: '0.02em',
-                borderStyle: labourMode === 'scan' ? 'solid' : 'dashed',
-                borderColor: labourMode === 'scan' ? `rgba(${DIARY_ACCENT}, 0.55)` : 'var(--edge)',
-                color: 'var(--text)',
-                boxShadow: labourMode === 'scan' ? `0 0 0 1px rgba(${DIARY_ACCENT}, 0.25)` : undefined,
-              }}
-            >
-              Scan Sign-In Sheet (Camera/Upload)
-            </button>
-            <button
-              type="button"
-              className="zlog-secondary-btn"
-              onClick={startManualLabour}
-              style={{
-                ...addRowButtonStyle,
-                textTransform: 'none',
-                letterSpacing: '0.02em',
-                borderStyle: labourMode === 'manual' ? 'solid' : 'dashed',
-                borderColor: labourMode === 'manual' ? `rgba(${DIARY_ACCENT}, 0.55)` : 'var(--edge)',
-                color: 'var(--text)',
-                boxShadow: labourMode === 'manual' ? `0 0 0 1px rgba(${DIARY_ACCENT}, 0.25)` : undefined,
-              }}
-            >
-              Manual Entry
-            </button>
-          </div>
-
-          {labourMode === 'scan' && (
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 10 }}>
-                <label style={{ ...labelStyle, marginBottom: 0, fontSize: 10 }}>Aggregate by</label>
-                <select
-                  value={labourGroupBy}
-                  onChange={(e) => setLabourGroupBy(e.target.value)}
-                  style={{ ...cellInputStyle, width: 'auto', minWidth: 180, marginBottom: 0 }}
-                  disabled={scanLoading}
-                >
-                  <option value="trade_company">Trade + company</option>
-                  <option value="trade">Trade</option>
-                  <option value="company">Company / subcontractor</option>
-                </select>
-              </div>
-              <ImageSourceButtons
-                onFiles={handleSignInSheetFiles}
-                disabled={scanLoading}
-                cameraLabel="Scan with camera"
-                galleryLabel="Upload sheet photo"
-                hint="OCR extracts sign-in/out times only. Review every operative before applying to the labour summary."
-              />
-              {scanLoading && (
-                <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--text-2)' }}>
-                  Reading sign-in sheet…
-                </p>
-              )}
-              {scanSheetPreview && (
-                // eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG
-                <img
-                  src={scanSheetPreview}
-                  alt="Sign-in sheet preview"
-                  style={{
-                    marginTop: 12,
-                    width: '100%',
-                    maxHeight: 180,
-                    objectFit: 'contain',
-                    borderRadius: 10,
-                    border: '1px solid var(--edge)',
-                    background: 'var(--ink)',
-                  }}
-                />
-              )}
-              {scanError && (
-                <p style={{ margin: '12px 0 0', fontSize: 13, color: '#ff6b6b' }}>{scanError}</p>
-              )}
-              {!scanLoading && scanMeta.extracted > 0 && !scanError && (
-                <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--text-2)' }}>
-                  Extracted {scanMeta.extracted} operative{scanMeta.extracted === 1 ? '' : 's'}
-                  {scanMeta.ignored > 0 ? ` · ${scanMeta.ignored} flagged as other date` : ''}.
-                </p>
-              )}
-              {!scanLoading && scanOperatives.length > 0 && (
-                <SignInOperativeReview
-                  operatives={scanOperatives}
-                  onChange={(next) => {
-                    setScanApplyError('')
-                    setScanApplyNotice('')
-                    setScanApplySaved(false)
-                    setScanOperatives(next)
-                  }}
-                  onApply={applyScanOperativesToLabour}
-                  onRetry={scanLastFile ? retrySignInScan : undefined}
-                  warnings={scanWarnings}
-                  reportDate={reportDate}
-                  applying={scanApplySaving}
-                  appliedSaved={scanApplySaved}
-                  disabled={scanLoading || scanApplySaving}
-                  applyError={scanApplyError}
-                  applyNotice={scanApplyNotice}
-                />
-              )}
-            </div>
-          )}
-
-          <div
-            style={{
-              marginBottom: 12,
-              border: '1px solid var(--edge)',
-              borderRadius: 10,
-              overflow: 'hidden',
-              background: 'var(--plate)',
-            }}
-          >
-            <div
-              style={{
-                padding: '10px 12px',
-                borderBottom: '1px solid var(--edge)',
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 8,
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                Labour summary · {reportDate}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                {labourTotals.operatives} operatives · {labourTotals.hours} hrs
-              </div>
-            </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 480 }}>
-                <thead>
-                  <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-                    <th style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--text-2)', fontWeight: 600 }}>Trade</th>
-                    <th style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--text-2)', fontWeight: 600 }}>Company</th>
-                    <th style={{ textAlign: 'right', padding: '8px 10px', color: 'var(--text-2)', fontWeight: 600, width: 88 }}>Ops</th>
-                    <th style={{ textAlign: 'right', padding: '8px 10px', color: 'var(--text-2)', fontWeight: 600, width: 88 }}>Hours</th>
-                    <th style={{ width: 44 }} />
-                  </tr>
-                </thead>
-                <tbody>
-                  {labourRows.map((row) => (
-                    <tr key={row.key} style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                      <td style={{ padding: '6px 8px' }}>
-                        <input
-                          style={{ ...cellInputStyle, marginBottom: 0, width: '100%' }}
-                          value={row.trade}
-                          onChange={(e) => updateLabour(row.key, 'trade', e.target.value)}
-                          placeholder="Carpenter"
-                        />
-                      </td>
-                      <td style={{ padding: '6px 8px' }}>
-                        <input
-                          style={{ ...cellInputStyle, marginBottom: 0, width: '100%' }}
-                          value={row.company}
-                          onChange={(e) => updateLabour(row.key, 'company', e.target.value)}
-                          placeholder="Subco Ltd"
-                        />
-                      </td>
-                      <td style={{ padding: '6px 8px' }}>
-                        <input
-                          type="number"
-                          min="0"
-                          style={{ ...cellInputStyle, marginBottom: 0, width: '100%', textAlign: 'right' }}
-                          value={row.headcount}
-                          onChange={(e) => updateLabour(row.key, 'headcount', e.target.value)}
-                          placeholder="4"
-                        />
-                      </td>
-                      <td style={{ padding: '6px 8px' }}>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.5"
-                          style={{ ...cellInputStyle, marginBottom: 0, width: '100%', textAlign: 'right' }}
-                          value={row.hours}
-                          onChange={(e) => updateLabour(row.key, 'hours', e.target.value)}
-                          placeholder="8"
-                        />
-                      </td>
-                      <td style={{ padding: '6px 4px', textAlign: 'center' }}>
-                        {labourRows.length > 1 && (
-                          <button
-                            type="button"
-                            style={{ ...removeRowStyle, marginBottom: 0, padding: '4px 6px' }}
-                            onClick={() => {
-                              dismissAutosaveSuccessClaim()
-                              invalidatePreparedSharePdf('committed-diary-change')
-                              setLabourRows((rows) => rows.filter((r) => r.key !== row.key))
-                            }}
-                            aria-label="Remove labour row"
-                          >
-                            ×
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <button type="button" style={addRowButtonStyle} onClick={() => {
-            dismissAutosaveSuccessClaim()
-            invalidatePreparedSharePdf('committed-diary-change')
-            setLabourRows((rows) => [...rows, emptyLabour()])
-          }}>
-            + Add labour row
-          </button>
         </GlassSection>
 
         <GlassSection title="Plant" accent={DIARY_ACCENT}>

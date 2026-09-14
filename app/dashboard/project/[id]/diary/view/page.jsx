@@ -1067,6 +1067,26 @@ function SavedDiaryViewer() {
         emptyText="No weather was recorded."
       />
 
+      <GlassSection title="Labour on Site" accent={DIARY_ACCENT}>
+        {view.labour.length ? (
+          <>
+            <p style={{ ...valueStyle, margin: '0 0 10px', fontWeight: 600 }}>
+              {view.labourTotal} on site
+            </p>
+            <RecordList
+              rows={view.labour}
+              columns={[
+                { key: 'trade', label: 'Trade' },
+                { key: 'headcount', label: 'Workers' },
+                { key: 'hours', label: 'Hours on site' },
+              ]}
+            />
+          </>
+        ) : view.secondaryReady ? (
+          <EmptySection>No labour was recorded.</EmptySection>
+        ) : null}
+      </GlassSection>
+
       <GlassSection title="H&S Incidents / Observations" accent={DIARY_ACCENT}>
         {view.hsIncidents.length ? (
           <RecordList
@@ -1123,28 +1143,6 @@ function SavedDiaryViewer() {
         value={view.siteSummary}
         emptyText="No site summary was recorded."
       />
-
-      <GlassSection title="Labour on Site" accent={DIARY_ACCENT}>
-        {view.labour.length ? (
-          <>
-            <p style={{ ...valueStyle, margin: '0 0 10px', fontWeight: 600 }}>
-              {view.labourTotal} on site
-            </p>
-            <RecordList
-              rows={view.labour}
-              columns={[
-                { key: 'trade', label: 'Trade' },
-                { key: 'company', label: 'Company' },
-                { key: 'headcount', label: 'Number on Site' },
-                { key: 'hours', label: 'Hours' },
-                { key: 'notes', label: 'Notes' },
-              ]}
-            />
-          </>
-        ) : view.secondaryReady ? (
-          <EmptySection>No labour was recorded.</EmptySection>
-        ) : null}
-      </GlassSection>
 
       <GlassSection title="Plant" accent={DIARY_ACCENT}>
         {view.plant.length ? (

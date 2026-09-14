@@ -1,7 +1,15 @@
 'use client'
 
-import { hoursFromSignInOut } from '@/lib/labour-from-register'
-import { labelStyle } from '@/lib/premium-ui'
+import { useState } from 'react'
+import { countSignInTradeHoursReviewRows } from '@/lib/labour-from-register'
+import {
+  addSignInTradeHoursRow,
+  formatSignInTradeHoursReviewStatus,
+  parseSignInTradeHoursInput,
+  renameSignInTradeHoursRow,
+  setSignInTradeHoursRowHours,
+  totalSignInTradeHoursReview,
+} from '@/lib/sign-in-trade-hours-review'
 
 const cell = {
   width: '100%',
@@ -15,67 +23,65 @@ const cell = {
   fontFamily: 'inherit',
 }
 
-function statusLabel(status) {
-  if (status === 'match') return null
-  if (status === 'missing') return 'No date'
-  if (status === 'other') return 'Other date'
-  return null
-}
-
 /**
- * Per-operative OCR review — edit times (hours recalculate in app code), include/exclude, add/remove.
+ * Editable Trade + Hours review of Sign-in OCR.
+ * Underlying OCR operatives stay in parent state; this edits the reviewed summary only.
  */
 export function SignInOperativeReview({
-  operatives,
-  onChange,
+  reviewRows = [],
+  otherDateCount = 0,
+  onReviewRowsChange,
   onApply,
-  onRetry,
   warnings = [],
-  reportDate,
+  reportDate: _reportDate,
   applying = false,
   appliedSaved = false,
   disabled = false,
   applyError = '',
   applyNotice = '',
+  /** 'claude' | 'openai' | null — Apply is no longer provider-gated. */
+  ocrProvider: _ocrProvider = null,
+  applyEnabled = true,
 }) {
-  const list = Array.isArray(operatives) ? operatives : []
+  const rows = Array.isArray(reviewRows) ? reviewRows : []
+  const { resolvedTradeCount, needsReviewCount } = countSignInTradeHoursReviewRows(rows)
+  const applyBlocked = applyEnabled === false
+  const applyNeedsReviewBlocked = needsReviewCount > 0
+  const showApplyControl = !applyBlocked
+  const applyStatusLine = formatSignInTradeHoursReviewStatus(resolvedTradeCount, needsReviewCount)
+  const totalsHours = totalSignInTradeHoursReview(rows)
+  const totalsWorkers = rows.reduce(
+    (sum, row) => sum + (Number.isFinite(Number(row?.workers)) ? Math.trunc(Number(row.workers)) : 0),
+    0,
+  )
+  const [hoursDraftByKey, setHoursDraftByKey] = useState({})
 
-  const updateRow = (id, patch) => {
-    onChange(
-      list.map((row) => {
-        if (row.id !== id) return row
-        const next = { ...row, ...patch }
-        if ('time_in' in patch || 'time_out' in patch) {
-          next.hours = hoursFromSignInOut(next.time_in, next.time_out)
-        }
+  const emit = (nextRows) => {
+    if (typeof onReviewRowsChange === 'function') onReviewRowsChange(nextRows)
+  }
+
+  const handleTradeBlur = (rowKey, value) => {
+    emit(renameSignInTradeHoursRow(rows, rowKey, value))
+  }
+
+  const handleHoursCommit = (rowKey, raw) => {
+    const parsed = parseSignInTradeHoursInput(raw)
+    if (!parsed.ok && String(raw ?? '').trim() && String(raw).trim() !== '—') {
+      // Invalid entry: revert draft to current reviewed value; do not accept.
+      setHoursDraftByKey((prev) => {
+        const next = { ...prev }
+        delete next[rowKey]
         return next
-      }),
-    )
+      })
+      return
+    }
+    emit(setSignInTradeHoursRowHours(rows, rowKey, raw))
+    setHoursDraftByKey((prev) => {
+      const next = { ...prev }
+      delete next[rowKey]
+      return next
+    })
   }
-
-  const removeRow = (id) => {
-    onChange(list.filter((row) => row.id !== id))
-  }
-
-  const addRow = () => {
-    onChange([
-      ...list,
-      {
-        id: `manual-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
-        person_name: '',
-        trade: '',
-        company: '',
-        work_date: reportDate || null,
-        time_in: '',
-        time_out: '',
-        hours: null,
-        dateStatus: 'match',
-        included: true,
-      },
-    ])
-  }
-
-  const includedCount = list.filter((r) => r.included !== false).length
 
   const handleApply = (event) => {
     event.preventDefault()
@@ -83,7 +89,17 @@ export function SignInOperativeReview({
     if (typeof event.nativeEvent?.stopImmediatePropagation === 'function') {
       event.nativeEvent.stopImmediatePropagation()
     }
-    if (disabled || applying || appliedSaved || includedCount === 0) return
+    if (
+      applyBlocked
+      || applyNeedsReviewBlocked
+      || disabled
+      || applying
+      || appliedSaved
+      || rows.length === 0
+      || resolvedTradeCount === 0
+    ) {
+      return
+    }
     if (typeof onApply === 'function') onApply(event)
   }
 
@@ -99,174 +115,277 @@ export function SignInOperativeReview({
           marginBottom: 8,
         }}
       >
-        Review extracted operatives
+        Labour from sign-in sheet
       </div>
       <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.45 }}>
-        Hours are calculated from sign-in / sign-out only. Edit times to recalculate. Uncheck rows you do not want in the labour summary.
+        Labour is summarised by trade for this diary date. Correct any trade or hours if needed.
+        The sign-in sheet photo is the source record.
       </p>
 
       {warnings?.length > 0 && (
-        <ul style={{ margin: '0 0 12px', padding: '10px 12px 10px 28px', borderRadius: 10, border: '1px solid rgba(245,166,35,0.45)', background: 'rgba(245,166,35,0.08)', color: '#F5A623', fontSize: 12, lineHeight: 1.45 }}>
+        <ul
+          style={{
+            margin: '0 0 12px',
+            padding: '10px 12px 10px 28px',
+            borderRadius: 10,
+            border: '1px solid rgba(245,166,35,0.45)',
+            background: 'rgba(245,166,35,0.08)',
+            color: '#F5A623',
+            fontSize: 12,
+            lineHeight: 1.45,
+          }}
+        >
           {warnings.map((w) => (
-            <li key={w} style={{ marginBottom: 4 }}>{w}</li>
+            <li key={w} style={{ marginBottom: 4 }}>
+              {w}
+            </li>
           ))}
         </ul>
       )}
 
-      <div style={{ overflowX: 'auto', border: '1px solid var(--edge)', borderRadius: 10, background: 'var(--plate)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 720 }}>
-          <thead>
-            <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-              <th style={{ padding: '8px 6px', width: 36 }} />
-              <th style={{ textAlign: 'left', padding: '8px 8px', color: 'var(--text-2)', fontWeight: 600 }}>Name</th>
-              <th style={{ textAlign: 'left', padding: '8px 8px', color: 'var(--text-2)', fontWeight: 600 }}>Trade</th>
-              <th style={{ textAlign: 'left', padding: '8px 8px', color: 'var(--text-2)', fontWeight: 600 }}>Company</th>
-              <th style={{ textAlign: 'left', padding: '8px 8px', color: 'var(--text-2)', fontWeight: 600, width: 88 }}>In</th>
-              <th style={{ textAlign: 'left', padding: '8px 8px', color: 'var(--text-2)', fontWeight: 600, width: 88 }}>Out</th>
-              <th style={{ textAlign: 'right', padding: '8px 8px', color: 'var(--text-2)', fontWeight: 600, width: 64 }}>Hrs</th>
-              <th style={{ width: 36 }} />
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((row) => {
-              const badge = statusLabel(row.dateStatus)
-              return (
-                <tr key={row.id} style={{ borderTop: '1px solid rgba(255,255,255,0.06)', opacity: row.included === false ? 0.55 : 1 }}>
-                  <td style={{ padding: '6px', textAlign: 'center' }}>
-                    <input
-                      type="checkbox"
-                      checked={row.included !== false}
-                      disabled={disabled}
-                      onChange={(e) => updateRow(row.id, { included: e.target.checked })}
-                      aria-label={`Include ${row.person_name || 'operative'}`}
-                    />
-                  </td>
-                  <td style={{ padding: '6px 8px' }}>
-                    <input
-                      style={cell}
-                      value={row.person_name || ''}
-                      disabled={disabled}
-                      onChange={(e) => updateRow(row.id, { person_name: e.target.value })}
-                      placeholder="Name"
-                    />
-                    {badge && (
-                      <div style={{ marginTop: 4, fontSize: 10, color: '#F5A623', letterSpacing: '0.04em' }}>
-                        {badge}{row.work_date ? ` · ${row.work_date}` : ''}
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ padding: '6px 8px' }}>
-                    <input style={cell} value={row.trade || ''} disabled={disabled} onChange={(e) => updateRow(row.id, { trade: e.target.value })} placeholder="Trade" />
-                  </td>
-                  <td style={{ padding: '6px 8px' }}>
-                    <input style={cell} value={row.company || ''} disabled={disabled} onChange={(e) => updateRow(row.id, { company: e.target.value })} placeholder="Company" />
-                  </td>
-                  <td style={{ padding: '6px 8px' }}>
-                    <input style={cell} value={row.time_in || ''} disabled={disabled} onChange={(e) => updateRow(row.id, { time_in: e.target.value })} placeholder="07:00" />
-                  </td>
-                  <td style={{ padding: '6px 8px' }}>
-                    <input style={cell} value={row.time_out || ''} disabled={disabled} onChange={(e) => updateRow(row.id, { time_out: e.target.value })} placeholder="16:00" />
-                  </td>
-                  <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--text)' }}>
-                    {row.hours == null ? '—' : row.hours}
-                  </td>
-                  <td style={{ padding: '6px 4px', textAlign: 'center' }}>
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => removeRow(row.id)}
-                      aria-label="Remove operative"
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        color: 'var(--text-2)',
-                        cursor: 'pointer',
-                        fontSize: 16,
-                        lineHeight: 1,
-                        padding: '4px 6px',
-                      }}
-                    >
-                      ×
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      {otherDateCount > 0 && (
+        <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.45 }}>
+          {otherDateCount} row{otherDateCount === 1 ? '' : 's'} from another date are not included
+          in these totals.
+        </p>
+      )}
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 12, alignItems: 'center' }}>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={addRow}
+      <div
+        style={{
+          border: '1px solid var(--edge)',
+          borderRadius: 10,
+          overflow: 'hidden',
+          background: 'var(--plate)',
+        }}
+      >
+        <div
           style={{
-            ...labelStyle,
-            margin: 0,
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) 56px minmax(72px, 88px)',
+            gap: 8,
             padding: '8px 12px',
-            borderRadius: 8,
-            border: '1px dashed var(--edge)',
-            background: 'transparent',
+            borderBottom: '1px solid var(--edge)',
+            fontSize: 11,
+            fontWeight: 600,
             color: 'var(--text-2)',
-            cursor: 'pointer',
-            textTransform: 'none',
-            letterSpacing: '0.02em',
-            fontSize: 12,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
           }}
         >
-          + Add operative
-        </button>
-        {typeof onRetry === 'function' && (
-          <button
-            type="button"
-            disabled={disabled || applying}
-            onClick={onRetry}
+          <span>Trade</span>
+          <span style={{ textAlign: 'right' }}>Workers</span>
+          <span style={{ textAlign: 'right' }}>Hours on site</span>
+        </div>
+
+        {rows.length === 0 ? (
+          <p style={{ margin: 0, padding: '12px', fontSize: 13, color: 'var(--text-2)' }}>
+            No labour for this diary date was read from the sheet. Add a trade if needed.
+          </p>
+        ) : (
+          rows.map((t) => {
+            const hoursDraft =
+              hoursDraftByKey[t.key] !== undefined
+                ? hoursDraftByKey[t.key]
+                : t.hoursComplete && t.hours != null
+                  ? String(t.hours)
+                  : ''
+            return (
+              <div
+                key={t.key}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(0, 1fr) 56px minmax(72px, 88px)',
+                  gap: 8,
+                  padding: '10px 12px',
+                  borderTop: '1px solid rgba(255,255,255,0.06)',
+                  alignItems: 'start',
+                }}
+              >
+                <div>
+                  <input
+                    style={{ ...cell, marginBottom: 0, fontWeight: 600 }}
+                    value={t.trade || ''}
+                    disabled={disabled}
+                    aria-label="Trade"
+                    onChange={(e) => {
+                      const next = e.target.value
+                      emit(
+                        rows.map((r) =>
+                          r.key === t.key ? { ...r, trade: next } : r,
+                        ),
+                      )
+                    }}
+                    onBlur={(e) => handleTradeBlur(t.key, e.target.value)}
+                    placeholder="Trade"
+                  />
+                  {t.needsReview && !t.hoursComplete ? (
+                    <p
+                      role="status"
+                      style={{ margin: '4px 0 0', fontSize: 12, color: '#F5A623', lineHeight: 1.4 }}
+                    >
+                      Needs review
+                    </p>
+                  ) : null}
+                </div>
+                <div
+                  aria-label={`Workers for ${t.trade || 'trade'}`}
+                  style={{
+                    paddingTop: 8,
+                    textAlign: 'right',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: 'var(--text)',
+                  }}
+                >
+                  {Number.isFinite(Number(t.workers)) ? Math.trunc(Number(t.workers)) : 0}
+                </div>
+                <div>
+                  <input
+                    style={{ ...cell, marginBottom: 0, textAlign: 'right', fontWeight: 600 }}
+                    value={hoursDraft}
+                    disabled={disabled}
+                    inputMode="decimal"
+                    aria-label={`Hours on site for ${t.trade || 'trade'}`}
+                    placeholder="—"
+                    onChange={(e) => {
+                      const next = e.target.value
+                      setHoursDraftByKey((prev) => ({ ...prev, [t.key]: next }))
+                    }}
+                    onBlur={(e) => handleHoursCommit(t.key, e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.currentTarget.blur()
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            )
+          })
+        )}
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) 56px minmax(72px, 88px)',
+            gap: 8,
+            padding: '10px 12px',
+            borderTop: '1px solid var(--edge)',
+            background: 'var(--ink)',
+            alignItems: 'center',
+          }}
+        >
+          <div
             style={{
-              padding: '8px 12px',
-              borderRadius: 8,
-              border: '1px solid var(--edge)',
-              background: 'transparent',
-              color: 'var(--text)',
-              cursor: 'pointer',
               fontSize: 12,
+              fontWeight: 600,
+              color: 'var(--text)',
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
             }}
           >
-            Retry scan
-          </button>
-        )}
-        <button
-          type="button"
-          form="zlog-labour-ocr-apply-disconnected"
-          disabled={disabled || applying || appliedSaved || includedCount === 0}
-          onClick={handleApply}
-          style={{
-            marginLeft: 'auto',
-            padding: '9px 14px',
-            borderRadius: 8,
-            border: '1px solid color-mix(in srgb, var(--action) 55%, transparent)',
-            background: 'color-mix(in srgb, var(--action) 18%, transparent)',
-            color: 'var(--text)',
-            cursor: (disabled || applying || appliedSaved || includedCount === 0) ? 'not-allowed' : 'pointer',
-            fontSize: 13,
-            fontWeight: 600,
-            touchAction: 'manipulation',
-            WebkitTapHighlightColor: 'transparent',
-          }}
-        >
-          {applying
-            ? 'Applying…'
-            : appliedSaved
-              ? '✓ Applied and saved'
-              : `Apply ${includedCount} to labour summary`}
-        </button>
+            Total
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', textAlign: 'right' }}>
+            {totalsWorkers}
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', textAlign: 'right' }}>
+            {totalsHours.toFixed(1)} hrs
+          </div>
+        </div>
       </div>
+
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => emit(addSignInTradeHoursRow(rows))}
+        style={{
+          marginTop: 10,
+          width: '100%',
+          minHeight: 44,
+          padding: '10px 14px',
+          borderRadius: 10,
+          border: '1px dashed var(--edge)',
+          background: 'transparent',
+          color: 'var(--text)',
+          fontSize: 14,
+          fontWeight: 600,
+          letterSpacing: '0.02em',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          fontFamily: 'inherit',
+        }}
+      >
+        + Add trade
+      </button>
+
+      {showApplyControl ? (
+        <div style={{ marginTop: 12 }}>
+          <p
+            style={{
+              margin: '0 0 8px',
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--text)',
+              lineHeight: 1.45,
+            }}
+          >
+            {applyStatusLine}
+          </p>
+          {applyNeedsReviewBlocked ? (
+            <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.45 }}>
+              Resolve the item marked for review before applying.
+            </p>
+          ) : null}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+            <button
+              type="button"
+              form="zlog-labour-ocr-apply-disconnected"
+              disabled={
+                disabled
+                || applying
+                || appliedSaved
+                || rows.length === 0
+                || resolvedTradeCount === 0
+                || applyNeedsReviewBlocked
+              }
+              onClick={handleApply}
+              style={{
+                marginLeft: 'auto',
+                padding: '9px 14px',
+                borderRadius: 8,
+                border: '1px solid color-mix(in srgb, var(--action) 55%, transparent)',
+                background: 'color-mix(in srgb, var(--action) 18%, transparent)',
+                color: 'var(--text)',
+                cursor:
+                  disabled
+                  || applying
+                  || appliedSaved
+                  || rows.length === 0
+                  || resolvedTradeCount === 0
+                  || applyNeedsReviewBlocked
+                    ? 'not-allowed'
+                    : 'pointer',
+                fontSize: 13,
+                fontWeight: 600,
+                touchAction: 'manipulation',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              {applying
+                ? 'Applying…'
+                : appliedSaved
+                  ? '✓ Applied and saved'
+                  : `Apply ${resolvedTradeCount} trade${resolvedTradeCount === 1 ? '' : 's'} to labour summary`}
+            </button>
+          </div>
+        </div>
+      ) : null}
       {applyError ? (
         <p role="alert" style={{ margin: '10px 0 0', fontSize: 13, color: '#ff6b6b', lineHeight: 1.45 }}>
           {applyError}
         </p>
       ) : null}
-      {applyNotice && !applyError ? (
+      {applyNotice && !applyError && showApplyControl ? (
         <p role="status" style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--text)', lineHeight: 1.45 }}>
           {applyNotice}
         </p>
