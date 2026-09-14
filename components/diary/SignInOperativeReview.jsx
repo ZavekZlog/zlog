@@ -8,6 +8,7 @@ import {
   parseSignInTradeHoursInput,
   renameSignInTradeHoursRow,
   setSignInTradeHoursRowHours,
+  formatLabourHoursForDisplay,
   totalSignInTradeHoursReview,
 } from '@/lib/sign-in-trade-hours-review'
 
@@ -290,7 +291,7 @@ export function SignInOperativeReview({
             {totalsWorkers}
           </div>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', textAlign: 'right' }}>
-            {totalsHours.toFixed(1)} hrs
+            {formatLabourHoursForDisplay(totalsHours)} hrs
           </div>
         </div>
       </div>
