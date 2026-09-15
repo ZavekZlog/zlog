@@ -38,6 +38,7 @@ import {
   createEmptyLabourRow,
   labourRowHasData,
 } from '@/lib/site-diary-labour-form'
+import { scanReviewEvidencePathForCommittedGeneration } from '@/lib/scan-review-evidence-path'
 
 const labourGroupBy = 'trade'
 
@@ -55,9 +56,14 @@ export function useSiteDiaryLabour({
   makeUuid,
   signedUrlForPath,
   visitors = '',
+  visitorsRegisterProvenance = [],
   onVisitorsChange,
 }) {
-  const [labourMode, setLabourMode] = useState('manual')
+  const [labourMode, setLabourModeState] = useState('manual')
+  const [manualLabourEditing, setManualLabourEditing] = useState(false)
+  const manualLabourSnapshotRef = useRef(null)
+  const [manualLabourSaveError, setManualLabourSaveError] = useState('')
+  const [manualLabourSaving, setManualLabourSaving] = useState(false)
   const [scanLoading, setScanLoading] = useState(false)
   const [scanError, setScanError] = useState('')
   const [scanApplyError, setScanApplyError] = useState('')
@@ -78,6 +84,7 @@ export function useSiteDiaryLabour({
   const [scanSheetPreview, setScanSheetPreview] = useState(null)
   const [scanSignInPreviewLoadError, setScanSignInPreviewLoadError] = useState('')
   const [signInSheetStoragePath, setSignInSheetStoragePath] = useState(null)
+  const [scanReviewEvidencePath, setScanReviewEvidencePath] = useState(null)
   const loadedSignInSheetPathRef = useRef(null)
   const signInSheetRemovedRef = useRef(false)
   const [signInSheetPickerKey, setSignInSheetPickerKey] = useState(0)
@@ -126,6 +133,7 @@ export function useSiteDiaryLabour({
     setScanOcrProvider(empty.scanOcrProvider)
     setScanApplyEnabled(empty.scanApplyEnabled)
     setScanLastFile(empty.scanLastFile)
+    setScanReviewEvidencePath(null)
     clearScanPreview()
     setSignInSheetPickerKey((key) => key + 1)
   }, [clearScanPreview])
@@ -136,7 +144,7 @@ export function useSiteDiaryLabour({
     const file = files[0]
     if (!file || !(file instanceof Blob)) return
     if (!reportDate) {
-      setScanError('Set the report date before scanning a sign-in sheet.')
+      setScanError('Set the report date before scanning the Attendance Register.')
       return
     }
 
@@ -144,7 +152,10 @@ export function useSiteDiaryLabour({
     const requestId = nextSignInSheetRequestId(scanRequestIdRef.current)
     scanRequestIdRef.current = requestId
 
-    setLabourMode('scan')
+    setLabourModeState('scan')
+    setManualLabourEditing(false)
+    setManualLabourSaveError('')
+    manualLabourSnapshotRef.current = null
     setScanLoading(true)
     setScanError('')
     setScanSignInPreviewLoadError('')
@@ -157,9 +168,11 @@ export function useSiteDiaryLabour({
     setScanTradeHoursReview([])
     setScanTradeHoursOtherDateCount(0)
     setScanTradeHoursReviewReady(false)
+    setScanReviewEvidencePath(null)
     setScanOcrProvider(null)
     setScanApplyEnabled(true)
     setScanMeta({ matched: 0, ignored: 0, extracted: 0 })
+    let persistedStoragePathForGeneration = null
     try {
       const provider = resolveSignInOcrProvider()
       const prepared = await prepareSignInSheetImageForProvider(file, provider)
@@ -193,6 +206,7 @@ export function useSiteDiaryLabour({
         }
         loadedSignInSheetPathRef.current = persistResult.storagePath
         setSignInSheetStoragePath(persistResult.storagePath)
+        persistedStoragePathForGeneration = persistResult.storagePath
         signInSheetRemovedRef.current = false
       }
 
@@ -223,9 +237,17 @@ export function useSiteDiaryLabour({
         ignored: result.ignoredCount || 0,
         extracted: result.extractedCount || operatives.length,
       })
+      const committedPath = scanReviewEvidencePathForCommittedGeneration({
+        persistEvidence,
+        editingReportId,
+        projectId,
+        persistedStoragePathForGeneration,
+        sessionPersistedPath: loadedSignInSheetPathRef.current || signInSheetStoragePath,
+      })
+      setScanReviewEvidencePath(committedPath)
 
       if (!operatives.length) {
-        setScanError('No attendee rows were read from this sheet. Try another photo or enter labour manually.')
+        setScanError('No attendee rows were read from this register. Try another photo or enter labour manually.')
       }
     } catch (err) {
       if (!isSignInSheetRequestCurrent(scanRequestIdRef.current, requestId)) return
@@ -235,12 +257,13 @@ export function useSiteDiaryLabour({
       if (!hasPersistedPath) {
         setScanSheetPreview(null)
       }
-      setScanError(err?.message || 'Failed to scan sign-in sheet')
+      setScanError(err?.message || 'Could not read the Attendance Register')
       setScanMeta({ matched: 0, ignored: 0, extracted: 0 })
       setScanOperatives([])
       setScanTradeHoursReview([])
       setScanTradeHoursOtherDateCount(0)
       setScanTradeHoursReviewReady(false)
+      setScanReviewEvidencePath(null)
       setScanOcrProvider(null)
       setScanApplyEnabled(true)
       setScanWarnings([])
@@ -272,7 +295,7 @@ export function useSiteDiaryLabour({
       setScanApplySaved(false)
       setScanApplyNotice('')
       setScanApplyError(
-        'Scanned labour cannot be applied to the summary yet. Review the sheet, or enter labour manually.',
+        'Scanned labour cannot be applied to the summary yet. Review the Attendance Register, or enter labour manually.',
       )
       return
     }
@@ -305,8 +328,8 @@ export function useSiteDiaryLabour({
     if (!editingReportId) {
       setScanApplyNotice(
         result.totals.hours > 0
-          ? `Labour summary now shows ${result.totals.workers} ${result.totals.workers === 1 ? 'worker' : 'workers'} · ${result.totals.hours} hrs.`
-          : `Labour summary now shows ${result.totals.workers} ${result.totals.workers === 1 ? 'worker' : 'workers'}. Check sign-in and sign-out times to add hours.`,
+          ? `Labour Attendance Summary now shows ${result.totals.workers} ${result.totals.workers === 1 ? 'worker' : 'workers'} · ${result.totals.hours} hrs.`
+          : `Labour Attendance Summary now shows ${result.totals.workers} ${result.totals.workers === 1 ? 'worker' : 'workers'}. Check time in and time out on the register to add hours.`,
       )
       finishApply()
       return
@@ -350,7 +373,7 @@ export function useSiteDiaryLabour({
     if (
       typeof window !== 'undefined'
       && !window.confirm(
-        'Remove this sign-in sheet photo? Your labour summary will stay as it is.',
+        'Delete this Attendance Register photo? Your Labour Attendance Summary will stay as it is.',
       )
     ) {
       return
@@ -387,6 +410,19 @@ export function useSiteDiaryLabour({
     updateDiarySetupFields,
   ])
 
+  const snapshotManualLabourRows = useCallback(() => {
+    manualLabourSnapshotRef.current = JSON.parse(JSON.stringify(_labourRows))
+  }, [_labourRows])
+
+  const setLabourMode = useCallback((mode) => {
+    setLabourModeState(mode)
+    if (mode === 'scan') {
+      setManualLabourEditing(false)
+      setManualLabourSaveError('')
+      manualLabourSnapshotRef.current = null
+    }
+  }, [])
+
   const startManualLabour = useCallback(() => {
     setLabourMode('manual')
     setScanError('')
@@ -400,10 +436,62 @@ export function useSiteDiaryLabour({
     setScanTradeHoursReview([])
     setScanTradeHoursOtherDateCount(0)
     setScanTradeHoursReviewReady(false)
-    setLabourRows((rows) => (
-      rows.some(labourRowHasData) ? rows : [createEmptyLabourRow(makeUuid())]
-    ))
-  }, [makeUuid, setLabourRows])
+    setScanReviewEvidencePath(null)
+    setManualLabourSaveError('')
+    setLabourRows((rows) => {
+      const next = rows.some(labourRowHasData) ? rows : [createEmptyLabourRow(makeUuid())]
+      manualLabourSnapshotRef.current = JSON.parse(JSON.stringify(next))
+      return next
+    })
+    setManualLabourEditing(true)
+  }, [makeUuid, setLabourMode, setLabourRows])
+
+  const resumeManualLabourEdit = useCallback(() => {
+    setManualLabourSaveError('')
+    snapshotManualLabourRows()
+    setManualLabourEditing(true)
+  }, [snapshotManualLabourRows])
+
+  const cancelManualLabourEdit = useCallback(() => {
+    const snap = manualLabourSnapshotRef.current
+    if (Array.isArray(snap)) {
+      setLabourRows(snap)
+    }
+    setManualLabourEditing(false)
+    setManualLabourSaveError('')
+    manualLabourSnapshotRef.current = null
+  }, [setLabourRows])
+
+  const saveManualLabourChanges = useCallback(() => {
+    setManualLabourSaveError('')
+    dismissAutosaveSuccessClaim()
+    invalidatePreparedSharePdf('committed-diary-change')
+    if (!editingReportId) {
+      setManualLabourEditing(false)
+      manualLabourSnapshotRef.current = null
+      return
+    }
+    setManualLabourSaving(true)
+    void persistAppliedLabourRows(supabase, editingReportId, _labourRows)
+      .then((labourPayload) => {
+        lastPersistedLabourRef.current = labourPayload
+        setManualLabourEditing(false)
+        manualLabourSnapshotRef.current = null
+      })
+      .catch(() => {
+        setManualLabourSaveError(LABOUR_APPLY_SAVE_FAIL_MESSAGE)
+      })
+      .finally(() => {
+        setManualLabourSaving(false)
+      })
+  }, [
+    _labourRows,
+    dismissAutosaveSuccessClaim,
+    editingReportId,
+    invalidatePreparedSharePdf,
+    lastPersistedLabourRef,
+    supabase,
+  ])
 
   const hydrateSignInFromReport = useCallback(async (existing, isCancelled) => {
     const hydratedSignInPath = signInSheetRemovedRef.current
@@ -472,12 +560,15 @@ export function useSiteDiaryLabour({
 
   const handleOperativeMoveToVisitors = useCallback(
     ({ reviewRowKey, operativeId, tradeLabel }) => {
+      const evidencePath = String(scanReviewEvidencePath || '').trim()
       const result = applyOperativeMoveToVisitorsFromReview({
         operatives: scanOperatives,
         reviewRows: scanTradeHoursReviewRef.current,
         reviewRowKey,
         operativeId,
         existingVisitorsText: visitors,
+        existingVisitorsRegisterProvenance: visitorsRegisterProvenance,
+        evidencePath,
         tradeLabel: tradeLabel || '',
       })
       if (!result.ok) {
@@ -485,6 +576,12 @@ export function useSiteDiaryLabour({
         setScanApplyNotice('')
         if (result.reason === 'already-moved') {
           setScanApplyError('')
+          if (
+            typeof onVisitorsChange === 'function'
+            && typeof result.visitorsText === 'string'
+          ) {
+            onVisitorsChange(result.visitorsText, result.visitorsRegisterProvenance)
+          }
           return
         }
         setScanApplyError(
@@ -499,10 +596,10 @@ export function useSiteDiaryLabour({
       setScanOperatives(result.operatives)
       setScanTradeHoursReview(result.reviewRows)
       if (typeof onVisitorsChange === 'function') {
-        onVisitorsChange(result.visitorsText)
+        onVisitorsChange(result.visitorsText, result.visitorsRegisterProvenance)
       }
     },
-    [scanOperatives, visitors, onVisitorsChange],
+    [scanOperatives, visitors, visitorsRegisterProvenance, onVisitorsChange, scanReviewEvidencePath],
   )
 
   return {
@@ -533,6 +630,12 @@ export function useSiteDiaryLabour({
     retrySignInScan,
     removeSignInSheetEvidence,
     startManualLabour,
+    manualLabourEditing,
+    resumeManualLabourEdit,
+    saveManualLabourChanges,
+    cancelManualLabourEdit,
+    manualLabourSaveError,
+    manualLabourSaving,
     hasSignInSheetEvidenceOnForm,
     hydrateSignInFromReport,
     handleScanTradeHoursReviewChange,

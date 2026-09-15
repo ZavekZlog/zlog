@@ -27,6 +27,7 @@ import {
 } from '@/lib/premium-ui'
 import { REPORT_THEMES } from '@/lib/report-theme'
 import { labourAggregateTotals } from '@/lib/labour-from-register'
+import { normalizeVisitorsRegisterProvenance } from '@/lib/visitors-register-provenance'
 import { createEmptyLabourRow, mapLabourRowsFromDb } from '@/lib/site-diary-labour-form'
 import { useSiteDiaryLabour } from '@/components/diary/useSiteDiaryLabour'
 import { SiteDiaryLabourSection } from '@/components/diary/SiteDiaryLabourSection'
@@ -616,10 +617,14 @@ export default function SiteDiaryPage() {
   }
   const [labourRows, setLabourRows] = useState([emptyLabour()])
   const [visitors, setVisitors] = useState('')
-  const handleVisitorsFromLabourScan = useCallback((text) => {
+  const [visitorsRegisterProvenance, setVisitorsRegisterProvenance] = useState([])
+  const handleVisitorsFromLabourScan = useCallback((text, provenance) => {
     dismissAutosaveSuccessClaim()
     invalidatePreparedSharePdf('committed-diary-change')
     setVisitors(text)
+    if (provenance !== undefined) {
+      setVisitorsRegisterProvenance(normalizeVisitorsRegisterProvenance(provenance))
+    }
   }, [dismissAutosaveSuccessClaim, invalidatePreparedSharePdf])
   const labourScan = useSiteDiaryLabour({
     reportDate,
@@ -635,6 +640,7 @@ export default function SiteDiaryPage() {
     makeUuid,
     signedUrlForPath,
     visitors,
+    visitorsRegisterProvenance,
     onVisitorsChange: handleVisitorsFromLabourScan,
   })
   const [plantRows, setPlantRows] = useState([emptyPlant()])
@@ -859,6 +865,7 @@ export default function SiteDiaryPage() {
         setWeather('')
         setShiftType('Day')
         setVisitors('')
+        setVisitorsRegisterProvenance([])
         setDelaysIssues('')
         setCompanyReportingFor('')
         setCreatorName('')
@@ -1120,6 +1127,9 @@ export default function SiteDiaryPage() {
         setShiftType(existing.shift || existing.shift_type || 'Day')
         setSiteSummary(existing.site_summary || '')
         setVisitors(existing.visitors || '')
+        setVisitorsRegisterProvenance(
+          normalizeVisitorsRegisterProvenance(existing.visitors_register_provenance),
+        )
         setDelaysIssues(existing.delays_issues || '')
         setActionsRequired(existing.actions || existing.actions_required || '')
         setCompanyReportingFor(existing.company_reporting_for || '')
@@ -1494,6 +1504,7 @@ export default function SiteDiaryPage() {
     weather,
     siteSummary,
     visitors,
+    visitorsRegisterProvenance,
     delaysIssues,
     actions: actionsRequired,
     equipmentHireRows,
@@ -1511,6 +1522,7 @@ export default function SiteDiaryPage() {
     weather,
     siteSummary,
     visitors,
+    visitorsRegisterProvenance,
     delaysIssues,
     actionsRequired,
     equipmentHireRows,
@@ -1528,6 +1540,9 @@ export default function SiteDiaryPage() {
     setWeather(snapshot.weather || '')
     setSiteSummary(snapshot.site_summary || '')
     setVisitors(snapshot.visitors || '')
+    setVisitorsRegisterProvenance(
+      normalizeVisitorsRegisterProvenance(snapshot.visitors_register_provenance),
+    )
     setDelaysIssues(snapshot.delays_issues || '')
     setActionsRequired(snapshot.actions || '')
     setEquipmentHireRows(equipmentHireFromDb(snapshot.equipment_hire))
@@ -2970,6 +2985,7 @@ export default function SiteDiaryPage() {
           shift: shiftType || null,
           site_summary: siteSummary.trim(),
           visitors: visitors.trim() || null,
+          visitors_register_provenance: normalizeVisitorsRegisterProvenance(visitorsRegisterProvenance),
           delays_issues: delaysIssues.trim() || null,
           actions: actionsRequired.trim() || null,
           company_reporting_for: companyReportingFor.trim() || null,
@@ -3719,6 +3735,12 @@ export default function SiteDiaryPage() {
           retrySignInScan={labourScan.retrySignInScan}
           removeSignInSheetEvidence={labourScan.removeSignInSheetEvidence}
           startManualLabour={labourScan.startManualLabour}
+          manualLabourEditing={labourScan.manualLabourEditing}
+          resumeManualLabourEdit={labourScan.resumeManualLabourEdit}
+          saveManualLabourChanges={labourScan.saveManualLabourChanges}
+          cancelManualLabourEdit={labourScan.cancelManualLabourEdit}
+          manualLabourSaveError={labourScan.manualLabourSaveError}
+          manualLabourSaving={labourScan.manualLabourSaving}
           hasSignInSheetEvidenceOnForm={labourScan.hasSignInSheetEvidenceOnForm}
           handleScanTradeHoursReviewChange={labourScan.handleScanTradeHoursReviewChange}
           handleOperativeLabourExclusion={labourScan.handleOperativeLabourExclusion}

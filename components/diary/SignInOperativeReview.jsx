@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { countSignInTradeHoursReviewRows } from '@/lib/labour-from-register'
 import {
   addSignInTradeHoursRow,
@@ -16,6 +16,10 @@ import {
   scanDerivedSignInTradeHoursReviewRow,
   signInAddTradeUsesPointerDownActivation,
   totalSignInTradeHoursReview,
+  signInTradeReviewRowPeoplePanelAnchor,
+  resolveOpenAdjustPeopleRowKey,
+  signInTradeReviewRowsPresenceKey,
+  shouldClearPeoplePanelAnchor,
 } from '@/lib/sign-in-trade-hours-review'
 
 /** User-facing Labour review must not surface other-date exclusion as a warning. */
@@ -74,14 +78,18 @@ export function SignInOperativeReview({
   const [hoursDraftByKey, setHoursDraftByKey] = useState({})
   const [workersDraftByKey, setWorkersDraftByKey] = useState({})
   const [adjustPeopleRowKey, setAdjustPeopleRowKey] = useState(null)
-  const [rowMenuOpenKey, setRowMenuOpenKey] = useState(null)
+  const [peoplePanelAnchor, setPeoplePanelAnchor] = useState(null)
   const operatives = Array.isArray(scanOperatives) ? scanOperatives : []
-
-  useEffect(() => {
-    if (adjustPeopleRowKey && !rows.some((row) => row.key === adjustPeopleRowKey)) {
-      setAdjustPeopleRowKey(null)
-    }
-  }, [rows, adjustPeopleRowKey])
+  const rowsPresenceKey = signInTradeReviewRowsPresenceKey(rows)
+  if (shouldClearPeoplePanelAnchor(peoplePanelAnchor, rowsPresenceKey)) {
+    setPeoplePanelAnchor(null)
+  }
+  const openAdjustPeopleRowKey = resolveOpenAdjustPeopleRowKey(
+    adjustPeopleRowKey,
+    rows,
+    peoplePanelAnchor,
+    rowsPresenceKey,
+  )
 
   const emit = (nextRows) => {
     if (typeof onReviewRowsChange === 'function') onReviewRowsChange(nextRows)
@@ -175,10 +183,10 @@ export function SignInOperativeReview({
           marginBottom: 8,
         }}
       >
-        Labour from sign-in sheet
+        Labour from Attendance Register
       </div>
       <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.45 }}>
-        Use ⋯ to separate visitors from production workers.
+        Use ⋯ to correct scan errors or separate visitors from production workers.
       </p>
 
       {visibleWarnings.length > 0 && (
@@ -232,7 +240,7 @@ export function SignInOperativeReview({
 
         {rows.length === 0 ? (
           <p style={{ margin: 0, padding: '12px', fontSize: 13, color: 'var(--text-2)' }}>
-            No labour for this diary date was read from the sheet. Add a trade if needed.
+            No labour for this diary date was read from the register. Add a trade if needed.
           </p>
         ) : (
           rows.map((t) => {
@@ -256,7 +264,7 @@ export function SignInOperativeReview({
                   (row) => row && row.movedToVisitors !== true,
                 )
               : []
-            const adjustOpen = adjustPeopleRowKey === t.key
+            const adjustOpen = openAdjustPeopleRowKey === t.key
             return (
               <div key={t.key}>
               <div
@@ -374,10 +382,21 @@ export function SignInOperativeReview({
                       <button
                         type="button"
                         disabled={disabled}
-                        aria-label={`More actions for ${t.trade || 'trade'}`}
-                        aria-expanded={rowMenuOpenKey === t.key}
+                        aria-label={`People on ${t.trade || 'this trade'}`}
+                        aria-expanded={adjustOpen}
                         onClick={() => {
-                          setRowMenuOpenKey((prev) => (prev === t.key ? null : t.key))
+                          setAdjustPeopleRowKey((prev) => {
+                            if (prev === t.key) {
+                              setPeoplePanelAnchor(null)
+                              return null
+                            }
+                            setPeoplePanelAnchor({
+                              rowKey: t.key,
+                              anchor: signInTradeReviewRowPeoplePanelAnchor(t),
+                              rowsPresenceKey,
+                            })
+                            return t.key
+                          })
                         }}
                         style={{
                           width: 32,
@@ -394,47 +413,6 @@ export function SignInOperativeReview({
                       >
                         ⋯
                       </button>
-                      {rowMenuOpenKey === t.key ? (
-                        <div
-                          role="menu"
-                          style={{
-                            position: 'absolute',
-                            right: 0,
-                            top: '100%',
-                            zIndex: 4,
-                            marginTop: 4,
-                            minWidth: 148,
-                            borderRadius: 10,
-                            border: '1px solid var(--edge)',
-                            background: 'var(--plate)',
-                            boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          <button
-                            type="button"
-                            role="menuitem"
-                            disabled={disabled}
-                            onClick={() => {
-                              setRowMenuOpenKey(null)
-                              setAdjustPeopleRowKey(t.key)
-                            }}
-                            style={{
-                              display: 'block',
-                              width: '100%',
-                              textAlign: 'left',
-                              padding: '10px 12px',
-                              border: 'none',
-                              background: 'transparent',
-                              color: 'var(--text)',
-                              fontSize: 13,
-                              cursor: disabled ? 'not-allowed' : 'pointer',
-                            }}
-                          >
-                            Review people
-                          </button>
-                        </div>
-                      ) : null}
                     </>
                   ) : null}
                 </div>
@@ -462,7 +440,9 @@ export function SignInOperativeReview({
                   <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
                     {bucketOperatives.map((op) => {
                       const excluded = op.excludedFromLabour === true
-                      const line = formatSignInOperativeLabourLine(op, t.trade)
+                      const line = formatSignInOperativeLabourLine(op, t.trade, {
+                        includeTradeSuffix: false,
+                      })
                       return (
                         <li
                           key={String(op.id)}
@@ -487,9 +467,10 @@ export function SignInOperativeReview({
                           <div
                             style={{
                               display: 'flex',
-                              flexDirection: 'column',
-                              gap: 6,
-                              alignItems: 'flex-start',
+                              flexWrap: 'wrap',
+                              gap: 8,
+                              alignItems: 'stretch',
+                              width: '100%',
                             }}
                           >
                             <button
@@ -506,17 +487,22 @@ export function SignInOperativeReview({
                                   (row) => String(row.id) !== String(op.id),
                                 )
                                 if (remainingAfterMove.length <= 1) {
+                                  setPeoplePanelAnchor(null)
                                   setAdjustPeopleRowKey(null)
                                 }
                               }}
                               style={{
-                                padding: '6px 10px',
+                                flex: '1 1 140px',
+                                minHeight: 44,
+                                padding: '8px 10px',
                                 borderRadius: 8,
                                 border: '1px solid var(--edge)',
                                 background: 'var(--plate)',
                                 color: 'var(--text)',
                                 fontSize: 12,
+                                fontWeight: 600,
                                 cursor: disabled || excluded ? 'not-allowed' : 'pointer',
+                                touchAction: 'manipulation',
                               }}
                             >
                               Move to Visitors
@@ -538,17 +524,22 @@ export function SignInOperativeReview({
                                     && row.excludedFromLabour !== true,
                                 )
                                 if (remaining.length <= 1) {
+                                  setPeoplePanelAnchor(null)
                                   setAdjustPeopleRowKey(null)
                                 }
                               }}
                               style={{
-                                padding: '6px 10px',
+                                flex: '1 1 140px',
+                                minHeight: 44,
+                                padding: '8px 10px',
                                 borderRadius: 8,
                                 border: '1px solid var(--edge)',
                                 background: 'var(--plate)',
                                 color: 'var(--text)',
                                 fontSize: 12,
+                                fontWeight: 600,
                                 cursor: disabled ? 'not-allowed' : 'pointer',
+                                touchAction: 'manipulation',
                               }}
                             >
                               {excluded ? 'Include in labour' : 'Exclude from labour'}
@@ -560,7 +551,10 @@ export function SignInOperativeReview({
                   </ul>
                   <button
                     type="button"
-                    onClick={() => setAdjustPeopleRowKey(null)}
+                    onClick={() => {
+                      setPeoplePanelAnchor(null)
+                      setAdjustPeopleRowKey(null)
+                    }}
                     style={{
                       marginTop: 4,
                       padding: 0,
@@ -603,10 +597,27 @@ export function SignInOperativeReview({
           >
             Total
           </div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', textAlign: 'right' }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--text)',
+              textAlign: 'right',
+              lineHeight: 1.35,
+            }}
+          >
             {totalsWorkers}
           </div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', textAlign: 'right' }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--text)',
+              whiteSpace: 'nowrap',
+              textAlign: 'right',
+              lineHeight: 1.35,
+            }}
+          >
             {formatLabourHoursForDisplay(totalsHours)} hrs
           </div>
         </div>
@@ -695,7 +706,7 @@ export function SignInOperativeReview({
                 ? 'Applying…'
                 : appliedSaved
                   ? '✓ Applied and saved'
-                  : `Apply ${resolvedTradeCount} trade${resolvedTradeCount === 1 ? '' : 's'} to labour summary`}
+                  : `Apply ${resolvedTradeCount} trade${resolvedTradeCount === 1 ? '' : 's'} to Labour Attendance Summary`}
             </button>
           </div>
         </div>

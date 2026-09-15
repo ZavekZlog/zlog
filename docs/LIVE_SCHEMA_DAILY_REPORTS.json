@@ -112,6 +112,15 @@
           "default": null
         },
         {
+          "name": "visitors_register_provenance",
+          "type": "jsonb",
+          "format": "jsonb",
+          "description": "Scan-derived visitor provenance from Attendance Register moves",
+          "nullable": false,
+          "requiredInSchema": true,
+          "default": "'[]'::jsonb"
+        },
+        {
           "name": "delays_issues",
           "type": "string",
           "format": "text",
@@ -284,6 +293,7 @@
         "shift",
         "site_summary",
         "visitors",
+        "visitors_register_provenance",
         "delays_issues",
         "actions",
         "created_at",
