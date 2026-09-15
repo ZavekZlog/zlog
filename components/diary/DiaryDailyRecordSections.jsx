@@ -4,7 +4,8 @@
  * Compact daily H&S / RFI / Variation sections for Site Diary.
  */
 
-import { GlassSection, labelStyle, inputStyle, textareaStyle } from '@/lib/premium-ui'
+import { GlassSection, labelStyle, inputStyle } from '@/lib/premium-ui'
+import { DiaryNarrativeTextarea } from '@/components/diary/DiaryNarrativeTextarea'
 import {
   HS_INCIDENT_STATUSES,
   RFI_STATUSES,
@@ -131,25 +132,22 @@ export function DiaryDailyRecordSections({
                 Remove
               </button>
               <FieldLabel>Description</FieldLabel>
-              <textarea
-                style={{ ...textareaStyle, marginBottom: 10, minHeight: 64 }}
+              <DiaryNarrativeTextarea
+                marginBottom={10}
                 value={row.description}
                 disabled={disabled}
                 onChange={(e) => patchHs(row.key, 'description', e.target.value)}
                 placeholder="What happened / what was observed"
-                rows={2}
+              />
+              <FieldLabel>Action taken (optional)</FieldLabel>
+              <DiaryNarrativeTextarea
+                marginBottom={10}
+                value={row.actionTaken}
+                disabled={disabled}
+                onChange={(e) => patchHs(row.key, 'actionTaken', e.target.value)}
+                placeholder="Immediate response"
               />
               <div style={gridStyle}>
-                <div>
-                  <FieldLabel>Action taken (optional)</FieldLabel>
-                  <input
-                    style={{ ...inputStyle, marginBottom: 0 }}
-                    value={row.actionTaken}
-                    disabled={disabled}
-                    onChange={(e) => patchHs(row.key, 'actionTaken', e.target.value)}
-                    placeholder="Immediate response"
-                  />
-                </div>
                 <div>
                   <FieldLabel>Assigned to (optional)</FieldLabel>
                   <input
@@ -229,13 +227,11 @@ export function DiaryDailyRecordSections({
                 </div>
               </div>
               <FieldLabel>Description / query</FieldLabel>
-              <textarea
-                style={{ ...textareaStyle, marginBottom: 0, minHeight: 64 }}
+              <DiaryNarrativeTextarea
                 value={row.description}
                 disabled={disabled}
                 onChange={(e) => patchRfi(row.key, 'description', e.target.value)}
                 placeholder="Short query"
-                rows={2}
               />
             </div>
           ))
@@ -296,13 +292,11 @@ export function DiaryDailyRecordSections({
                 </div>
               </div>
               <FieldLabel>Short description</FieldLabel>
-              <textarea
-                style={{ ...textareaStyle, marginBottom: 0, minHeight: 64 }}
+              <DiaryNarrativeTextarea
                 value={row.description}
                 disabled={disabled}
                 onChange={(e) => patchVariation(row.key, 'description', e.target.value)}
                 placeholder="Brief description of the variation"
-                rows={2}
               />
             </div>
           ))

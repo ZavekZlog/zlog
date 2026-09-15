@@ -108,7 +108,7 @@ function SavedAreaCard({
           }}
         >
           <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)' }}>
-            {group.areaName}
+            Work Area · {group.areaName}
           </div>
           <div style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 3 }}>
             {group.photos.length} photo{group.photos.length === 1 ? '' : 's'} · {perPage} per page

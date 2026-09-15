@@ -10,7 +10,6 @@ import {
   GlassSection,
   labelStyle,
   inputStyle,
-  textareaStyle,
   PrimaryCTA,
   SecondaryButton,
   EqualChoiceButton,
@@ -34,6 +33,7 @@ import { SiteDiaryLabourSection } from '@/components/diary/SiteDiaryLabourSectio
 import { BrandingSelector, brandingPayload } from '@/components/branding/BrandingSelector'
 import { DiaryDailyRecordSections } from '@/components/diary/DiaryDailyRecordSections'
 import { DiaryTemporaryWorksSection } from '@/components/diary/DiaryTemporaryWorksSection'
+import { DiaryNarrativeTextarea } from '@/components/diary/DiaryNarrativeTextarea'
 import { PhotoWorkspace } from '@/components/photo-workspace'
 import {
   flattenAreaGroups,
@@ -673,6 +673,7 @@ export default function SiteDiaryPage() {
   const coverPendingGenerationRef = useRef(null)
   const [signature, setSignature] = useState(null)
   const [signatureMode, setSignatureMode] = useState('draw') // 'carried' | 'accepted' | 'draw'
+  const [signatureReplacing, setSignatureReplacing] = useState(false)
   const [brandingSelection, setBrandingSelection] = useState(null)
   const [carriedVisitors, setCarriedVisitors] = useState(false)
   const [carriedDelaysIssues, setCarriedDelaysIssues] = useState(false)
@@ -1992,6 +1993,8 @@ export default function SiteDiaryPage() {
 
   const canvasRef = useRef(null)
   const signaturePadRef = useRef(null)
+  /** Prior accepted signature while user is in deliberate replace/draw mode (not cleared on entry). */
+  const signatureReplaceBackupRef = useRef(null)
   const endStrokeHandlerRef = useRef(null)
   const touchBlockerRef = useRef(null)
   const originalReleasePointerCaptureRef = useRef(null)
@@ -2107,7 +2110,6 @@ export default function SiteDiaryPage() {
       dismissAutosaveSuccessClaim()
       invalidatePreparedSharePdf('committed-diary-change')
       if (pad.isEmpty()) {
-        setSignature(null)
         rebindPadIfNeeded()
         return
       }
@@ -2122,6 +2124,9 @@ export default function SiteDiaryPage() {
             storagePath: null,
           }
         })
+        signatureReplaceBackupRef.current = null
+        setSignatureReplacing(false)
+        setSignatureMode('accepted')
       }, 'image/png')
       rebindPadIfNeeded()
     }
@@ -2134,27 +2139,48 @@ export default function SiteDiaryPage() {
     teardownSignaturePad()
   }, [teardownSignaturePad])
 
+  const restoreSignatureAfterReplaceCancel = (restored) => {
+    if (!restored) {
+      setSignatureMode('draw')
+      return
+    }
+    setSignature(restored)
+    setSignatureMode(
+      restored.storagePath && !restored.file ? 'carried' : 'accepted',
+    )
+  }
+
   const clearSignaturePad = () => {
     dismissAutosaveSuccessClaim()
     invalidatePreparedSharePdf('committed-diary-change')
     signaturePadRef.current?.clear()
+    if (signatureReplaceBackupRef.current) {
+      const restored = signatureReplaceBackupRef.current
+      signatureReplaceBackupRef.current = null
+      setSignatureReplacing(false)
+      teardownSignaturePad()
+      restoreSignatureAfterReplaceCancel(restored)
+      return
+    }
     setSignature((prev) => {
       if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
       return null
     })
   }
 
-  const useExistingSignature = () => {
-    setSignatureMode('accepted')
-  }
-
-  const resignSignature = () => {
+  const replaceSignature = () => {
     dismissAutosaveSuccessClaim()
     invalidatePreparedSharePdf('committed-diary-change')
-    setSignature((prev) => {
-      if (prev?.file && prev.preview) URL.revokeObjectURL(prev.preview)
-      return null
-    })
+    const current = signatureRef.current
+    signatureReplaceBackupRef.current = current
+      ? {
+          file: current.file ?? null,
+          preview: current.preview ?? null,
+          storagePath: current.storagePath ?? null,
+        }
+      : null
+    teardownSignaturePad()
+    setSignatureReplacing(true)
     setSignatureMode('draw')
   }
 
@@ -3770,13 +3796,11 @@ export default function SiteDiaryPage() {
 
         <GlassSection title="Site summary" accent={DIARY_ACCENT}>
           <label style={labelStyle}>Summary</label>
-          <textarea
-            style={{ ...textareaStyle, marginBottom: 0 }}
+          <DiaryNarrativeTextarea
             value={siteSummary}
             onInput={handleSiteSummaryInput}
             onChange={handleSiteSummaryInput}
             placeholder="Overall progress, key activities, and notable events today…"
-            rows={5}
           />
         </GlassSection>
 
@@ -3911,15 +3935,13 @@ export default function SiteDiaryPage() {
             {carriedVisitors && (
               <p style={carriedFieldNoteStyle}>Carried from last report — edit or clear</p>
             )}
-            <textarea
-              style={{ ...textareaStyle, marginBottom: 0 }}
+            <DiaryNarrativeTextarea
               value={visitors}
               onChange={(e) => {
                 setVisitors(e.target.value)
                 setCarriedVisitors(false)
               }}
               placeholder="Client reps, inspectors, deliveries…"
-              rows={3}
             />
           </div>
         </GlassSection>
@@ -3929,26 +3951,22 @@ export default function SiteDiaryPage() {
             {carriedDelaysIssues && (
               <p style={carriedFieldNoteStyle}>Carried from last report — edit or clear</p>
             )}
-            <textarea
-              style={{ ...textareaStyle, marginBottom: 0 }}
+            <DiaryNarrativeTextarea
               value={delaysIssues}
               onChange={(e) => {
                 setDelaysIssues(e.target.value)
                 setCarriedDelaysIssues(false)
               }}
               placeholder="Weather delays, material shortages, access issues…"
-              rows={3}
             />
           </div>
         </GlassSection>
 
         <GlassSection title="Actions required" accent={DIARY_ACCENT}>
-          <textarea
-            style={{ ...textareaStyle, marginBottom: 0 }}
+          <DiaryNarrativeTextarea
             value={actionsRequired}
             onChange={(e) => setActionsRequired(e.target.value)}
             placeholder="Follow-ups, RFIs, instructions needed…"
-            rows={3}
           />
         </GlassSection>
 
@@ -3975,23 +3993,27 @@ export default function SiteDiaryPage() {
         >
         <GlassSection title="Signature" accent={DIARY_ACCENT}>
             <label style={labelStyle}>Signature</label>
-            {(signatureMode === 'carried' || signatureMode === 'accepted') && signature?.preview ? (
+            {signature?.preview && signatureMode !== 'draw' ? (
               <div style={{ marginBottom: 0 }}>
                 <img
                   src={signature.preview}
                   alt="Signature"
-                  style={{ maxWidth: '100%', maxHeight: 120, objectFit: 'contain', borderRadius: 8, display: 'block', marginBottom: 10, background: '#fff', padding: 8 }}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: 120,
+                    objectFit: 'contain',
+                    borderRadius: 8,
+                    display: 'block',
+                    marginBottom: 10,
+                    background: '#fff',
+                    padding: 8,
+                    pointerEvents: 'none',
+                    touchAction: 'pan-y',
+                  }}
                 />
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                  {signatureMode === 'carried' && (
-                    <SecondaryButton type="button" onClick={useExistingSignature}>
-                      Use Existing Signature
-                    </SecondaryButton>
-                  )}
-                  <SecondaryButton type="button" onClick={resignSignature}>
-                    Re-sign / Clear
-                  </SecondaryButton>
-                </div>
+                <SecondaryButton type="button" onClick={replaceSignature}>
+                  Replace signature
+                </SecondaryButton>
               </div>
             ) : (
               <div style={{ marginBottom: 0 }}>
@@ -4010,7 +4032,7 @@ export default function SiteDiaryPage() {
                   }}
                 />
                 <SecondaryButton type="button" onClick={clearSignaturePad}>
-                  Clear
+                  {signatureReplacing ? 'Cancel replacement' : 'Clear'}
                 </SecondaryButton>
               </div>
             )}

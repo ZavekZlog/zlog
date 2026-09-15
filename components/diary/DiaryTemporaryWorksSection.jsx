@@ -1,6 +1,7 @@
 'use client'
 
-import { GlassSection, inputStyle, labelStyle, textareaStyle } from '@/lib/premium-ui'
+import { GlassSection, inputStyle, labelStyle } from '@/lib/premium-ui'
+import { DiaryNarrativeTextarea } from '@/components/diary/DiaryNarrativeTextarea'
 import {
   TEMPORARY_WORKS_CHECK_RESULTS,
   TEMPORARY_WORKS_SCAFFOLD_CHECKS,
@@ -261,13 +262,11 @@ export function DiaryTemporaryWorksSection({
 
                   <div style={{ marginTop: 10 }}>
                     <Field label="Notes / Action">
-                      <textarea
-                        style={{ ...textareaStyle, marginBottom: 0, minHeight: 64 }}
+                      <DiaryNarrativeTextarea
                         value={row.notes}
                         disabled={disabled}
                         onChange={(event) => patch(row.key, 'notes', event.target.value)}
                         placeholder="Condition, action taken, or follow-up needed"
-                        rows={2}
                       />
                     </Field>
                   </div>
