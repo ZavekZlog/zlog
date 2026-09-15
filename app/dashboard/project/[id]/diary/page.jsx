@@ -3783,6 +3783,22 @@ export default function SiteDiaryPage() {
           setLabourRows={setLabourRows}
         />
 
+        <GlassSection title="Visitors" accent={DIARY_ACCENT}>
+          <div style={carriedVisitors ? carriedFieldWrapStyle : undefined}>
+            {carriedVisitors && (
+              <p style={carriedFieldNoteStyle}>Carried from last report — edit or clear</p>
+            )}
+            <DiaryNarrativeTextarea
+              value={visitors}
+              onChange={(e) => {
+                setVisitors(e.target.value)
+                setCarriedVisitors(false)
+              }}
+              placeholder="Client reps, inspectors, deliveries…"
+            />
+          </div>
+        </GlassSection>
+
         <DiaryDailyRecordSections
           accent={DIARY_ACCENT}
           disabled={isDiaryViewMode}
@@ -3794,15 +3810,7 @@ export default function SiteDiaryPage() {
           onVariationsChange={setVariations}
         />
 
-        <GlassSection title="Site summary" accent={DIARY_ACCENT}>
-          <label style={labelStyle}>Summary</label>
-          <DiaryNarrativeTextarea
-            value={siteSummary}
-            onInput={handleSiteSummaryInput}
-            onChange={handleSiteSummaryInput}
-            placeholder="Overall progress, key activities, and notable events today…"
-          />
-        </GlassSection>
+
 
         <GlassSection title="Plant" accent={DIARY_ACCENT}>
           {plantRows.map((row) => (
@@ -3930,21 +3938,7 @@ export default function SiteDiaryPage() {
           }}
         />
 
-        <GlassSection title="Visitors" accent={DIARY_ACCENT}>
-          <div style={carriedVisitors ? carriedFieldWrapStyle : undefined}>
-            {carriedVisitors && (
-              <p style={carriedFieldNoteStyle}>Carried from last report — edit or clear</p>
-            )}
-            <DiaryNarrativeTextarea
-              value={visitors}
-              onChange={(e) => {
-                setVisitors(e.target.value)
-                setCarriedVisitors(false)
-              }}
-              placeholder="Client reps, inspectors, deliveries…"
-            />
-          </div>
-        </GlassSection>
+
 
         <GlassSection title="Delays & issues" accent={DIARY_ACCENT}>
           <div style={carriedDelaysIssues ? carriedFieldWrapStyle : undefined}>
@@ -3984,6 +3978,16 @@ export default function SiteDiaryPage() {
           onAreaNameValidationResolved={handleAreaNameValidationResolved}
           onDraftDirtyChange={handlePhotoWorkspaceDraftDirtyChange}
         />
+
+        <GlassSection title="Site summary" accent={DIARY_ACCENT}>
+          <label style={labelStyle}>Summary</label>
+          <DiaryNarrativeTextarea
+            value={siteSummary}
+            onInput={handleSiteSummaryInput}
+            onChange={handleSiteSummaryInput}
+            placeholder="Overall progress, key activities, and notable events today…"
+          />
+        </GlassSection>
 
         <div
           ref={signatureSectionRef}
