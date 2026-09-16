@@ -152,6 +152,7 @@ import {
 } from '@/lib/diary-pdf-background-prepare'
 import { readReportSetupExtras, reportDateInputValue, todayIsoDate } from '@/lib/report-setup'
 import {
+  createDiaryWorkbenchLoadWatchdog,
   describeDiaryWorkbenchLoadFailure,
   DIARY_PREVIEW_URL_TIMEOUT_MS,
   DIARY_WORKBENCH_LOAD_FAILED_COPY,
@@ -773,8 +774,10 @@ export default function SiteDiaryPage() {
       generation,
       activeGeneration: loadGenerationRef.current,
     })
+    let loadWatchdog = null
     const failLoad = (stage, err) => {
       if (!commit()) return
+      if (loadWatchdog && !loadWatchdog.shouldApplyLoadFailure()) return
       const failure = describeDiaryWorkbenchLoadFailure({
         stage,
         reportId: editingReportId,
@@ -786,6 +789,15 @@ export default function SiteDiaryPage() {
       if (process.env.NODE_ENV !== 'production') {
         console.log(failure.diagnostic, err || null)
       }
+    }
+    const commitCriticalHydrateSuccess = () => {
+      if (!commit()) return false
+      loadWatchdog?.markCriticalHydrateSucceeded()
+      if (loadWatchdog?.shouldClearStaleLoadError()) {
+        setLoadDiagnostic('')
+        setError('')
+      }
+      return true
     }
     const load = async () => {
       console.log(DIARY_SAVE_LOG, 'load:start', { editingReportId, projectId })
@@ -804,10 +816,14 @@ export default function SiteDiaryPage() {
       setCarriedVisitors(false)
       setCarriedDelaysIssues(false)
 
-      const watchdog = setTimeout(() => {
-        failLoad('timeout', new Error('diary-load-timeout'))
-        if (commit()) setLoading(false)
-      }, DIARY_WORKBENCH_LOAD_TIMEOUT_MS)
+      loadWatchdog = createDiaryWorkbenchLoadWatchdog({
+        timeoutMs: DIARY_WORKBENCH_LOAD_TIMEOUT_MS,
+        isActiveGeneration: () => commit(),
+        onTimeout: () => {
+          failLoad('timeout', new Error('diary-load-timeout'))
+          if (commit()) setLoading(false)
+        },
+      })
 
       try {
         // Continue landings (`?compose=1`) paint once report + project + form
@@ -1179,8 +1195,6 @@ export default function SiteDiaryPage() {
         const mappedLabour = mapLabourRowsFromDb(labour, makeUuid)
         setLabourRows(mappedLabour.length ? mappedLabour : [emptyLabour()])
 
-        await labourScan.hydrateSignInFromReport(existing, () => cancelled)
-
         // Always replace plant rows from this report only (never merge prior diary state).
         setPlantRows(hydratePlantFormRows(plant, makeUuid))
         if (progressiveCompose || progressiveEdit) {
@@ -1211,6 +1225,15 @@ export default function SiteDiaryPage() {
         lastPersistedPlantRef.current = plantFormToPersistRows(plant || [], existing.id)
         lastPersistedPhotosRef.current = photoRowsToBaseline(reportPhotos || [])
         suppressAutosaveRef.current = true
+
+        if (!progressiveCompose && !progressiveEdit) {
+          await labourScan.hydrateSignInFromReport(existing, () => cancelled)
+          if (cancelled) return
+        }
+
+        const hydrateSignInEvidenceInBackground = () => {
+          void labourScan.hydrateSignInFromReport(existing, () => cancelled)
+        }
 
         const kickPdfAssetPrewarm = () => {
           if (cancelled) return
@@ -1257,10 +1280,10 @@ export default function SiteDiaryPage() {
 
         if (progressiveCompose) {
           // First usable paint — secondary media/selector work continues below.
-          if (commit()) {
-            setLoadDiagnostic('')
+          if (commitCriticalHydrateSuccess()) {
             setLoading(false)
           }
+          hydrateSignInEvidenceInBackground()
 
           // F2B: resume canonical cover upload after first paint (non-blocking).
           if (pendingCoverGeneration && !cancelled) {
@@ -1350,17 +1373,16 @@ export default function SiteDiaryPage() {
           }
           if (!cancelled && commit()) setRecentDiaries(logs || [])
 
-          if (commit()) {
-            setLoadDiagnostic('')
+          if (commitCriticalHydrateSuccess()) {
             setHydrateComplete(true)
           }
         } else if (progressiveEdit) {
           // First usable paint — unused selector/recent and non-critical signed
           // cover/logo/photo previews continue below. Signature preview is already applied.
-          if (commit()) {
-            setLoadDiagnostic('')
+          if (commitCriticalHydrateSuccess()) {
             setLoading(false)
           }
+          hydrateSignInEvidenceInBackground()
 
           // F2B: resume canonical cover upload after first paint (non-blocking).
           if (pendingCoverGeneration && !cancelled) {
@@ -1426,8 +1448,7 @@ export default function SiteDiaryPage() {
           }
           kickPdfAssetPrewarm()
 
-          if (commit()) {
-            setLoadDiagnostic('')
+          if (commitCriticalHydrateSuccess()) {
             setHydrateComplete(true)
           }
         } else {
@@ -1448,8 +1469,7 @@ export default function SiteDiaryPage() {
             logs = fallback.data
           }
           if (!cancelled) setRecentDiaries(logs || [])
-          if (commit()) {
-            setLoadDiagnostic('')
+          if (commitCriticalHydrateSuccess()) {
             setHydrateComplete(true)
           }
           kickPdfAssetPrewarm()
@@ -1493,7 +1513,7 @@ export default function SiteDiaryPage() {
       } catch (err) {
         failLoad('exception', err)
       } finally {
-        clearTimeout(watchdog)
+        loadWatchdog?.clear()
         if (commit()) setLoading(false)
       }
     }
