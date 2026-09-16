@@ -335,7 +335,7 @@ export function useSiteDiaryLabour({
       return
     }
 
-    void persistAppliedLabourRows(supabase, editingReportId, result.rows)
+    void persistAppliedLabourRows(supabase, editingReportId, projectId, result.rows)
       .then((labourPayload) => {
         lastPersistedLabourRef.current = labourPayload
         setScanApplySaved(true)
@@ -357,6 +357,7 @@ export function useSiteDiaryLabour({
     editingReportId,
     invalidatePreparedSharePdf,
     makeUuid,
+    projectId,
     scanApplyEnabled,
     scanOcrProvider,
     setLabourRows,
@@ -472,7 +473,7 @@ export function useSiteDiaryLabour({
       return
     }
     setManualLabourSaving(true)
-    void persistAppliedLabourRows(supabase, editingReportId, _labourRows)
+    void persistAppliedLabourRows(supabase, editingReportId, projectId, _labourRows)
       .then((labourPayload) => {
         lastPersistedLabourRef.current = labourPayload
         setManualLabourEditing(false)
@@ -490,6 +491,7 @@ export function useSiteDiaryLabour({
     editingReportId,
     invalidatePreparedSharePdf,
     lastPersistedLabourRef,
+    projectId,
     supabase,
   ])
 
