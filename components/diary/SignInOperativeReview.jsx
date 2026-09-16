@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { countSignInTradeHoursReviewRows } from '@/lib/labour-from-register'
 import {
   addSignInTradeHoursRow,
@@ -10,11 +10,15 @@ import {
   parseSignInTradeHoursInput,
   parseSignInTradeWorkersInput,
   renameSignInTradeHoursRow,
+  removeManualSignInTradeHoursRow,
   setSignInTradeHoursRowHours,
   setSignInTradeHoursRowWorkers,
   formatLabourHoursForDisplay,
   scanDerivedSignInTradeHoursReviewRow,
-  signInAddTradeUsesPointerDownActivation,
+  signInAddTradeClickShouldAddRow,
+  signInAddTradePeakMovementPx,
+  signInAddTradeShouldActivateAfterPointerUp,
+  signInAddTradeUsesTapUpActivation,
   totalSignInTradeHoursReview,
   signInTradeReviewRowPeoplePanelAnchor,
   resolveOpenAdjustPeopleRowKey,
@@ -62,6 +66,13 @@ export function SignInOperativeReview({
   applyEnabled = true,
 }) {
   const rows = Array.isArray(reviewRows) ? reviewRows : []
+  const rowsRef = useRef(rows)
+  const suppressAddTradeClickRef = useRef(false)
+  const addTradeTouchGestureActiveRef = useRef(false)
+  const addTradePendingPointerRef = useRef(null)
+  useEffect(() => {
+    rowsRef.current = rows
+  }, [rows])
   const visibleWarnings = (Array.isArray(warnings) ? warnings : []).filter(
     (w) => !isOtherDateLabourScanWarning(w),
   )
@@ -97,6 +108,26 @@ export function SignInOperativeReview({
 
   const handleTradeBlur = (rowKey, value) => {
     emit(renameSignInTradeHoursRow(rows, rowKey, value))
+  }
+
+  const handleRemoveManualRow = (rowKey) => {
+    const row = rows.find((r) => r.key === rowKey)
+    if (!row || scanDerivedSignInTradeHoursReviewRow(row)) return
+    emit(removeManualSignInTradeHoursRow(rows, rowKey))
+    setWorkersDraftByKey((prev) => {
+      const next = { ...prev }
+      delete next[rowKey]
+      return next
+    })
+    setHoursDraftByKey((prev) => {
+      const next = { ...prev }
+      delete next[rowKey]
+      return next
+    })
+    if (adjustPeopleRowKey === rowKey || openAdjustPeopleRowKey === rowKey) {
+      setAdjustPeopleRowKey(null)
+      setPeoplePanelAnchor(null)
+    }
   }
 
   const handleWorkersCommit = (rowKey, raw) => {
@@ -140,15 +171,95 @@ export function SignInOperativeReview({
     })
   }
 
-  const handleAddTrade = () => {
+  const clearAddTradePendingPointer = useCallback(() => {
+    const pending = addTradePendingPointerRef.current
+    if (!pending) return
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pointerup', pending.onUp)
+      window.removeEventListener('pointercancel', pending.onCancel)
+      window.removeEventListener('pointermove', pending.onMove)
+    }
+    addTradePendingPointerRef.current = null
+  }, [])
+
+  useEffect(() => () => clearAddTradePendingPointer(), [clearAddTradePendingPointer])
+
+  const appendAddTradeRow = useCallback(() => {
     if (disabled) return
-    emit(addSignInTradeHoursRow(rows))
+    if (typeof onReviewRowsChange === 'function') {
+      onReviewRowsChange(addSignInTradeHoursRow(rowsRef.current))
+    }
+  }, [disabled, onReviewRowsChange])
+
+  const handleAddTradeClick = (event) => {
+    if (disabled) return
+    const suppress = suppressAddTradeClickRef.current
+    if (suppress) {
+      suppressAddTradeClickRef.current = false
+      event.preventDefault()
+      return
+    }
+    const pointerType = event.nativeEvent?.pointerType
+    if (
+      !signInAddTradeClickShouldAddRow({
+        pointerType,
+        suppressSyntheticClick: false,
+        touchGestureActive: addTradeTouchGestureActiveRef.current,
+      })
+    ) {
+      event.preventDefault()
+      return
+    }
+    appendAddTradeRow()
   }
 
   const handleAddTradePointerDown = (event) => {
-    if (!signInAddTradeUsesPointerDownActivation(event.pointerType, disabled)) return
-    event.preventDefault()
-    handleAddTrade()
+    if (!signInAddTradeUsesTapUpActivation(event.pointerType, disabled)) return
+    if (typeof window === 'undefined') return
+    clearAddTradePendingPointer()
+    addTradeTouchGestureActiveRef.current = true
+    const pointerId = event.pointerId
+    const startX = event.clientX
+    const startY = event.clientY
+    let maxMovementPx = 0
+    const finish = (ev, cancelled) => {
+      if (ev.pointerId !== pointerId) return
+      clearAddTradePendingPointer()
+      addTradeTouchGestureActiveRef.current = false
+      if (!signInAddTradeUsesTapUpActivation(ev.pointerType, disabled)) return
+      if (
+        !cancelled
+        && signInAddTradeShouldActivateAfterPointerUp({
+          startX,
+          startY,
+          endX: ev.clientX,
+          endY: ev.clientY,
+          cancelled: false,
+          maxMovementPx,
+        })
+      ) {
+        suppressAddTradeClickRef.current = true
+        appendAddTradeRow()
+      } else {
+        suppressAddTradeClickRef.current = true
+      }
+    }
+    const onMove = (ev) => {
+      if (ev.pointerId !== pointerId) return
+      maxMovementPx = signInAddTradePeakMovementPx(
+        startX,
+        startY,
+        ev.clientX,
+        ev.clientY,
+        maxMovementPx,
+      )
+    }
+    const onUp = (ev) => finish(ev, false)
+    const onCancel = (ev) => finish(ev, true)
+    addTradePendingPointerRef.current = { onUp, onCancel, onMove }
+    window.addEventListener('pointermove', onMove, { passive: true })
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
   }
 
   const handleApply = (event) => {
@@ -259,6 +370,7 @@ export function SignInOperativeReview({
             const rowIds = Array.isArray(t.rowIds) ? t.rowIds : []
             const scanDerived = scanDerivedSignInTradeHoursReviewRow(t)
             const canAdjustPeople = rowIds.length > 0
+            const canRemoveManualRow = !scanDerived
             const bucketOperatives = canAdjustPeople
               ? operativesForSignInTradeReviewRow(operatives, rowIds).filter(
                   (row) => row && row.movedToVisitors !== true,
@@ -414,6 +526,29 @@ export function SignInOperativeReview({
                         ⋯
                       </button>
                     </>
+                  ) : canRemoveManualRow ? (
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      aria-label="Remove trade row"
+                      onClick={() => handleRemoveManualRow(t.key)}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        border: '1px solid var(--edge)',
+                        background: 'var(--ink)',
+                        color: 'var(--text-2)',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        lineHeight: 1.1,
+                        cursor: disabled ? 'not-allowed' : 'pointer',
+                        padding: '2px 4px',
+                        touchAction: 'manipulation',
+                      }}
+                    >
+                      Del
+                    </button>
                   ) : null}
                 </div>
               </div>
@@ -627,7 +762,7 @@ export function SignInOperativeReview({
         type="button"
         disabled={disabled}
         onPointerDown={handleAddTradePointerDown}
-        onClick={handleAddTrade}
+        onClick={handleAddTradeClick}
         style={{
           marginTop: 10,
           width: '100%',
@@ -642,7 +777,7 @@ export function SignInOperativeReview({
           letterSpacing: '0.02em',
           cursor: disabled ? 'not-allowed' : 'pointer',
           fontFamily: 'inherit',
-          touchAction: 'manipulation',
+          touchAction: 'pan-y',
           WebkitTapHighlightColor: 'transparent',
         }}
       >
