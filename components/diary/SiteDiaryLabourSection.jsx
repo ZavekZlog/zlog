@@ -26,6 +26,8 @@ export function SiteDiaryLabourSection({
   scanLastFile,
   scanSheetPreview,
   scanSignInPreviewLoadError,
+  scanSignInEvidenceLoading = false,
+  retrySignInEvidenceLoad,
   signInSheetPickerKey,
   handleSignInSheetFiles,
   applyScanOperativesToLabour,
@@ -165,11 +167,28 @@ export function SiteDiaryLabourSection({
               }}
             />
           )}
+          {!scanSheetPreview && scanSignInEvidenceLoading && (
+            <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text-2)' }}>
+              Loading Attendance Register…
+            </p>
+          )}
           {!scanSheetPreview && scanSignInPreviewLoadError && (
             <p style={{ margin: '0 0 8px', fontSize: 13, color: '#ff6b6b' }}>
               {scanSignInPreviewLoadError}
             </p>
           )}
+          {!scanSheetPreview && scanSignInPreviewLoadError && typeof retrySignInEvidenceLoad === 'function' ? (
+            <SecondaryButton
+              type="button"
+              disabled={scanSignInEvidenceLoading || scanLoading}
+              onClick={() => {
+                void retrySignInEvidenceLoad()
+              }}
+              style={{ marginBottom: 8 }}
+            >
+              Try again
+            </SecondaryButton>
+          ) : null}
           {scanLoading && (
             <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--text-2)' }}>
               Reading attendance register…

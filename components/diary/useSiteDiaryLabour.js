@@ -24,6 +24,11 @@ import {
   signInSheetPathFromReport,
 } from '@/lib/diary-sign-in-sheet-evidence'
 import {
+  evictSignInSheetSessionEvidence,
+  loadSignInSheetPreparedEvidence,
+  rememberSignInSheetSessionEvidence,
+} from '@/lib/diary-sign-in-sheet-session-cache'
+import {
   applyOperativeLabourExclusionToReview,
   applyOperativeMoveToVisitorsFromReview,
   initSignInTradeHoursReviewFromOperatives,
@@ -83,12 +88,14 @@ export function useSiteDiaryLabour({
   const [scanLastFile, setScanLastFile] = useState(null)
   const [scanSheetPreview, setScanSheetPreview] = useState(null)
   const [scanSignInPreviewLoadError, setScanSignInPreviewLoadError] = useState('')
+  const [scanSignInEvidenceLoading, setScanSignInEvidenceLoading] = useState(false)
   const [signInSheetStoragePath, setSignInSheetStoragePath] = useState(null)
   const [scanReviewEvidencePath, setScanReviewEvidencePath] = useState(null)
   const loadedSignInSheetPathRef = useRef(null)
   const signInSheetRemovedRef = useRef(false)
   const [signInSheetPickerKey, setSignInSheetPickerKey] = useState(0)
   const scanRequestIdRef = useRef(0)
+  const signInEvidenceHydrateGenRef = useRef(0)
   const scanSheetPreviewRef = useRef(scanSheetPreview)
 
   useEffect(() => {
@@ -114,6 +121,70 @@ export function useSiteDiaryLabour({
     })
   }, [])
 
+  const applyPersistedSignInEvidenceBlob = useCallback((blob) => {
+    if (!(blob instanceof Blob) || blob.size < 1) {
+      setScanLastFile(null)
+      clearScanPreview()
+      return false
+    }
+    const file = preparedSignInSheetFileFromBlob(blob)
+    if (!file) {
+      setScanLastFile(null)
+      clearScanPreview()
+      return false
+    }
+    setScanLastFile(file)
+    setScanSheetPreview((prev) => {
+      if (prev && String(prev).startsWith('blob:')) {
+        try { URL.revokeObjectURL(prev) } catch { /* ignore */ }
+      }
+      return URL.createObjectURL(blob)
+    })
+    setScanSignInPreviewLoadError('')
+    return true
+  }, [clearScanPreview])
+
+  const loadPersistedSignInEvidenceForPath = useCallback(async (storagePath, isCancelled = () => false) => {
+    const generation = ++signInEvidenceHydrateGenRef.current
+    setScanSignInEvidenceLoading(true)
+    setScanSignInPreviewLoadError('')
+    try {
+      const { blob } = await loadSignInSheetPreparedEvidence(storagePath, {
+        signedUrlForPath,
+        supabase,
+      })
+      if (isCancelled() || generation !== signInEvidenceHydrateGenRef.current) {
+        return { ok: false, cancelled: true }
+      }
+      if (!blob) {
+        setScanSignInPreviewLoadError(SIGN_IN_SHEET_EVIDENCE_PREVIEW_LOAD_FAIL_MESSAGE)
+        return { ok: false, cancelled: false }
+      }
+      const applied = applyPersistedSignInEvidenceBlob(blob)
+      if (!applied) {
+        setScanSignInPreviewLoadError(SIGN_IN_SHEET_EVIDENCE_PREVIEW_LOAD_FAIL_MESSAGE)
+        return { ok: false, cancelled: false }
+      }
+      return { ok: true, cancelled: false }
+    } catch {
+      if (!isCancelled() && generation === signInEvidenceHydrateGenRef.current) {
+        setScanSignInPreviewLoadError(SIGN_IN_SHEET_EVIDENCE_PREVIEW_LOAD_FAIL_MESSAGE)
+      }
+      return { ok: false, cancelled: false }
+    } finally {
+      if (generation === signInEvidenceHydrateGenRef.current) {
+        setScanSignInEvidenceLoading(false)
+      }
+    }
+  }, [applyPersistedSignInEvidenceBlob, signedUrlForPath, supabase])
+
+  const retrySignInEvidenceLoad = useCallback(async () => {
+    const path = loadedSignInSheetPathRef.current || signInSheetStoragePath
+    if (!path || signInSheetRemovedRef.current) return
+    evictSignInSheetSessionEvidence(path)
+    await loadPersistedSignInEvidenceForPath(path, () => false)
+  }, [loadPersistedSignInEvidenceForPath, signInSheetStoragePath])
+
   const clearSignInSheetWorkingState = useCallback(() => {
     // Invalidate any in-flight Claude/OpenAI OCR so a late response cannot repopulate.
     scanRequestIdRef.current = nextSignInSheetRequestId(scanRequestIdRef.current)
@@ -134,6 +205,7 @@ export function useSiteDiaryLabour({
     setScanApplyEnabled(empty.scanApplyEnabled)
     setScanLastFile(empty.scanLastFile)
     setScanReviewEvidencePath(null)
+    setScanSignInEvidenceLoading(false)
     clearScanPreview()
     setSignInSheetPickerKey((key) => key + 1)
   }, [clearScanPreview])
@@ -146,6 +218,11 @@ export function useSiteDiaryLabour({
     if (!reportDate) {
       setScanError('Set the report date before scanning the Attendance Register.')
       return
+    }
+
+    const previousStoragePath = loadedSignInSheetPathRef.current || signInSheetStoragePath
+    if (previousStoragePath) {
+      evictSignInSheetSessionEvidence(previousStoragePath)
     }
 
     // Genuine new/replacement selection — invalidate prior generation and replace (no merge).
@@ -208,6 +285,9 @@ export function useSiteDiaryLabour({
         setSignInSheetStoragePath(persistResult.storagePath)
         persistedStoragePathForGeneration = persistResult.storagePath
         signInSheetRemovedRef.current = false
+        if (preparedBlob) {
+          rememberSignInSheetSessionEvidence(persistResult.storagePath, preparedBlob)
+        }
       }
 
       setScanSheetPreview(prepared.dataUrl)
@@ -380,6 +460,9 @@ export function useSiteDiaryLabour({
       return
     }
     const path = loadedSignInSheetPathRef.current || signInSheetStoragePath
+    if (path) {
+      evictSignInSheetSessionEvidence(path)
+    }
     if (editingReportId && projectId && path) {
       setScanLoading(true)
       setScanError('')
@@ -503,28 +586,15 @@ export function useSiteDiaryLabour({
       loadedSignInSheetPathRef.current = hydratedSignInPath
       setSignInSheetStoragePath(hydratedSignInPath)
       signInSheetRemovedRef.current = false
-      setScanSignInPreviewLoadError('')
-      const signInPreview = await signedUrlForPath(supabase, hydratedSignInPath)
-      if (isCancelled()) return
-      if (signInPreview) {
-        setScanSheetPreview(signInPreview)
-        try {
-          const res = await fetch(signInPreview)
-          const blob = await res.blob()
-          const preparedFile = preparedSignInSheetFileFromBlob(blob)
-          if (preparedFile) setScanLastFile(preparedFile)
-        } catch {
-          setScanSignInPreviewLoadError(SIGN_IN_SHEET_EVIDENCE_PREVIEW_LOAD_FAIL_MESSAGE)
-        }
-      } else {
-        setScanSignInPreviewLoadError(SIGN_IN_SHEET_EVIDENCE_PREVIEW_LOAD_FAIL_MESSAGE)
-      }
+      await loadPersistedSignInEvidenceForPath(hydratedSignInPath, isCancelled)
     } else {
+      signInEvidenceHydrateGenRef.current += 1
       loadedSignInSheetPathRef.current = null
       setSignInSheetStoragePath(null)
       setScanSignInPreviewLoadError('')
+      setScanSignInEvidenceLoading(false)
     }
-  }, [signedUrlForPath, supabase])
+  }, [loadPersistedSignInEvidenceForPath])
 
   const handleScanTradeHoursReviewChange = useCallback((next) => {
     setScanApplyError('')
@@ -625,6 +695,8 @@ export function useSiteDiaryLabour({
     scanLastFile,
     scanSheetPreview,
     scanSignInPreviewLoadError,
+    scanSignInEvidenceLoading,
+    retrySignInEvidenceLoad,
     signInSheetPickerKey,
     clearSignInSheetWorkingState,
     handleSignInSheetFiles,

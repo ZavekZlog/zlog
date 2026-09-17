@@ -3775,6 +3775,8 @@ export default function SiteDiaryPage() {
           scanLastFile={labourScan.scanLastFile}
           scanSheetPreview={labourScan.scanSheetPreview}
           scanSignInPreviewLoadError={labourScan.scanSignInPreviewLoadError}
+          scanSignInEvidenceLoading={labourScan.scanSignInEvidenceLoading}
+          retrySignInEvidenceLoad={labourScan.retrySignInEvidenceLoad}
           signInSheetPickerKey={labourScan.signInSheetPickerKey}
           handleSignInSheetFiles={labourScan.handleSignInSheetFiles}
           applyScanOperativesToLabour={labourScan.applyScanOperativesToLabour}
