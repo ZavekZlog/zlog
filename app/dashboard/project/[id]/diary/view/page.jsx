@@ -24,7 +24,14 @@ import {
 } from '@/lib/premium-ui'
 import { ReportDeletionDialog } from '@/components/report-management/ReportDeletionDialog'
 import { REPORT_THEMES } from '@/lib/report-theme'
-import { NOT_RECORDED, loadSavedDiaryView } from '@/lib/diary-saved-view'
+import {
+  NOT_RECORDED,
+  SAVED_DIARY_MEDIA_FAILED,
+  SAVED_DIARY_MEDIA_LOADING,
+  SAVED_DIARY_MEDIA_READY,
+  loadSavedDiaryView,
+} from '@/lib/diary-saved-view'
+import { evictSignInSheetSessionEvidence } from '@/lib/diary-sign-in-sheet-session-cache'
 import { mergeSiteDiarySessionSnapshot } from '@/lib/site-diary-session-context'
 import {
   gridImageSrc,
@@ -391,6 +398,8 @@ function SavedDiaryViewer() {
   const pdfReadyRef = useRef(null)
   const pdfCacheGenRef = useRef(0)
   const sdscSeedRef = useRef(null)
+  const hydrateDisplayMediaRef = useRef(null)
+  const attendancePreviewUrlRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -422,9 +431,23 @@ function SavedDiaryViewer() {
         })
         const applyPatch = (patch) => {
           if (!cancelled && patch) {
+            if (patch.attendanceRegisterPreviewUrl?.startsWith('blob:')) {
+              if (
+                attendancePreviewUrlRef.current
+                && attendancePreviewUrlRef.current !== patch.attendanceRegisterPreviewUrl
+              ) {
+                try {
+                  URL.revokeObjectURL(attendancePreviewUrlRef.current)
+                } catch {
+                  /* ignore */
+                }
+              }
+              attendancePreviewUrlRef.current = patch.attendanceRegisterPreviewUrl
+            }
             setView((current) => (current ? { ...current, ...patch } : current))
           }
         }
+        hydrateDisplayMediaRef.current = result.hydrateDisplayMedia || null
         const secondary = result.hydrateSecondary
         const hydrate = result.hydrateDisplayMedia
         if (!cancelled && secondary && typeof secondary.run === 'function') {
@@ -462,8 +485,58 @@ function SavedDiaryViewer() {
     void load().catch(() => {})
     return () => {
       cancelled = true
+      hydrateDisplayMediaRef.current = null
+      if (attendancePreviewUrlRef.current) {
+        try {
+          URL.revokeObjectURL(attendancePreviewUrlRef.current)
+        } catch {
+          /* ignore */
+        }
+        attendancePreviewUrlRef.current = null
+      }
     }
   }, [projectId, reportId])
+
+  const retryAttendanceRegister = async () => {
+    const path = view?.attendanceRegisterPath
+    const hydrateAttendance = hydrateDisplayMediaRef.current?.attendanceRegister
+    if (!path || typeof hydrateAttendance !== 'function') return
+    evictSignInSheetSessionEvidence(path)
+    if (attendancePreviewUrlRef.current) {
+      try {
+        URL.revokeObjectURL(attendancePreviewUrlRef.current)
+      } catch {
+        /* ignore */
+      }
+      attendancePreviewUrlRef.current = null
+    }
+    setView((current) => {
+      if (!current) return current
+      return {
+        ...current,
+        attendanceRegisterPreviewUrl: null,
+        attendanceRegisterPreviewStatus: SAVED_DIARY_MEDIA_LOADING,
+        attendanceRegisterLoadError: '',
+      }
+    })
+    try {
+      const patch = await hydrateAttendance()
+      if (patch?.attendanceRegisterPreviewUrl?.startsWith('blob:')) {
+        attendancePreviewUrlRef.current = patch.attendanceRegisterPreviewUrl
+      }
+      setView((current) => (current ? { ...current, ...patch } : current))
+    } catch {
+      setView((current) => {
+        if (!current) return current
+        return {
+          ...current,
+          attendanceRegisterPath: path,
+          attendanceRegisterPreviewUrl: null,
+          attendanceRegisterPreviewStatus: SAVED_DIARY_MEDIA_FAILED,
+        }
+      })
+    }
+  }
 
   // Fast capability probe — no PDF generation. Results → Cursor terminal via /api/share-diag.
   useEffect(() => {
@@ -1071,7 +1144,9 @@ function SavedDiaryViewer() {
         {view.labour.length ? (
           <>
             <p style={{ ...valueStyle, margin: '0 0 10px', fontWeight: 600 }}>
-              {view.labourTotal} on site
+              {view.labourTotals?.operatives ?? view.labourTotal}{' '}
+              {(view.labourTotals?.operatives ?? view.labourTotal) === 1 ? 'worker' : 'workers'} ·{' '}
+              {view.labourTotals?.hours ?? 0} hrs
             </p>
             <RecordList
               rows={view.labour}
@@ -1085,7 +1160,68 @@ function SavedDiaryViewer() {
         ) : view.secondaryReady ? (
           <EmptySection>No labour was recorded.</EmptySection>
         ) : null}
+        {view.attendanceRegisterPath ? (
+          <div
+            style={{
+              marginTop: 16,
+              paddingTop: 14,
+              borderTop: '1px solid var(--edge)',
+            }}
+          >
+            <p
+              style={{
+                margin: '0 0 8px',
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--text)',
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Attendance Register
+            </p>
+            {view.attendanceRegisterPreviewStatus === SAVED_DIARY_MEDIA_READY
+              && view.attendanceRegisterPreviewUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG
+                <img
+                  src={view.attendanceRegisterPreviewUrl}
+                  alt="Attendance register"
+                  style={{
+                    display: 'block',
+                    margin: '0 auto',
+                    width: 'auto',
+                    height: 'auto',
+                    maxWidth: '100%',
+                    maxHeight: 'min(72vh, 420px)',
+                    objectFit: 'contain',
+                    borderRadius: 4,
+                    border: '1px solid var(--edge)',
+                  }}
+                />
+              ) : null}
+            {view.attendanceRegisterPreviewStatus === SAVED_DIARY_MEDIA_LOADING ? (
+              <EmptySection>Loading Attendance Register…</EmptySection>
+            ) : null}
+            {view.attendanceRegisterPreviewStatus === SAVED_DIARY_MEDIA_FAILED ? (
+              <>
+                <p style={{ ...emptyValueStyle, margin: '0 0 10px' }}>
+                  {view.attendanceRegisterLoadError
+                    || 'Could not load the saved Attendance Register photo.'}
+                </p>
+                <SecondaryButton type="button" onClick={() => void retryAttendanceRegister()}>
+                  Retry
+                </SecondaryButton>
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </GlassSection>
+
+      <TextSection
+        title="Visitors"
+        value={view.visitors}
+        emptyText="No visitors were recorded."
+      />
 
       <GlassSection title="H&S Incidents / Observations" accent={DIARY_ACCENT}>
         {view.hsIncidents.length ? (
@@ -1198,12 +1334,6 @@ function SavedDiaryViewer() {
           <EmptySection>No temporary works items were recorded.</EmptySection>
         )}
       </GlassSection>
-
-      <TextSection
-        title="Visitors"
-        value={view.visitors}
-        emptyText="No visitors were recorded."
-      />
 
       <TextSection
         title="Delays & Issues"

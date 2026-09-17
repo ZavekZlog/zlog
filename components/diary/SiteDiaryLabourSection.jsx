@@ -76,6 +76,21 @@ export function SiteDiaryLabourSection({
     startManualLabour()
   }
 
+  const labourInternalHeadingStyle = {
+    fontSize: 12,
+    fontWeight: 600,
+    color: 'var(--text)',
+    letterSpacing: '0.04em',
+    textTransform: 'uppercase',
+    margin: '0 0 8px',
+  }
+
+  const labourAttendanceRegisterSubsectionStyle = {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTop: '1px solid var(--edge)',
+  }
+
   return (
     <GlassSection title="Labour" accent={accent}>
       <div
@@ -144,114 +159,6 @@ export function SiteDiaryLabourSection({
             galleryLabel="Choose from gallery"
             hint="OCR builds trade hours from the register. The photo stays the source record."
           />
-        </div>
-      )}
-
-      {hasSignInSheetEvidenceOnForm && (
-        <div style={{ marginBottom: 16 }}>
-          {scanSheetPreview && (
-            // eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG
-            <img
-              src={scanSheetPreview}
-              alt="Attendance register preview"
-              style={{
-                display: 'block',
-                margin: '0 auto',
-                width: 'auto',
-                height: 'auto',
-                maxWidth: '100%',
-                maxHeight: 'min(72vh, 420px)',
-                objectFit: 'contain',
-                borderRadius: 4,
-                border: '1px solid rgba(255,255,255,0.08)',
-              }}
-            />
-          )}
-          {!scanSheetPreview && scanSignInEvidenceLoading && (
-            <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text-2)' }}>
-              Loading Attendance Register…
-            </p>
-          )}
-          {!scanSheetPreview && scanSignInPreviewLoadError && (
-            <p style={{ margin: '0 0 8px', fontSize: 13, color: '#ff6b6b' }}>
-              {scanSignInPreviewLoadError}
-            </p>
-          )}
-          {!scanSheetPreview && scanSignInPreviewLoadError && typeof retrySignInEvidenceLoad === 'function' ? (
-            <SecondaryButton
-              type="button"
-              disabled={scanSignInEvidenceLoading || scanLoading}
-              onClick={() => {
-                void retrySignInEvidenceLoad()
-              }}
-              style={{ marginBottom: 8 }}
-            >
-              Try again
-            </SecondaryButton>
-          ) : null}
-          {scanLoading && (
-            <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--text-2)' }}>
-              Reading attendance register…
-            </p>
-          )}
-          {scanError && (
-            <p style={{ margin: '12px 0 0', fontSize: 13, color: '#ff6b6b' }}>{scanError}</p>
-          )}
-          <div key={signInSheetPickerKey} style={{ marginTop: 12 }}>
-            <ImageSourceButtons
-              onFiles={handleSignInSheetFiles}
-              disabled={scanLoading}
-              cameraLabel="Take new photo"
-              galleryLabel="Choose from gallery"
-              hint="Take new photo or Choose from gallery replaces this Attendance Register photo and clears its current scan results. Re-scan reads the current photo again. Delete photo removes the photo; the applied Labour Attendance Summary is unchanged."
-            />
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 10,
-              alignItems: 'center',
-              marginTop: 10,
-            }}
-          >
-            {scanLastFile ? (
-              <SecondaryButton
-                type="button"
-                disabled={scanLoading || scanApplySaving}
-                onClick={retrySignInScan}
-              >
-                Re-scan
-              </SecondaryButton>
-            ) : null}
-            <DestructiveButton
-              type="button"
-              disabled={scanLoading}
-              onClick={removeSignInSheetEvidence}
-            >
-              Delete photo
-            </DestructiveButton>
-          </div>
-          {labourMode === 'scan' && !scanLoading && scanTradeHoursReviewReady && (
-            <SignInOperativeReview
-              key={`signin-review-${signInSheetPickerKey}`}
-              reviewRows={scanTradeHoursReview}
-              scanOperatives={scanOperatives}
-              onReviewRowsChange={handleScanTradeHoursReviewChange}
-              onOperativeLabourExclusion={handleOperativeLabourExclusion}
-              onOperativeMoveToVisitors={handleOperativeMoveToVisitors}
-              onApply={applyScanOperativesToLabour}
-              warnings={scanWarnings}
-              reportDate={reportDate}
-              applying={scanApplySaving}
-              appliedSaved={scanApplySaved}
-              disabled={scanLoading || scanApplySaving}
-              applyError={scanApplyError}
-              applyNotice={scanApplyNotice}
-              ocrProvider={scanOcrProvider}
-              applyEnabled={scanApplyEnabled}
-            />
-          )}
         </div>
       )}
 
@@ -491,6 +398,116 @@ export function SiteDiaryLabourSection({
         </p>
       )}
       </>
+      )}
+
+      {labourMode === 'scan' && !scanLoading && scanTradeHoursReviewReady && hasSignInSheetEvidenceOnForm && (
+        <SignInOperativeReview
+          key={`signin-review-${signInSheetPickerKey}`}
+          reviewRows={scanTradeHoursReview}
+          scanOperatives={scanOperatives}
+          onReviewRowsChange={handleScanTradeHoursReviewChange}
+          onOperativeLabourExclusion={handleOperativeLabourExclusion}
+          onOperativeMoveToVisitors={handleOperativeMoveToVisitors}
+          onApply={applyScanOperativesToLabour}
+          warnings={scanWarnings}
+          reportDate={reportDate}
+          applying={scanApplySaving}
+          appliedSaved={scanApplySaved}
+          disabled={scanLoading || scanApplySaving}
+          applyError={scanApplyError}
+          applyNotice={scanApplyNotice}
+          ocrProvider={scanOcrProvider}
+          applyEnabled={scanApplyEnabled}
+        />
+      )}
+
+      {hasSignInSheetEvidenceOnForm && (
+        <div style={labourAttendanceRegisterSubsectionStyle}>
+          <p style={labourInternalHeadingStyle}>Attendance Register</p>
+          {scanSheetPreview && (
+            // eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG
+            <img
+              src={scanSheetPreview}
+              alt="Attendance register preview"
+              style={{
+                display: 'block',
+                margin: '0 auto',
+                width: 'auto',
+                height: 'auto',
+                maxWidth: '100%',
+                maxHeight: 'min(72vh, 420px)',
+                objectFit: 'contain',
+                borderRadius: 4,
+                border: '1px solid rgba(255,255,255,0.08)',
+              }}
+            />
+          )}
+          {!scanSheetPreview && scanSignInEvidenceLoading && (
+            <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text-2)' }}>
+              Loading Attendance Register…
+            </p>
+          )}
+          {!scanSheetPreview && scanSignInPreviewLoadError && (
+            <p style={{ margin: '0 0 8px', fontSize: 13, color: '#ff6b6b' }}>
+              {scanSignInPreviewLoadError}
+            </p>
+          )}
+          {!scanSheetPreview && scanSignInPreviewLoadError && typeof retrySignInEvidenceLoad === 'function' ? (
+            <SecondaryButton
+              type="button"
+              disabled={scanSignInEvidenceLoading || scanLoading}
+              onClick={() => {
+                void retrySignInEvidenceLoad()
+              }}
+              style={{ marginBottom: 8 }}
+            >
+              Try again
+            </SecondaryButton>
+          ) : null}
+          {scanLoading && (
+            <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--text-2)' }}>
+              Reading attendance register…
+            </p>
+          )}
+          {scanError && (
+            <p style={{ margin: '12px 0 0', fontSize: 13, color: '#ff6b6b' }}>{scanError}</p>
+          )}
+          <div key={signInSheetPickerKey} style={{ marginTop: 12 }}>
+            <ImageSourceButtons
+              onFiles={handleSignInSheetFiles}
+              disabled={scanLoading}
+              cameraLabel="Take new photo"
+              galleryLabel="Choose from gallery"
+              hint="Take new photo or Choose from gallery replaces this Attendance Register photo and clears its current scan results. Re-scan reads the current photo again. Delete photo removes the photo; the applied Labour Attendance Summary is unchanged."
+            />
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 10,
+              alignItems: 'center',
+              marginTop: 10,
+            }}
+          >
+            {scanLastFile ? (
+              <SecondaryButton
+                type="button"
+                disabled={scanLoading || scanApplySaving}
+                onClick={retrySignInScan}
+              >
+                Re-scan
+              </SecondaryButton>
+            ) : null}
+            <DestructiveButton
+              type="button"
+              disabled={scanLoading}
+              onClick={removeSignInSheetEvidence}
+            >
+              Delete photo
+            </DestructiveButton>
+          </div>
+        </div>
       )}
     </GlassSection>
   )
