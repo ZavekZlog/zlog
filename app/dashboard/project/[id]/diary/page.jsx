@@ -187,6 +187,8 @@ import {
 } from '@/lib/photo-workspace/persist-prepared-photo'
 import {
   createPhotoDisplaySignSession,
+  enrichGridPhotoRowsFromDisplayCache,
+  getValidDisplaySignedUrl,
   signSavedPhotoGridRows,
 } from '@/lib/photo-workspace/thumbnail-display'
 import {
@@ -921,7 +923,8 @@ export default function SiteDiaryPage() {
           }
           loadedCoverPathRef.current = storagePath
           coverRemovedRef.current = false
-          setCoverPhoto(coverPhotoStateFromSaved(storagePath, null))
+          const cachedPreview = getValidDisplaySignedUrl(storagePath, { recordStats: true })
+          setCoverPhoto(coverPhotoStateFromSaved(storagePath, cachedPreview || null))
         }
 
         const applySignature = async (storagePath) => {
@@ -1199,7 +1202,9 @@ export default function SiteDiaryPage() {
         setPlantRows(hydratePlantFormRows(plant, makeUuid))
         if (progressiveCompose || progressiveEdit) {
           if (reportPhotos?.length) {
-            const withoutPreview = reportPhotos.map(mapPhotoRowWithoutPreview)
+            const withoutPreview = enrichGridPhotoRowsFromDisplayCache(
+              reportPhotos.map(mapPhotoRowWithoutPreview),
+            )
             setPhotos(withoutPreview)
             setLocationWalk(groupPhotosByArea(withoutPreview))
           } else {
