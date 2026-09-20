@@ -1,5 +1,3 @@
-'use client'
-
 import { Document, Page, Text, View, Image, Link, Font, StyleSheet } from '@react-pdf/renderer'
 import { PdfHeader, PdfFooter } from '@/components/pdf/PdfHeader'
 import { computeProjectDay, formatProjectDateDisplay } from '@/lib/project-day'

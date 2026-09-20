@@ -1,5 +1,3 @@
-'use client'
-
 import { View, Text, Image, Link, StyleSheet } from '@react-pdf/renderer'
 import {
   PDF_FOOTER_BLOCK_H,
