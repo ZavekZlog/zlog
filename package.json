@@ -23,7 +23,8 @@
     "check:eslint-gate": "node scripts/run-eslint-gate.mjs",
     "test:release": "node scripts/run-release-gate.mjs",
     "test:release-gate": "node scripts/run-release-gate.mjs",
-    "worker:site-diary-pdf-export": "node worker/site-diary-pdf-export/run.mjs"
+    "worker:site-diary-pdf-export": "node worker/site-diary-pdf-export/run.mjs",
+    "build:worker-site-diary-pdf": "node worker/site-diary-pdf-export/build-pdf-pipeline.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
@@ -44,6 +45,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "esbuild": "^0.25.9",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
