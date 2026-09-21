@@ -32,7 +32,7 @@ describe('Worker Site Diary PDF build boundary (2C-2C-1A)', () => {
     const buildSrc = read('build-pdf-pipeline.mjs')
     assert.match(buildSrc, /alias:\s*\{/)
     assert.match(buildSrc, /'@':\s*repoRoot/)
-    assert.match(read('pdf-pipeline-probe.mjs'), /@\/lib\/server\/assemble-site-diary-pdf-props/)
+    assert.match(read('process-site-diary-pdf-export.js'), /@\/lib\/server\/assemble-site-diary-pdf-props/)
   })
 
   it('D — server-only is shimmed only by worker build', () => {
@@ -48,55 +48,57 @@ describe('Worker Site Diary PDF build boundary (2C-2C-1A)', () => {
     assert.match(readRoot('lib/server/render-site-diary-pdf.js'), serverOnlyImport)
   })
 
-  it('F — probe imports the SAME assembler file', () => {
-    assert.match(
-      read('pdf-pipeline-probe.mjs'),
-      /@\/lib\/server\/assemble-site-diary-pdf-props\.js/,
-    )
+  it('F — build entry imports the SAME assembler file', () => {
+    assert.match(read('process-site-diary-pdf-export.js'), /@\/lib\/server\/assemble-site-diary-pdf-props\.js/)
     assert.match(
       readRoot('lib/server/assemble-site-diary-pdf-props.js'),
       /export async function assembleSiteDiaryPdfDocumentProps/,
     )
   })
 
-  it('G — probe imports the SAME completeness helper', () => {
-    assert.match(read('pdf-pipeline-probe.mjs'), /@\/lib\/diary-pdf-photos\.js/)
+  it('G — build entry imports the SAME completeness helper', () => {
+    assert.match(read('process-site-diary-pdf-export.js'), /@\/lib\/diary-pdf-photos\.js/)
     assert.match(readRoot('lib/diary-pdf-photos.js'), /export function assertDiaryPdfPhotosComplete/)
   })
 
-  it('H — probe imports the SAME renderer file', () => {
-    assert.match(read('pdf-pipeline-probe.mjs'), /@\/lib\/server\/render-site-diary-pdf\.js/)
+  it('H — build entry imports the SAME renderer file', () => {
+    assert.match(read('process-site-diary-pdf-export.js'), /@\/lib\/server\/render-site-diary-pdf\.js/)
     assert.match(readRoot('lib/server/render-site-diary-pdf.js'), /export async function renderSiteDiaryPdfBuffer/)
   })
 
   it('I — no duplicate DiaryPdfDocument exists under worker/', () => {
     assert.equal(existsSync(join(here, 'DiaryPdfDocument.jsx')), false)
     assert.equal(existsSync(join(here, 'components', 'pdf', 'DiaryPdfDocument.jsx')), false)
-    assert.doesNotMatch(read('pdf-pipeline-probe.mjs'), /@\/components\/pdf\/DiaryPdfDocument/)
+    assert.doesNotMatch(read('process-site-diary-pdf-export.js'), /@\/components\/pdf\/DiaryPdfDocument/)
   })
 
-  it('J — build/probe does not call assembler', () => {
-    const probe = read('pdf-pipeline-probe.mjs')
-    assert.doesNotMatch(probe, /assembleSiteDiaryPdfDocumentProps\s*\(/)
+  it('J — build entry does not invoke assembler at module load', () => {
+    const wrapper = read('process-site-diary-pdf-export.js')
+    assert.doesNotMatch(wrapper, /assembleSiteDiaryPdfDocumentProps\s*\(/)
+    assert.doesNotMatch(read('pdf-pipeline-build-entry.mjs'), /assembleSiteDiaryPdfDocumentProps\s*\(/)
   })
 
-  it('K — build/probe does not call renderer', () => {
-    const probe = read('pdf-pipeline-probe.mjs')
-    assert.doesNotMatch(probe, /renderSiteDiaryPdfBuffer\s*\(/)
+  it('K — build entry does not invoke renderer at module load', () => {
+    const wrapper = read('process-site-diary-pdf-export.js')
+    assert.doesNotMatch(wrapper, /renderSiteDiaryPdfBuffer\s*\(/)
   })
 
-  it('L — build/probe contains no Supabase RPC', () => {
-    const combined = [read('pdf-pipeline-probe.mjs'), read('build-pdf-pipeline.mjs')].join('\n')
+  it('L — build/processor contains no Supabase RPC', () => {
+    const combined = [
+      read('process-site-diary-pdf-export.js'),
+      read('process-site-diary-pdf-export-core.js'),
+      read('build-pdf-pipeline.mjs'),
+    ].join('\n')
     assert.doesNotMatch(combined, /\.rpc\s*\(/)
   })
 
-  it('M — build/probe contains no claim', () => {
-    const combined = [read('pdf-pipeline-probe.mjs'), read('build-pdf-pipeline.mjs')].join('\n')
+  it('M — build/processor contains no claim', () => {
+    const combined = [read('process-site-diary-pdf-export-core.js'), read('build-pdf-pipeline.mjs')].join('\n')
     assert.doesNotMatch(combined, /claim_next_site_diary_pdf_export/)
   })
 
-  it('N — build/probe contains no upload', () => {
-    const combined = [read('pdf-pipeline-probe.mjs'), read('build-pdf-pipeline.mjs')].join('\n')
+  it('N — build/processor contains no upload', () => {
+    const combined = [read('process-site-diary-pdf-export-core.js'), read('build-pdf-pipeline.mjs')].join('\n')
     assert.doesNotMatch(combined, /\.storage\./)
     assert.doesNotMatch(combined, /\.upload\s*\(/)
   })
@@ -105,7 +107,7 @@ describe('Worker Site Diary PDF build boundary (2C-2C-1A)', () => {
     const runSrc = read('run.mjs')
     assert.match(runSrc, /runClaimLoop/)
     assert.doesNotMatch(runSrc, /build-pdf-pipeline/)
-    assert.doesNotMatch(runSrc, /pdf-pipeline-probe/)
+    assert.doesNotMatch(runSrc, /processSiteDiaryPdfExport/)
     assert.doesNotMatch(runSrc, /assembleSiteDiaryPdfDocumentProps/)
   })
 

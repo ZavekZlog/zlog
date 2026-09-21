@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = join(here, '..', '..')
-const entry = join(here, 'pdf-pipeline-probe.mjs')
+const entry = join(here, 'pdf-pipeline-build-entry.mjs')
 const outdir = join(here, 'dist')
-const outfile = join(outdir, 'pdf-pipeline-probe.mjs')
+const outfile = join(outdir, 'worker-pdf-pipeline.mjs')
 
 /** Runtime packages — not bundled (native / heavy / shared with Next install). */
 const EXTERNAL_PACKAGES = [
