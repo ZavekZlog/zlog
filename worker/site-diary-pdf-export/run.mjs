@@ -1,6 +1,7 @@
 import { validateWorkerEnv } from './env.js'
 import { createWorkerSupabaseAdmin } from './supabase-admin.js'
 import { runClaimLoop } from './claim-loop.js'
+import { loadProductionPdfExecutor } from './load-production-pdf-executor.mjs'
 
 const shutdown = { shuttingDown: false }
 
@@ -29,12 +30,17 @@ async function main() {
     serviceRoleKey: config.serviceRoleKey,
   })
 
+  const executeClaimedSiteDiaryPdfExport = config.claimEnabled
+    ? await loadProductionPdfExecutor()
+    : undefined
+
   await runClaimLoop({
     admin,
     workerId: config.workerId,
     pollMs: config.pollMs,
     claimEnabled: config.claimEnabled,
     shutdown,
+    executeClaimedSiteDiaryPdfExport,
   })
 
   process.exit(0)

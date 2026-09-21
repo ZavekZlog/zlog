@@ -143,10 +143,13 @@ describe('Site Diary PDF export worker shell (2C-2B)', () => {
     assert.equal(JSON.stringify(line).includes('private'), false)
   })
 
-  it('N — one claimed job causes claim-only development exit', () => {
+  it('N — claimed job runs durable executor then continues polling until shutdown', () => {
     const loopSrc = readWorker('claim-loop.js')
-    assert.match(loopSrc, /Claim-only mode: exiting/)
-    assert.match(loopSrc, /exit\(0\)/)
+    assert.match(loopSrc, /executeClaimed\(/)
+    assert.match(loopSrc, /while \(!shutdown\.shuttingDown\)/)
+    assert.doesNotMatch(loopSrc, /Claim-only mode: exiting/)
+    const runSrc = readWorker('run.mjs')
+    assert.match(runSrc, /loadProductionPdfExecutor/)
   })
 
   it('does not modify Next.js supabase-admin', () => {

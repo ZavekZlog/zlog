@@ -197,10 +197,13 @@ describe('processSiteDiaryPdfExport (2C-2C-1B)', () => {
     assert.match(runSrc, /runClaimLoop/)
   })
 
-  it('S — claim-loop.js unchanged', () => {
-    assert.doesNotMatch(read('claim-loop.js'), /processSiteDiaryPdfExport/)
-    assert.match(read('claim-loop.js'), /CLAIM_RPC_NAME/)
-    assert.match(read('claim-loop.js'), /invokeClaimNextExport/)
+  it('S — claim-loop delegates PDF work to injected executor only', () => {
+    const loopSrc = read('claim-loop.js')
+    assert.doesNotMatch(loopSrc, /processSiteDiaryPdfExport/)
+    assert.doesNotMatch(loopSrc, /assembleSiteDiaryPdfDocumentProps/)
+    assert.match(loopSrc, /CLAIM_RPC_NAME/)
+    assert.match(loopSrc, /invokeClaimNextExport/)
+    assert.match(loopSrc, /executeClaimedSiteDiaryPdfExport/)
   })
 
   it('T — existing worker build boundary remains intact', () => {
