@@ -6,3 +6,5 @@ export {
   validateExportJob,
   DEFAULT_WORKER_PDF_PIPELINE,
 } from './process-site-diary-pdf-export.js'
+
+export { executeClaimedSiteDiaryPdfExport } from './execute-claimed-site-diary-pdf-export.js'

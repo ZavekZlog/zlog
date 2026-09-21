@@ -3,6 +3,10 @@
  */
 
 export const CLAIM_RPC_NAME = 'claim_next_site_diary_pdf_export'
+export const COMPLETE_RPC_NAME = 'complete_site_diary_pdf_export'
+export const FAIL_RPC_NAME = 'fail_site_diary_pdf_export'
+
+export const SITE_DIARY_PDF_EXPORT_STORAGE_BUCKET = 'site-diary-pdf-exports'
 
 export const DEFAULT_POLL_MS = 5000
 export const MIN_POLL_MS = 1000
