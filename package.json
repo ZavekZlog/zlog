@@ -22,7 +22,8 @@
     "check:eslint-exceptions": "node scripts/check-eslint-exceptions.mjs",
     "check:eslint-gate": "node scripts/run-eslint-gate.mjs",
     "test:release": "node scripts/run-release-gate.mjs",
-    "test:release-gate": "node scripts/run-release-gate.mjs"
+    "test:release-gate": "node scripts/run-release-gate.mjs",
+    "worker:site-diary-pdf-export": "node worker/site-diary-pdf-export/run.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
