@@ -125,3 +125,100 @@ Returns the export row as `jsonb` for `owner_id = auth.uid()` only. No signed UR
 
 - `docs/contracts/SITE_DIARY_PDF_SNAPSHOT_V1.md`
 - `lib/site-diary-pdf-snapshot-v1.js`
+
+---
+
+## Phase 2C-2A — Worker claim / lease state (database only)
+
+**Version:** 1.1 (append)
+**Date:** 2026-09-21
+**Status:** Worker RPC foundation — **no** worker process, Storage bucket, or HTTP API in this phase
+
+Migration: `supabase/migrations/20260921140000_site_diary_pdf_export_worker_state.sql`
+Does **not** modify `20260921120000_site_diary_pdf_exports.sql`.
+
+### Additional columns
+
+| Column | Type | Notes |
+|--------|------|--------|
+| `lease_expires_at` | `timestamptz` | Set on claim/reclaim; cleared on `ready` / `failed` |
+| `locked_by` | `text` | Worker identity from `p_worker_id`; cleared on terminal states |
+| `reclaim_count` | `integer NOT NULL DEFAULT 0` | Stale lease recoveries only; CHECK `>= 0` |
+
+### Claim indexes
+
+- `site_diary_pdf_exports_queued_created_idx` — `created_at ASC` WHERE `status = 'queued'`
+- `site_diary_pdf_exports_processing_lease_idx` — `lease_expires_at ASC` WHERE `status = 'processing'`
+
+### Atomic claim: `claim_next_site_diary_pdf_export(p_worker_id text)`
+
+- **`SECURITY DEFINER`**, `search_path = pg_catalog, public`
+- **`service_role` only** — `REVOKE` from `PUBLIC` and `authenticated`; `GRANT EXECUTE` to `service_role`
+- Rejects null/blank `p_worker_id`
+- Returns claimed row as `jsonb`, or `NULL` when no eligible job
+
+**Concurrency:** inside one function, each candidate row is selected with **`FOR UPDATE SKIP LOCKED`** so two Railway workers cannot claim the same row.
+
+**Eligible rows (in priority order):**
+
+1. `status = 'queued'`
+2. `status = 'processing'` AND `lease_expires_at IS NOT NULL` AND `lease_expires_at < now()` (stale lease)
+
+**Ordering:** queued before stale processing; then oldest `created_at` first.
+
+**Queued claim:**
+
+- `status` → `processing`
+- `started_at` → `COALESCE(started_at, now())`
+- `lease_expires_at` → `now() + 20 minutes`
+- `locked_by` → `p_worker_id`
+- `reclaim_count` unchanged
+
+**Stale reclaim** (same row stays `processing`):
+
+- `lease_expires_at` → `now() + 20 minutes`
+- `locked_by` → `p_worker_id`
+- `reclaim_count` → `reclaim_count + 1`
+- `started_at` unchanged
+
+**Stale reclaim limit:** maximum **3** reclaims (`reclaim_count` must be `< 3` to reclaim). When a stale row has `reclaim_count >= 3`, the claim function **fails that row** (not returned as a claim):
+
+- `status` → `failed`
+- `error_code` → `processing_timeout`
+- `error_message` → generic non-sensitive text
+- `completed_at` → `now()`
+- `lease_expires_at` / `locked_by` → `NULL`
+
+Then the claim loop continues to the next eligible job.
+
+### Complete: `complete_site_diary_pdf_export(p_export_id, p_storage_path, p_byte_size, p_worker_id)`
+
+- **`service_role` only**
+- Requires: row exists; `status = 'processing'`; `locked_by = p_worker_id`; lease **not** expired (`lease_expires_at >= now()`); non-blank `p_storage_path`; `p_byte_size >= 0`
+- On success: `status = ready`, `storage_path`, `byte_size`, `completed_at = now()`, clear `lease_expires_at`, `locked_by`, `error_code`, `error_message`
+- Wrong worker or expired lease **cannot** complete
+
+### Fail: `fail_site_diary_pdf_export(p_export_id, p_error_code, p_error_message, p_worker_id)`
+
+- **`service_role` only**
+- Requires: row exists; `status = 'processing'`; `locked_by = p_worker_id`
+- `p_error_code` non-blank; `p_error_message` trimmed and bounded (max 500 chars); default generic message if blank
+- On success: `status = failed`, `error_code`, `error_message`, `completed_at = now()`, clear `lease_expires_at`, `locked_by`
+- No stack traces or secrets in stored messages
+
+### Worker RPC boundary
+
+| RPC | Caller |
+|-----|--------|
+| `enqueue_site_diary_pdf_export`, `get_site_diary_pdf_export` | `authenticated` (2C-1) |
+| `claim_next_site_diary_pdf_export`, `complete_site_diary_pdf_export`, `fail_site_diary_pdf_export` | **`service_role` only** |
+
+Enqueue already proved ownership; the worker does **not** use end-user JWTs. Application-level retry/backoff, heartbeat, and lease extension are **out of scope** for 2C-2A.
+
+### Non-goals (Phase 2C-2A)
+
+- Heartbeat / lease-extension RPCs
+- Railway worker binary, cron, in-worker retry engine
+- Storage bucket creation or upload
+- HTTP enqueue/poll/download routes
+- Changes to PDF assembly, rendering, or client Share
