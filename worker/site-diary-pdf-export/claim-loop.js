@@ -27,6 +27,25 @@ export function formatExecutionSuccessLog(result) {
 }
 
 /**
+ * Supabase PostgREST RPC error metadata only — no client, headers, or env.
+ * @param {unknown} error
+ */
+export function formatClaimRpcErrorLog(error) {
+  const src = error && typeof error === 'object' ? error : {}
+  return {
+    code:
+      typeof src.code === 'string'
+        ? src.code
+        : src.code != null && src.code !== ''
+          ? String(src.code)
+          : null,
+    message: typeof src.message === 'string' ? src.message : null,
+    details: typeof src.details === 'string' ? src.details : null,
+    hint: typeof src.hint === 'string' ? src.hint : null,
+  }
+}
+
+/**
  * @param {unknown} err
  */
 export function formatExecutionFailureLog(err) {
@@ -95,7 +114,10 @@ export async function runClaimLoop(options) {
     const { data, error } = await claimNext(admin, workerId)
 
     if (error) {
-      log.error('[site-diary-pdf-worker] Claim RPC failed.')
+      log.error(
+        '[site-diary-pdf-worker] Claim RPC failed.',
+        formatClaimRpcErrorLog(error),
+      )
       await wait(pollMs, shutdown)
       continue
     }

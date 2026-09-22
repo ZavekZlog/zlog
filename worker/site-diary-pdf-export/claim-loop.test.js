@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import {
   runClaimLoop,
   formatClaimLogLine,
+  formatClaimRpcErrorLog,
   formatExecutionFailureLog,
   formatExecutionSuccessLog,
 } from './claim-loop.js'
@@ -276,10 +277,16 @@ describe('runClaimLoop (2C-2C-2C)', () => {
     assert.equal(claimCalls, 1)
   })
 
-  it('M — claim RPC error → no executor', async () => {
+  it('M — claim RPC error → sleep/retry, no executor, safe error metadata logged', async () => {
     let execCalls = 0
     let claimCalls = 0
+    let sleepCalls = 0
     const shutdown = { shuttingDown: false }
+    const logs = []
+    const log = {
+      log: (...args) => logs.push(args),
+      error: (...args) => logs.push(args),
+    }
 
     await runClaimLoop({
       admin: {},
@@ -287,12 +294,24 @@ describe('runClaimLoop (2C-2C-2C)', () => {
       pollMs: 1,
       claimEnabled: true,
       shutdown,
+      log,
       sleep: async () => {
+        sleepCalls += 1
         shutdown.shuttingDown = true
       },
       claimNext: async () => {
         claimCalls += 1
-        return { data: null, error: { message: 'rpc failed' } }
+        return {
+          data: null,
+          error: {
+            code: 'PGRST202',
+            message: 'Could not find the function',
+            details: 'Searched for claim_next_site_diary_pdf_export',
+            hint: null,
+            headers: { Authorization: 'Bearer secret-jwt' },
+            config: { url: 'https://project.supabase.co' },
+          },
+        }
       },
       executeClaimedSiteDiaryPdfExport: async () => {
         execCalls += 1
@@ -301,6 +320,42 @@ describe('runClaimLoop (2C-2C-2C)', () => {
 
     assert.equal(claimCalls, 1)
     assert.equal(execCalls, 0)
+    assert.equal(sleepCalls, 1)
+
+    const errorLog = logs.find(
+      (entry) => entry[0] === '[site-diary-pdf-worker] Claim RPC failed.',
+    )
+    assert.ok(errorLog)
+    assert.deepEqual(errorLog[1], {
+      code: 'PGRST202',
+      message: 'Could not find the function',
+      details: 'Searched for claim_next_site_diary_pdf_export',
+      hint: null,
+    })
+    const joined = JSON.stringify(logs)
+    assert.doesNotMatch(joined, /secret-jwt/)
+    assert.doesNotMatch(joined, /supabase\.co/)
+    assert.doesNotMatch(joined, /SERVICE_ROLE/)
+    assert.doesNotMatch(joined, /Authorization/)
+  })
+
+  it('M2 — formatClaimRpcErrorLog exposes only code/message/details/hint', () => {
+    const shaped = formatClaimRpcErrorLog({
+      code: '42501',
+      message: 'permission denied',
+      details: 'detail text',
+      hint: 'try service_role',
+      request: { headers: { apikey: 'leaked' } },
+      stack: 'Error: at claim',
+    })
+    assert.deepEqual(shaped, {
+      code: '42501',
+      message: 'permission denied',
+      details: 'detail text',
+      hint: 'try service_role',
+    })
+    assert.equal(Object.keys(shaped).sort().join(','), 'code,details,hint,message')
+    assert.doesNotMatch(JSON.stringify(shaped), /leaked/)
   })
 
   it('L — safe logs omit full job and raw errors', () => {
