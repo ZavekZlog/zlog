@@ -18,7 +18,7 @@ import {
   passwordVisibilityLabel,
   readLoginFormCredentials,
 } from '@/lib/auth/login-form'
-import { safeAppReturnPath } from '@/lib/auth/return-path'
+import { resolvePostLoginDestination, safeAppReturnPath } from '@/lib/auth/return-path'
 
 /**
  * Sign-in — inherits re-centred ZlogBrandWordmark glow.
@@ -60,8 +60,7 @@ export default function Login() {
     setShowPassword(false)
     setErrorMsg('')
     setLoading(false)
-    const next = safeAppReturnPath(params.get('next'))
-    router.replace(next ? `/login?next=${encodeURIComponent(next)}` : '/login')
+    router.replace('/login?signedOut=1')
   }, [router])
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -122,11 +121,14 @@ export default function Login() {
         return
       }
 
-      const next = safeAppReturnPath(
-        new URLSearchParams(window.location.search).get('next'),
-      )
-      // Full navigation restores the exact report URL (pathname + ?report=) with the new session.
-      window.location.assign(next || '/dashboard')
+      const params = new URLSearchParams(window.location.search)
+      const destination = resolvePostLoginDestination({
+        next: params.get('next'),
+        signedOut: params.get('signedOut') === '1',
+        recovery: params.get('recovery'),
+      })
+      // Single replace — Site Control Panel by default; recovery=1 restores protected work URLs only.
+      window.location.replace(destination)
     } catch {
       setErrorMsg('An unexpected error occurred. Please try again.')
       setLoading(false)
