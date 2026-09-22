@@ -27,6 +27,12 @@ import {
   diaryHubHref,
   savedDiaryViewerHref,
 } from '@/lib/diary-routing'
+import {
+  navigateToSavedDiaryViewer,
+  prefetchSavedDiaryViewerRoutes,
+  shouldIgnoreSavedDiaryRowOpen,
+  tryBeginSavedDiaryOpen,
+} from '@/lib/diary-saved-list-navigation'
 import { clearSetupFormDraft } from '@/lib/report-setup'
 import {
   BULK_SAVED_DIARY_DELETE_LABELS,
@@ -165,12 +171,25 @@ const savedDiaryListCss = `
     display: block;
     padding: 10px 8px 10px 2px;
     cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
   }
   .zlog-saved-diary-open:hover {
     background: color-mix(in srgb, rgb(${DIARY_ACCENT}) 8%, transparent);
   }
-  .zlog-saved-diary-open:active {
-    background: color-mix(in srgb, rgb(${DIARY_ACCENT}) 14%, transparent);
+  .zlog-saved-diary-open:active:not([data-opening='true']) {
+    background: color-mix(in srgb, rgb(${DIARY_ACCENT}) 8%, transparent);
+  }
+  .zlog-saved-diary-open[data-opening='true'] {
+    background: color-mix(in srgb, rgb(${DIARY_ACCENT}) 10%, var(--plate));
+    cursor: wait;
+  }
+  .zlog-saved-diary-opening-label {
+    display: block;
+    margin-top: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: color-mix(in srgb, rgb(${DIARY_ACCENT}) 78%, var(--text));
   }
   .zlog-saved-diary-open:focus-visible {
     outline: 3px solid color-mix(in srgb, rgb(${DIARY_ACCENT}) 72%, white);
@@ -396,6 +415,8 @@ function SiteDiaryEntryPage() {
   // render; putting that in the reports-load effect would reload the list.
   const supabase = useMemo(() => createClient(), [])
   const openingSavedDiaryRef = useRef(false)
+  const savedDiaryOpenInFlightRef = useRef(null)
+  const [openingReportId, setOpeningReportId] = useState(null)
 
   const [mode, setMode] = useState(() => (
     searchParams.get('view') === 'saved' ? 'saved' : null
@@ -511,17 +532,36 @@ function SiteDiaryEntryPage() {
     }
   }, [mode, filterProjectId, supabase])
 
+  useEffect(() => {
+    if (mode !== 'previous' && mode !== 'saved') return
+    if (!reports.length) return
+    prefetchSavedDiaryViewerRoutes(reports, savedDiaryViewerHref, router, 8)
+  }, [mode, reports, router])
+
   const openExistingReport = (row) => {
-    if (selectionMode) return
+    if (
+      shouldIgnoreSavedDiaryRowOpen({
+        selectionMode,
+        inFlightRef: savedDiaryOpenInFlightRef,
+      })
+    ) {
+      return
+    }
     const href = savedDiaryViewerHref(row?.project_id, row?.id)
     if (!href) {
       setError('That diary can’t be opened. Try another one, or start a new diary.')
       return
     }
+    if (!tryBeginSavedDiaryOpen(savedDiaryOpenInFlightRef, row?.id)) return
     // Read-only viewer for the exact saved report — one continuous document.
     // Never opens the compose workbench and never creates a row.
     openingSavedDiaryRef.current = true
-    router.push(href)
+    setOpeningReportId(row.id)
+    navigateToSavedDiaryViewer(href, {
+      navigate: (target) => {
+        window.location.assign(target)
+      },
+    })
   }
 
   const openSavedDiaries = () => {
@@ -840,6 +880,8 @@ function SiteDiaryEntryPage() {
                 const shift = row.shift || '—'
                 const summary = (row.site_summary || '').trim()
                 const selected = selectedIds.has(row.id)
+                const opening = openingReportId === row.id
+                const openBlocked = Boolean(openingReportId) && !selectionMode
                 return (
                   <div
                     key={row.id}
@@ -855,6 +897,8 @@ function SiteDiaryEntryPage() {
                           ? 'zlog-saved-diary-open zlog-saved-diary-open--selecting'
                           : 'zlog-saved-diary-open'
                       }
+                      data-opening={opening ? 'true' : undefined}
+                      disabled={openBlocked && !opening}
                       onClick={() => {
                         if (selectionMode) {
                           toggleSelected(row.id)
@@ -862,6 +906,7 @@ function SiteDiaryEntryPage() {
                         }
                         openExistingReport(row)
                       }}
+                      aria-busy={opening ? 'true' : undefined}
                       aria-pressed={selectionMode ? selected : undefined}
                       aria-label={
                         selectionMode
@@ -887,6 +932,9 @@ function SiteDiaryEntryPage() {
                         </span>
                         {summary ? (
                           <span className="zlog-saved-diary-summary">{summary}</span>
+                        ) : null}
+                        {opening ? (
+                          <span className="zlog-saved-diary-opening-label">Opening diary…</span>
                         ) : null}
                       </span>
                     </button>
