@@ -129,8 +129,10 @@
     {
       "id": "ESLINT-PHOTO-001-IMG",
       "files": [
+        "app/dashboard/diary/labour-ocr-claude-benchmark/page.jsx",
         "app/dashboard/project/[id]/diary/page.jsx",
         "app/dashboard/project/[id]/diary/view/page.jsx",
+        "components/diary/SiteDiaryLabourSection.jsx",
         "components/ai-annotation/AreaPhotoViewer.jsx",
         "components/ai-annotation/AnnotationPendingReview.jsx",
         "components/ai-annotation/AnnotationPhotoCard.jsx",
@@ -163,6 +165,18 @@
       "scope": "existing-img-disable"
     },
     {
+      "id": "ESLINT-DIARY-WORKBENCH-HYDRATE-DEPS",
+      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "reason": "Workbench load effect intentionally omits labourScan — including it would re-run full hydrate on every labour hook identity change.",
+      "preserves": "Site Diary edit hydrate stability / SDSC fast path",
+      "tests": [
+        "lib/diary-edit-hydrate.test.js",
+        "lib/diary-site-diary-contract.test.js"
+      ],
+      "scope": "single-line"
+    },
+    {
       "id": "ESLINT-SETUP-HYDRATE-DEPS",
       "file": "app/dashboard/diary/setup/page.jsx",
       "rule": "react-hooks/exhaustive-deps",
@@ -183,6 +197,16 @@
       "tests": [],
       "manualQA": true,
       "scope": "single-line"
+    },
+    {
+      "id": "ESLINT-E15",
+      "file": "app/dashboard/diary/labour-ocr-claude-benchmark/page.jsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "reason": "Temporary Claude OCR benchmark resets break-review rows when a new scan result arrives.",
+      "preserves": "Isolated benchmark page — no production labour OCR writes",
+      "tests": [],
+      "manualQA": true,
+      "scope": "single-effect"
     },
     {
       "id": "ESLINT-E13",

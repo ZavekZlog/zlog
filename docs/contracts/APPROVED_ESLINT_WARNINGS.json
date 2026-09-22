@@ -18,6 +18,13 @@
   ],
   "warnings": [
     {
+      "file": "app/(auth)/login/page.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "safeAppReturnPath",
+      "sourceHint": "import { resolvePostLoginDestination, safeAppReturnPath } from '@/lib/auth/return-path'",
+      "classification": "no-unused-vars"
+    },
+    {
       "file": "app/dashboard/diary/setup/page.jsx",
       "rule": "@next/next/no-img-element",
       "messageKey": "no-img-element",
@@ -50,13 +57,6 @@
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "PHOTO_LAYOUT_SECTIONS",
       "sourceHint": "const PHOTO_LAYOUT_SECTIONS = [",
-      "classification": "no-unused-vars"
-    },
-    {
-      "file": "app/dashboard/project/[id]/diary/page.jsx",
-      "rule": "@typescript-eslint/no-unused-vars",
-      "messageKey": "labourFromDbRow",
-      "sourceHint": "function labourFromDbRow(row) {",
       "classification": "no-unused-vars"
     },
     {
@@ -130,13 +130,6 @@
       "classification": "no-img-element"
     },
     {
-      "file": "app/dashboard/project/[id]/diary/page.jsx",
-      "rule": "@next/next/no-img-element",
-      "messageKey": "no-img-element",
-      "sourceHint": "<img src={signature.preview} alt=\"Signature\" style={{ maxWidth: '100%', maxHeight: 120, objectFit: 'contain', borderRadius: 8, display: 'block', marginBottom: 10, background: '#fff",
-      "classification": "no-img-element"
-    },
-    {
       "file": "app/dashboard/project/[id]/diary/view/page.jsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "groupIndex",
@@ -151,6 +144,13 @@
       "classification": "exhaustive-deps"
     },
     {
+      "file": "app/landing-feature-strip.tsx",
+      "rule": "@next/next/no-img-element",
+      "messageKey": "no-img-element",
+      "sourceHint": "<img src={feature.src} alt=\"\" width={FEATURE_ICON_SIZE} height={FEATURE_ICON_SIZE} style={{ width: FEATURE_ICON_SIZE, height: FEATURE_ICON_SIZE,",
+      "classification": "no-img-element"
+    },
+    {
       "file": "components/ai-annotation/AiLocationWalk.jsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "continueToSignature",
@@ -162,6 +162,41 @@
       "rule": "react-hooks/exhaustive-deps",
       "messageKey": "list",
       "sourceHint": "const list = Array.isArray(photos) ? photos : []",
+      "classification": "exhaustive-deps"
+    },
+    {
+      "file": "components/diary/SignInOperativeReview.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "_reportDate",
+      "sourceHint": "reportDate: _reportDate,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "components/diary/SignInOperativeReview.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "_ocrProvider",
+      "sourceHint": "ocrProvider: _ocrProvider = null,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "components/diary/SignInOperativeReview.jsx",
+      "rule": "react-hooks/exhaustive-deps",
+      "messageKey": "rows",
+      "sourceHint": "const rows = Array.isArray(reviewRows) ? reviewRows : []",
+      "classification": "exhaustive-deps"
+    },
+    {
+      "file": "components/diary/SiteDiaryLabourSection.jsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "_removeRowStyle",
+      "sourceHint": "removeRowStyle: _removeRowStyle,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "components/diary/useSiteDiaryLabour.js",
+      "rule": "react-hooks/exhaustive-deps",
+      "messageKey": "lastPersistedLabourRef",
+      "sourceHint": "}, [",
       "classification": "exhaustive-deps"
     },
     {
@@ -242,6 +277,13 @@
       "classification": "no-unused-vars"
     },
     {
+      "file": "lib/diary-pdf-asset-prewarm.test.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "peekPreparedCoverSessionInflight",
+      "sourceHint": "peekPreparedCoverSessionInflight,",
+      "classification": "no-unused-vars"
+    },
+    {
       "file": "lib/diary-reporting-company.test.js",
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "columns",
@@ -263,17 +305,38 @@
       "classification": "no-unused-vars"
     },
     {
-      "file": "lib/diary-save.js",
-      "rule": "@typescript-eslint/no-unused-vars",
-      "messageKey": "_liveRow",
-      "sourceHint": "export function adaptReportPayloadForLiveRow(reportPayload, _liveRow) {",
-      "classification": "no-unused-vars"
-    },
-    {
       "file": "lib/diary-share.js",
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "canSharePdfFile",
       "sourceHint": "canSharePdfFile,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/photo-workspace/display-signed-url-cache.test.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "DISPLAY_SIGNED_URL_SAFETY_MARGIN_MS",
+      "sourceHint": "DISPLAY_SIGNED_URL_SAFETY_MARGIN_MS,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/photo-workspace/display-signed-url-cache.test.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "displaySignedUrlCacheKey",
+      "sourceHint": "displaySignedUrlCacheKey,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/photo-workspace/display-signed-url-cache.test.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "displaySignedUrlExpiresAtMs",
+      "sourceHint": "displaySignedUrlExpiresAtMs,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/photo-workspace/display-signed-url-cache.test.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "isDisplaySignedUrlEntryValid",
+      "sourceHint": "isDisplaySignedUrlEntryValid,",
       "classification": "no-unused-vars"
     },
     {
@@ -333,6 +396,41 @@
       "classification": "no-unused-vars"
     },
     {
+      "file": "lib/server/load-site-diary-pdf-snapshot-source.test.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "buildSiteDiaryPdfSnapshotRawInput",
+      "sourceHint": "import { buildSiteDiaryPdfSnapshotRawInput } from '../site-diary-pdf-snapshot-source.js'",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/sign-in-trade-hours-review.test.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "upsertSignInDerivedVisitorLine",
+      "sourceHint": "upsertSignInDerivedVisitorLine,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/sign-in-trade-hours-review.test.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "pruneDepletedSignInTradeHoursReviewRows",
+      "sourceHint": "pruneDepletedSignInTradeHoursReviewRows,",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/sign-in-trade-hours-review.test.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "qs",
+      "sourceHint": "const qs = rows.find((r) => r.trade === 'QS' || r.trade.includes('QS'))",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "lib/site-diary-pdf-export-client.test.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "client",
+      "sourceHint": "const { client, calls } = mockSupabase(() => ({ data: null, error: null }))",
+      "classification": "no-unused-vars"
+    },
+    {
       "file": "scripts/check-change-scope.test.js",
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "many",
@@ -365,6 +463,13 @@
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "persistenceFiles",
       "sourceHint": "const persistenceFiles = [",
+      "classification": "no-unused-vars"
+    },
+    {
+      "file": "worker/site-diary-pdf-export/process-site-diary-pdf-export.test.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "messageKey": "root",
+      "sourceHint": "const root = join(here, '..', '..')",
       "classification": "no-unused-vars"
     }
   ]

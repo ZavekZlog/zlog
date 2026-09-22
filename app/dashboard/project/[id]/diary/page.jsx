@@ -55,7 +55,6 @@ import {
 import { DiarySaveError, DIARY_SAVE_LOG, finalizeSiteDiarySave } from '@/lib/diary-save'
 import {
   labourFormToPersistRows,
-  labourPersistRowsEqual,
   plantFormToPersistRows,
   photoRowsToBaseline,
   durablePhotosToBaseline,
@@ -141,6 +140,7 @@ import {
   snapshotUserActivation,
 } from '@/lib/diary-share'
 import {
+  fetchAuthoritativeSiteDiaryPdfExportFingerprint,
   fetchSiteDiaryPdfExportAuthorization,
   isSiteDiaryPdfExportUserAbortResult,
   runSiteDiaryPdfExportToExportReady,
@@ -148,6 +148,19 @@ import {
   SITE_DIARY_PDF_EXPORT_HANDOFF,
   userMessageForSiteDiaryPdfExportFailure,
 } from '@/lib/site-diary-pdf-export-client'
+import {
+  coordinateBackgroundPdfOnSaveStart,
+  diarySavedPdfPrepareFailureMessage,
+  isDiaryCleanForSaveRetainCheck,
+  preparedFileMatchesFingerprint,
+  SAVE_CTA_IDLE_LABEL,
+  SAVE_CTA_PREPARING_LABEL,
+  SAVE_CTA_SAVING_LABEL,
+  SAVE_CTA_SHARE_READY_LABEL,
+  shouldIgnoreDuplicateSaveTap,
+  shouldRetainPreparedFileOnSave,
+  tryAcquireSaveOperationLock,
+} from '@/lib/diary-save-pdf-coordination'
 import { emitShareDiag } from '@/lib/share-diag-beacon'
 import {
   beginDiaryHydrationTiming,
@@ -197,7 +210,6 @@ import {
 } from '@/lib/diary-project-details'
 import {
   persistSaveAreaGroup,
-  photoRowNeedsPreparedUpload,
   SAVE_AREA_PERSIST_FAIL_MESSAGE,
 } from '@/lib/photo-workspace/persist-save-area'
 import {
@@ -489,6 +501,7 @@ export default function SiteDiaryPage() {
   const [loading, setLoading] = useState(true)
   const saveCtaRef = useRef(null)
   const [saving, setSaving] = useState(false)
+  const [pdfPreparing, setPdfPreparing] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
   const [showSaveBanner, setShowSaveBanner] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(false)
@@ -507,6 +520,7 @@ export default function SiteDiaryPage() {
   const backgroundPrepareLiveRef = useRef({})
   const [shareReady, setShareReady] = useState(false)
   const invalidatePreparedSharePdf = useCallback((reason) => {
+    emitShareDiag('pdf-invalidate', { reason })
     pdfPrepareAbortRef.current?.abort()
     pdfPrepareAbortRef.current = null
     pdfBackgroundPrepareAbortRef.current?.abort()
@@ -558,6 +572,7 @@ export default function SiteDiaryPage() {
     completingRef.current = false
     invalidatePreparedSharePdf('report-edit-reset')
     setSaving(false)
+    setPdfPreparing(false)
     setJustSaved(false)
     setShareCompletionKind(null)
     setShowSaveBanner(false)
@@ -1634,6 +1649,7 @@ export default function SiteDiaryPage() {
       cancelled = true
       endDiaryHydrationTiming('cancelled')
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ESLINT-DIARY-WORKBENCH-HYDRATE-DEPS
   }, [projectId, editingReportId, formReloadToken, composeQuery, editQuery, supabase])
 
   const autosavePayload = useMemo(() => buildDiaryAutosavePayload({
@@ -2771,22 +2787,22 @@ export default function SiteDiaryPage() {
       shareReady: isWorkbenchSharePrepared(shareReadyPdfRef.current),
     })
 
-    // Clear stale locks so Save is never silently no-op.
-    if (saveLockRef.current && !saving && !justSaved) {
-      saveLockRef.current = false
-      completingRef.current = false
+    if (
+      shouldIgnoreDuplicateSaveTap({
+        saveLockRef,
+        finalSaveInProgressRef,
+        sharePrepared: isWorkbenchSharePrepared(shareReadyPdfRef.current),
+        saving,
+      })
+    ) {
+      emitShareDiag('duplicate-save-tap-ignored', {
+        reportId: editingReportId,
+        projectId,
+      })
+      return
     }
 
-    if (!isWorkbenchSharePrepared(shareReadyPdfRef.current) && (saveLockRef.current || justSaved || completingRef.current)) {
-      const blockMsg = justSaved || completingRef.current
-        ? 'Save already completed for this attempt. Change a field or reopen the report.'
-        : 'Save is already in progress.'
-      flushSync(() => {
-        persistUiErrorRef.current = blockMsg
-        setAutosaveStatus(null)
-        setError(blockMsg)
-      })
-      saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+    if (!isWorkbenchSharePrepared(shareReadyPdfRef.current) && (justSaved || completingRef.current)) {
       return
     }
 
@@ -2797,13 +2813,30 @@ export default function SiteDiaryPage() {
       finalSaveInProgressRef.current = false
       flushSync(() => {
         setSaving(false)
+        setPdfPreparing(false)
         setJustSaved(false)
         setShowSaveBanner(false)
         persistUiErrorRef.current = message
         setAutosaveStatus(null)
         setError(message)
       })
-      saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+    }
+
+    const failPdfAfterSave = (message) => {
+      diarySaveLog('pdf-prepare-fail', { message })
+      saveLockRef.current = false
+      completingRef.current = false
+      finalSaveInProgressRef.current = false
+      const userMessage = diarySavedPdfPrepareFailureMessage(message)
+      flushSync(() => {
+        setSaving(false)
+        setPdfPreparing(false)
+        setJustSaved(true)
+        setShowSaveBanner(false)
+        persistUiErrorRef.current = userMessage
+        setAutosaveStatus(null)
+        setError(userMessage)
+      })
     }
 
     const finishAfterSuccessfulShare = (completionKind = 'shared') => {
@@ -2828,7 +2861,6 @@ export default function SiteDiaryPage() {
         setShareCompletionKind(null)
         saveNavTimerRef.current = null
       }, POST_SAVE_SHARE_DELAY_MS)
-      saveCtaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
     }
 
     const sharePreparedFile = async (prepared) => {
@@ -2953,10 +2985,45 @@ export default function SiteDiaryPage() {
       return
     }
 
-    saveLockRef.current = true
+    if (!tryAcquireSaveOperationLock(saveLockRef)) {
+      emitShareDiag('duplicate-save-tap-ignored', {
+        reportId: editingReportId,
+        projectId,
+      })
+      return
+    }
     finalSaveInProgressRef.current = true
     const tapUserActivation = snapshotUserActivation()
     const tapStartedAt = Date.now()
+    const diaryCleanForRetain = isDiaryCleanForSaveRetainCheck({
+      latestPayload: latestPayloadRef.current,
+      ackedSnapshot: ackedSnapshotRef.current,
+      payloadsEqual: autosavePayloadsEqual,
+      photoWorkspaceDraftDirty: photoWorkspaceDraftDirtyRef.current,
+    })
+    const retainPreparedFile = shouldRetainPreparedFileOnSave({
+      diaryPersistedClean: diaryCleanForRetain,
+      preparedEntry: shareReadyPdfRef.current,
+      reportId: editingReportId,
+    })
+    flushSync(() => {
+      setSaving(true)
+      setPdfPreparing(false)
+      setJustSaved(false)
+      setShowSaveBanner(false)
+      persistUiErrorRef.current = ''
+      setAutosaveStatus(null)
+      setError('')
+      if (!retainPreparedFile) {
+        setShareReady(false)
+      }
+    })
+    emitShareDiag('save-lock-acquired', {
+      tapStartedAt,
+      reportId: editingReportId,
+      projectId,
+      retainPreparedFile,
+    })
     console.info('[zlog:share-diag] CTA tap', {
       userActivation: tapUserActivation,
       reportId: editingReportId,
@@ -2969,28 +3036,48 @@ export default function SiteDiaryPage() {
       userActivationHasBeenActive: tapUserActivation.hasBeenActive,
       reportId: editingReportId,
       projectId,
+      savingUiActive: true,
     })
     diarySaveLog('save button clicked', {
       reportId: editingReportId,
       projectId,
       userActivation: tapUserActivation,
     })
-    pdfPrepareGenerationRef.current = bumpPdfPrepareGeneration(pdfPrepareGenerationRef.current)
-    pdfPrepareAbortRef.current?.abort()
-    pdfPrepareAbortRef.current = null
-    pdfBackgroundPrepareSchedulerRef.current?.cancel()
-    await pdfBackgroundPrepareSchedulerRef.current?.waitUntilIdle?.()
-    shareReadyPdfRef.current = null
-    flushSync(() => {
-      setShareReady(false)
-      setSaving(true)
-      setJustSaved(false)
-      setShowSaveBanner(false)
-      persistUiErrorRef.current = ''
-      setAutosaveStatus(null)
-      setError('')
+    const { joinBackgroundInFlight, invalidatedPrepared } = coordinateBackgroundPdfOnSaveStart({
+      retainCurrentPreparedFile: retainPreparedFile,
+      bumpGeneration: bumpPdfPrepareGeneration,
+      pdfPrepareGenerationRef,
+      pdfPrepareAbortRef,
+      pdfBackgroundPrepareAbortRef,
+      pdfBackgroundPrepareSchedulerRef,
     })
+    if (invalidatedPrepared) {
+      shareReadyPdfRef.current = null
+      emitShareDiag('prepared-file-invalidated', {
+        reportId: editingReportId,
+        projectId,
+        reason: 'save-stale-state',
+      })
+    } else if (retainPreparedFile) {
+      emitShareDiag('prepared-file-retained', {
+        reportId: editingReportId,
+        projectId,
+        joinBackgroundInFlight,
+      })
+    }
+    if (joinBackgroundInFlight) {
+      emitShareDiag('background-reused-current', {
+        reportId: editingReportId,
+        projectId,
+      })
+    } else if (invalidatedPrepared) {
+      emitShareDiag('background-aborted-stale', {
+        reportId: editingReportId,
+        projectId,
+      })
+    }
 
+    let diaryPersistSucceeded = false
     try {
       if (!editingReportId) {
         failSave('We couldn’t save your Site Diary because it wasn’t opened correctly. Go back to Site Diary and choose Open Latest Diary or Start New Site Diary.')
@@ -3338,6 +3425,7 @@ export default function SiteDiaryPage() {
       lastPersistedPlantRef.current = plantPayload
       lastPersistedPhotosRef.current = durablePhotosToBaseline(sequenced)
       setReportIsDraft(false)
+      diaryPersistSucceeded = true
       diarySaveLog('success', { reportId: saved.id })
 
       const startedPrepareGeneration = pdfPrepareGenerationRef.current
@@ -3355,11 +3443,74 @@ export default function SiteDiaryPage() {
           finalSaveInProgressRef.current = false
           flushSync(() => {
             setSaving(false)
+            setPdfPreparing(false)
           })
           return true
         }
         return false
       }
+
+      const adoptRetainedPreparedFileIfCurrent = async () => {
+        const fingerprint = await fetchAuthoritativeSiteDiaryPdfExportFingerprint(saved.id, {
+          signal: prepareAbort.signal,
+        })
+        if (!fingerprint.ok) {
+          return { ok: false, result: fingerprint }
+        }
+        const retained = shareReadyPdfRef.current
+        if (
+          retainPreparedFile
+          && isWorkbenchSharePrepared(retained)
+          && preparedFileMatchesFingerprint(retained, fingerprint.contentFingerprint)
+        ) {
+          emitShareDiag('prepared-file-retained', {
+            reportId: saved.id,
+            projectId,
+            confirmedAfterSave: true,
+            fingerprintPrefix: fingerprint.contentFingerprint?.slice(0, 8) || null,
+          })
+          saveLockRef.current = false
+          completingRef.current = false
+          finalSaveInProgressRef.current = false
+          flushSync(() => {
+            setSaving(false)
+            setPdfPreparing(false)
+            setShareReady(true)
+            setError('')
+            persistUiErrorRef.current = ''
+          })
+          return { ok: true, adopted: true }
+        }
+        return { ok: true, adopted: false }
+      }
+
+      const retainedAdoption = await adoptRetainedPreparedFileIfCurrent()
+      if (retainedAdoption.adopted) {
+        return
+      }
+      if (!retainedAdoption.ok) {
+        failPdfAfterSave(userMessageForSiteDiaryPdfExportFailure(retainedAdoption.result))
+        return
+      }
+
+      if (joinBackgroundInFlight) {
+        await pdfBackgroundPrepareSchedulerRef.current?.waitUntilIdle?.()
+        if (dismissStaleWorkerPrepare()) {
+          return
+        }
+        const joinedAdoption = await adoptRetainedPreparedFileIfCurrent()
+        if (joinedAdoption.adopted) {
+          return
+        }
+        if (!joinedAdoption.ok) {
+          failPdfAfterSave(userMessageForSiteDiaryPdfExportFailure(joinedAdoption.result))
+          return
+        }
+      }
+
+      flushSync(() => {
+        setPdfPreparing(true)
+      })
 
       const useNativeFileShareOnPrepare = canShareSiteDiaryPdfViaNativeFile()
       const prepared = useNativeFileShareOnPrepare
@@ -3380,7 +3531,7 @@ export default function SiteDiaryPage() {
         if (isSiteDiaryPdfExportUserAbortResult(prepared) && dismissStaleWorkerPrepare()) {
           return
         }
-        failSave(userMessageForSiteDiaryPdfExportFailure(prepared))
+        failPdfAfterSave(userMessageForSiteDiaryPdfExportFailure(prepared))
         return
       }
 
@@ -3409,6 +3560,12 @@ export default function SiteDiaryPage() {
         nativeFileShare: useNativeFileShareOnPrepare,
         handoff: prepared.handoff || (useNativeFileShareOnPrepare ? SITE_DIARY_PDF_EXPORT_HANDOFF.fileReady : null),
       })
+      const fingerprintAfterPrepare = await fetchAuthoritativeSiteDiaryPdfExportFingerprint(saved.id, {
+        signal: prepareAbort.signal,
+      })
+      const preparedFingerprint = fingerprintAfterPrepare.ok
+        ? fingerprintAfterPrepare.contentFingerprint
+        : null
       if (useNativeFileShareOnPrepare) {
         const pdfFile = prepared.file instanceof File
           ? prepared.file
@@ -3424,6 +3581,9 @@ export default function SiteDiaryPage() {
           fileName: prepared.fileName,
           title: prepared.title,
           text: prepared.text,
+          reportId: saved.id,
+          exportId: prepared.exportId || null,
+          contentFingerprint: preparedFingerprint,
         }
       } else {
         shareReadyPdfRef.current = {
@@ -3433,6 +3593,7 @@ export default function SiteDiaryPage() {
           fileName: prepared.fileName,
           title: prepared.title,
           text: prepared.text,
+          contentFingerprint: preparedFingerprint,
         }
       }
       saveLockRef.current = false
@@ -3440,6 +3601,7 @@ export default function SiteDiaryPage() {
       finalSaveInProgressRef.current = false
       flushSync(() => {
         setSaving(false)
+        setPdfPreparing(false)
         setShareReady(true)
         setError('')
         persistUiErrorRef.current = ''
@@ -3450,7 +3612,11 @@ export default function SiteDiaryPage() {
         err instanceof DiarySaveError
           ? friendlyDiarySaveError(err)
           : 'We couldn’t prepare the share. Check your connection and try again.'
-      failSave(message)
+      if (diaryPersistSucceeded) {
+        failPdfAfterSave(message)
+      } else {
+        failSave(message)
+      }
     }
   }
 
@@ -3465,7 +3631,6 @@ export default function SiteDiaryPage() {
     }
   }, [])
 
-  /* eslint-disable react-hooks/set-state-in-effect -- drop stale unfinished-area Share fallback when no live draft */
   useEffect(() => {
     if (!isUnfinishedAreaFallbackPageError(error)) return
     if (locationWalkRef.current?.hasUnsavedAreaForShare?.() === true) return
@@ -3474,7 +3639,6 @@ export default function SiteDiaryPage() {
     }
     setError('')
   }, [error])
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const visiblePageError = visibleDiaryUnfinishedAreaPageError(
     error,
@@ -3734,7 +3898,7 @@ export default function SiteDiaryPage() {
             <>
               {isDiaryViewMode ? 'You’re viewing the saved Site Diary for ' : 'You’re editing the saved Site Diary for '}
               <strong style={{ fontWeight: 700, color: 'var(--text)' }}>{project.name}</strong>
-              {isDiaryViewMode ? '.' : '. Make your changes, then tap Save & Share when you’re ready.'}
+              {isDiaryViewMode ? '.' : '. Make your changes, then tap Save when you’re ready.'}
             </>
           ) : (
             diaryModeBannerCopy.text
@@ -4146,6 +4310,7 @@ export default function SiteDiaryPage() {
             <label style={labelStyle}>Signature</label>
             {signature?.preview && signatureMode !== 'draw' ? (
               <div style={{ marginBottom: 0 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG */}
                 <img
                   src={signature.preview}
                   alt="Signature"
@@ -4308,10 +4473,10 @@ export default function SiteDiaryPage() {
                       flexShrink: 0,
                     }}
                   />
-                  Preparing report…
+                  {pdfPreparing ? SAVE_CTA_PREPARING_LABEL : SAVE_CTA_SAVING_LABEL}
                 </>
               ) : (
-                shareReady ? 'Report Ready — Share Now' : 'Save & Share'
+                shareReady ? SAVE_CTA_SHARE_READY_LABEL : SAVE_CTA_IDLE_LABEL
               )}
             </span>
           </PrimaryCTA>

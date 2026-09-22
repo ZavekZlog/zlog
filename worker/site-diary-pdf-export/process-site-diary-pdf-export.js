@@ -5,12 +5,7 @@ import {
   DIARY_PDF_PHOTOS_INCOMPLETE_MESSAGE,
 } from '@/lib/diary-pdf-photos.js'
 import { renderSiteDiaryPdfBuffer } from '@/lib/server/render-site-diary-pdf.js'
-import {
-  processSiteDiaryPdfExportCore,
-  validateExportJob,
-  assertAssembledReportMatchesExport,
-  WorkerPdfProcessorError,
-} from './process-site-diary-pdf-export-core.js'
+import { processSiteDiaryPdfExportCore } from './process-site-diary-pdf-export-core.js'
 
 export {
   validateExportJob,

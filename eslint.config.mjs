@@ -16,6 +16,7 @@ const eslintConfig = defineConfig([
     "scripts/introspect-live-daily-reports-schema.mjs",
     // Lint-control fixtures only. Do not broaden to scripts/**.
     "scripts/fixtures/**",
+    "worker/site-diary-pdf-export/dist/**",
   ]),
 ]);
 
