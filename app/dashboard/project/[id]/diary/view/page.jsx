@@ -57,6 +57,12 @@ import {
   fingerprintFromSavedDiaryView,
   loadShareReadyPdf,
 } from '@/lib/diary-pdf-cache'
+import {
+  DIARY_HYDRATION_STAGE,
+  endDiaryHydrationTiming,
+  getActiveDiaryHydrationTimingSession,
+  markDiaryHydrationTiming,
+} from '@/lib/diary-hydration-timing-diag'
 
 const DIARY_ACCENT = REPORT_THEMES.diary.accent
 
@@ -309,6 +315,10 @@ function SavedPhotoGrid({ photos, perPage, numberOffset, totalPhotoCount = 0 }) 
                   alt={caption || `Photo ${numberOffset + index + 1}`}
                   loading={loading}
                   decoding="async"
+                  onLoad={() => {
+                    const timing = getActiveDiaryHydrationTimingSession()
+                    timing?.noteWorkPhotoImageLoaded({ visibleIndex: numberOffset + index })
+                  }}
                   style={{
                     width: '100%',
                     height: '100%',
@@ -485,6 +495,7 @@ function SavedDiaryViewer() {
     void load().catch(() => {})
     return () => {
       cancelled = true
+      endDiaryHydrationTiming('cancelled')
       hydrateDisplayMediaRef.current = null
       if (attendancePreviewUrlRef.current) {
         try {
@@ -1091,6 +1102,9 @@ function SavedDiaryViewer() {
             // eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG
             <img
               src={view.coverPhotoUrl}
+              onLoad={() => {
+                markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H9, { surface: 'saved-diary-view' })
+              }}
               alt="Site Diary cover photo"
               style={{
                 display: 'block',
@@ -1390,6 +1404,9 @@ function SavedDiaryViewer() {
           // eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG
           <img
             src={view.signatureUrl}
+            onLoad={() => {
+              markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H11, { surface: 'saved-diary-view' })
+            }}
             alt="Saved signature"
             style={{
               display: 'block',

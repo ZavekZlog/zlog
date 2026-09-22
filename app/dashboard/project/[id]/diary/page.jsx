@@ -149,6 +149,14 @@ import {
   userMessageForSiteDiaryPdfExportFailure,
 } from '@/lib/site-diary-pdf-export-client'
 import { emitShareDiag } from '@/lib/share-diag-beacon'
+import {
+  beginDiaryHydrationTiming,
+  countPipelinePhotos,
+  DIARY_HYDRATION_STAGE,
+  endDiaryHydrationTiming,
+  getActiveDiaryHydrationTimingSession,
+  markDiaryHydrationTiming,
+} from '@/lib/diary-hydration-timing-diag'
 import { mapWithConcurrency } from '@/lib/diary-pdf-photos'
 import { batchSignedUrlsForStoragePaths } from '@/lib/diary-share-pdf-assets'
 import { prewarmDiaryPdfSessionAssets } from '@/lib/diary-pdf-asset-prewarm'
@@ -201,6 +209,7 @@ import {
   createPhotoDisplaySignSession,
   enrichGridPhotoRowsFromDisplayCache,
   getValidDisplaySignedUrl,
+  gridImageSrc,
   signSavedPhotoGridRows,
 } from '@/lib/photo-workspace/thumbnail-display'
 import {
@@ -865,6 +874,15 @@ export default function SiteDiaryPage() {
         const progressiveEdit =
           editFlag === '1' || editFlag === 'true' || editFlag === 'edit'
 
+        beginDiaryHydrationTiming({
+          surface: 'workbench',
+          reportId: editingReportId,
+          projectId,
+          mode: progressiveEdit ? 'edit' : progressiveCompose ? 'compose' : 'legacy',
+          progressiveCompose,
+          progressiveEdit,
+        })
+
         const proj = await fetchProjectRowForEditHydrate(supabase, projectId)
 
         const allProjectsPromise = progressiveCompose
@@ -939,6 +957,10 @@ export default function SiteDiaryPage() {
           const preview = await resolveCoverPhotoPreviewUrl(supabase, storagePath)
           if (cancelled) return
           setCoverPhoto(coverPhotoStateFromSaved(storagePath, preview))
+          markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H8, {
+            hasPreview: Boolean(preview),
+            pathOnly: false,
+          })
         }
 
         const applyCoverPathOnly = (storagePath) => {
@@ -951,6 +973,10 @@ export default function SiteDiaryPage() {
           coverRemovedRef.current = false
           const cachedPreview = getValidDisplaySignedUrl(storagePath, { recordStats: true })
           setCoverPhoto(coverPhotoStateFromSaved(storagePath, cachedPreview || null))
+          markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H8, {
+            hasPreview: Boolean(cachedPreview),
+            pathOnly: true,
+          })
         }
 
         const applySignature = async (storagePath) => {
@@ -968,6 +994,10 @@ export default function SiteDiaryPage() {
           }
           setSignature({ file: null, preview, storagePath })
           setSignatureMode('carried')
+          markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H10, {
+            hasPreview: Boolean(preview),
+            pathOnly: false,
+          })
         }
 
         const applySignaturePathOnly = (storagePath) => {
@@ -978,6 +1008,10 @@ export default function SiteDiaryPage() {
           }
           setSignature({ file: null, preview: null, storagePath })
           setSignatureMode('carried')
+          markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H10, {
+            hasPreview: false,
+            pathOnly: true,
+          })
         }
 
         const mapPhotoRowWithoutPreview = (p, index) => ({
@@ -1061,6 +1095,12 @@ export default function SiteDiaryPage() {
           site_summary: existing.site_summary,
           report_date: existing.report_date,
           cover_photo_url: existing.cover_photo_url || null,
+        })
+        markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H1, {
+          reportId: existing.id,
+          projectId,
+          progressiveCompose,
+          progressiveEdit,
         })
         setReportIsDraft(existing.is_draft === true)
 
@@ -1168,6 +1208,24 @@ export default function SiteDiaryPage() {
 
         if (cancelled) return
 
+        markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H2, {
+          ...countPipelinePhotos(reportPhotos || []),
+        })
+
+        const commitPhotoSourcesToUi = (phase, rows) => {
+          const list = Array.isArray(rows) ? rows : []
+          const withDisplaySrc = list.filter((row) => Boolean(gridImageSrc(row))).length
+          markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H5, {
+            phase,
+            photoCount: list.length,
+            withDisplaySrc,
+          })
+          const timing = getActiveDiaryHydrationTimingSession()
+          if (timing && withDisplaySrc > 0) {
+            timing.noteWorkPhotoExpected(withDisplaySrc)
+          }
+        }
+
         setReportDate(reportDateInputValue(existing.report_date) || today)
         setWeather(existing.weather || '')
         setShiftType(existing.shift || existing.shift_type || 'Day')
@@ -1231,6 +1289,7 @@ export default function SiteDiaryPage() {
             const withoutPreview = enrichGridPhotoRowsFromDisplayCache(
               reportPhotos.map(mapPhotoRowWithoutPreview),
             )
+            commitPhotoSourcesToUi('metadata-only', withoutPreview)
             setPhotos(withoutPreview)
             setLocationWalk(groupPhotosByArea(withoutPreview))
           } else {
@@ -1239,6 +1298,7 @@ export default function SiteDiaryPage() {
         } else if (reportPhotos?.length) {
           const withPreview = await signReportPhotoRows(reportPhotos)
           if (cancelled) return
+          commitPhotoSourcesToUi('signed', withPreview)
           setPhotos(withPreview)
           setLocationWalk(groupPhotosByArea(withPreview))
         } else {
@@ -1365,6 +1425,11 @@ export default function SiteDiaryPage() {
             )
             if (!cancelled && commit()) {
               setCoverPhoto(coverPhotoStateFromSaved(editHydration.coverStoragePath, preview))
+              markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H8, {
+                hasPreview: Boolean(preview),
+                pathOnly: false,
+                progressive: 'compose',
+              })
             }
           }
 
@@ -1382,6 +1447,7 @@ export default function SiteDiaryPage() {
           if (reportPhotos?.length) {
             const withPreview = await signReportPhotoRows(reportPhotos)
             if (!cancelled && commit()) {
+              commitPhotoSourcesToUi('signed-progressive-compose', withPreview)
               setPhotos(withPreview)
               setLocationWalk(groupPhotosByArea(withPreview))
             }
@@ -1405,6 +1471,9 @@ export default function SiteDiaryPage() {
           if (!cancelled && commit()) setRecentDiaries(logs || [])
 
           if (commitCriticalHydrateSuccess()) {
+            markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H12, {
+              progressive: 'compose',
+            })
             setHydrateComplete(true)
           }
         } else if (progressiveEdit) {
@@ -1459,6 +1528,11 @@ export default function SiteDiaryPage() {
             )
             if (!cancelled && commit()) {
               setCoverPhoto(coverPhotoStateFromSaved(editHydration.coverStoragePath, preview))
+              markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H8, {
+                hasPreview: Boolean(preview),
+                pathOnly: false,
+                progressive: 'edit',
+              })
             }
           }
 
@@ -1473,6 +1547,7 @@ export default function SiteDiaryPage() {
           if (reportPhotos?.length) {
             const withPreview = await signReportPhotoRows(reportPhotos)
             if (!cancelled && commit()) {
+              commitPhotoSourcesToUi('signed-progressive-edit', withPreview)
               setPhotos(withPreview)
               setLocationWalk(groupPhotosByArea(withPreview))
             }
@@ -1480,6 +1555,9 @@ export default function SiteDiaryPage() {
           kickPdfAssetPrewarm()
 
           if (commitCriticalHydrateSuccess()) {
+            markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H12, {
+              progressive: 'edit',
+            })
             setHydrateComplete(true)
           }
         } else {
@@ -1501,6 +1579,9 @@ export default function SiteDiaryPage() {
           }
           if (!cancelled) setRecentDiaries(logs || [])
           if (commitCriticalHydrateSuccess()) {
+            markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H12, {
+              progressive: 'legacy',
+            })
             setHydrateComplete(true)
           }
           kickPdfAssetPrewarm()
@@ -1549,7 +1630,10 @@ export default function SiteDiaryPage() {
       }
     }
     load()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      endDiaryHydrationTiming('cancelled')
+    }
   }, [projectId, editingReportId, formReloadToken, composeQuery, editQuery, supabase])
 
   const autosavePayload = useMemo(() => buildDiaryAutosavePayload({
@@ -2498,6 +2582,10 @@ export default function SiteDiaryPage() {
       : diaryEditHref(projectId, editingReportId)
     if (href) router.replace(href)
     // Re-load canonical saved Cover Photo + Project Reference (not stale client blanks).
+    markDiaryHydrationTiming('hydration-mode-transition', {
+      to: 'edit',
+      reportId: editingReportId,
+    })
     setFormReloadToken((n) => n + 1)
   }
 
@@ -2508,6 +2596,10 @@ export default function SiteDiaryPage() {
     setShowSaveBanner(false)
     const href = existingDiaryHref(projectId, editingReportId)
     if (href) router.replace(href)
+    markDiaryHydrationTiming('hydration-mode-transition', {
+      to: 'view',
+      reportId: editingReportId,
+    })
     setFormReloadToken((n) => n + 1)
   }
 
@@ -4057,6 +4149,9 @@ export default function SiteDiaryPage() {
                 <img
                   src={signature.preview}
                   alt="Signature"
+                  onLoad={() => {
+                    markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H11, { surface: 'workbench' })
+                  }}
                   style={{
                     maxWidth: '100%',
                     maxHeight: 120,

@@ -17,6 +17,7 @@ import {
   gridImageSrc,
   shouldEagerLoadSavedReviewThumb,
 } from '@/lib/photo-workspace/thumbnail-display'
+import { getActiveDiaryHydrationTimingSession } from '@/lib/diary-hydration-timing-diag'
 
 const thumbBtn = {
   display: 'inline-flex',
@@ -172,6 +173,10 @@ export function CaptureThumbnailGrid({
                     alt=""
                     loading={loading}
                     decoding="async"
+                    onLoad={() => {
+                      const timing = getActiveDiaryHydrationTimingSession()
+                      timing?.noteWorkPhotoImageLoaded({ visibleIndex: numberOffset + index })
+                    }}
                     {...userPhotoImgProtectionProps()}
                     style={{
                       width: '100%',
