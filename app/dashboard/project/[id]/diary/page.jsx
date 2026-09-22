@@ -133,20 +133,33 @@ import {
 } from '@/lib/diary-form-hydrate'
 import {
   canNativeShare,
+  canSharePdfFile,
+  canShareSiteDiaryPdfViaNativeFile,
   downloadSiteDiaryPdf,
-  prepareSiteDiaryPdf,
+  downloadSiteDiaryPdfViaSignedUrl,
   shareSiteDiaryPdfNative,
   snapshotUserActivation,
 } from '@/lib/diary-share'
+import {
+  fetchSiteDiaryPdfExportAuthorization,
+  isSiteDiaryPdfExportUserAbortResult,
+  runSiteDiaryPdfExportToExportReady,
+  runSiteDiaryPdfExportToShareReadyArtifact,
+  SITE_DIARY_PDF_EXPORT_HANDOFF,
+  userMessageForSiteDiaryPdfExportFailure,
+} from '@/lib/site-diary-pdf-export-client'
 import { emitShareDiag } from '@/lib/share-diag-beacon'
 import { mapWithConcurrency } from '@/lib/diary-pdf-photos'
 import { batchSignedUrlsForStoragePaths } from '@/lib/diary-share-pdf-assets'
 import { prewarmDiaryPdfSessionAssets } from '@/lib/diary-pdf-asset-prewarm'
 import { handlePdfVisibleTextInput } from '@/lib/diary-share-ready-invalidate'
 import {
+  buildWorkbenchShareReadyFromWorkerArtifact,
   bumpPdfPrepareGeneration,
   createDiaryPdfBackgroundPrepareScheduler,
   DIARY_PDF_BACKGROUND_PREPARE_IDLE_MS,
+  hasAdoptableWorkbenchShareFile,
+  isDiaryPersistedCleanForBackgroundPdf,
   shouldAdoptBackgroundPreparedPdf,
   shouldRunBackgroundPdfPrepare,
 } from '@/lib/diary-pdf-background-prepare'
@@ -183,7 +196,6 @@ import {
   ensurePreparedPhotoAssets,
   uploadPreparedPhotoAssets,
   buildPreparedPhotoRecordFields,
-  collectLocalPreparedPdfPhotoSources,
 } from '@/lib/photo-workspace/persist-prepared-photo'
 import {
   createPhotoDisplaySignSession,
@@ -299,6 +311,14 @@ const DIARY_SAVE_SHARE_ACTION_STYLE = {
 
 /** Green Shared ✓ linger after native share returns (~3s). */
 const POST_SAVE_SHARE_DELAY_MS = 3200
+
+function isWorkbenchSharePrepared(entry) {
+  if (!entry) return false
+  if (entry.handoff === SITE_DIARY_PDF_EXPORT_HANDOFF.exportReady) {
+    return Boolean(entry.exportId && entry.reportId)
+  }
+  return Boolean(entry.file)
+}
 
 const COVER_UPLOAD_FAIL_MESSAGE =
   'We couldn’t upload the cover photo. Check your connection and try Share again.'
@@ -471,11 +491,17 @@ export default function SiteDiaryPage() {
   const completingRef = useRef(false)
   const shareReadyPdfRef = useRef(null)
   const pdfPrepareGenerationRef = useRef(0)
+  const pdfPrepareAbortRef = useRef(null)
   const pdfBackgroundPrepareSchedulerRef = useRef(null)
   const pdfBackgroundPrepareRunRef = useRef(null)
+  const pdfBackgroundPrepareAbortRef = useRef(null)
   const backgroundPrepareLiveRef = useRef({})
   const [shareReady, setShareReady] = useState(false)
   const invalidatePreparedSharePdf = useCallback((reason) => {
+    pdfPrepareAbortRef.current?.abort()
+    pdfPrepareAbortRef.current = null
+    pdfBackgroundPrepareAbortRef.current?.abort()
+    pdfBackgroundPrepareAbortRef.current = null
     shareReadyPdfRef.current = null
     pdfPrepareGenerationRef.current = bumpPdfPrepareGeneration(pdfPrepareGenerationRef.current)
     setShareReady((prev) => (prev ? false : prev))
@@ -2232,6 +2258,13 @@ export default function SiteDiaryPage() {
 
   const labourTotals = useMemo(() => labourAggregateTotals(labourRows), [labourRows])
 
+  const diaryPersistedClean = isDiaryPersistedCleanForBackgroundPdf({
+    latestPayload: latestPayloadRef.current,
+    ackedSnapshot: ackedSnapshotRef.current,
+    payloadsEqual: autosavePayloadsEqual,
+    photoWorkspaceDraftDirty: photoWorkspaceDraftDirtyRef.current,
+  })
+
   backgroundPrepareLiveRef.current = {
     hydrateComplete,
     writable: isDiaryEditMode,
@@ -2243,12 +2276,11 @@ export default function SiteDiaryPage() {
     labourRows,
     temporaryWorks,
     temporaryWorksApplicable,
+    diaryPersistedClean,
   }
 
   const runBackgroundPdfPrepare = useCallback(async () => {
     const live = backgroundPrepareLiveRef.current
-    const startedGeneration = pdfPrepareGenerationRef.current
-    const startedReportId = live.reportId
     const shareInProgress = Boolean(
       live.saving
       || saveLockRef.current
@@ -2262,177 +2294,86 @@ export default function SiteDiaryPage() {
       sessionExpired: live.sessionExpired,
       shareInProgress,
       hasUnsavedArea: locationWalkRef.current?.hasUnsavedAreaForShare?.() === true,
-      alreadyHasCurrentFile: Boolean(shareReadyPdfRef.current?.file),
+      alreadyHasCurrentFile: hasAdoptableWorkbenchShareFile(shareReadyPdfRef.current),
+      diaryPersistedClean: isDiaryPersistedCleanForBackgroundPdf({
+        latestPayload: latestPayloadRef.current,
+        ackedSnapshot: ackedSnapshotRef.current,
+        payloadsEqual: autosavePayloadsEqual,
+        photoWorkspaceDraftDirty: photoWorkspaceDraftDirtyRef.current,
+      }),
+      nativeFileShareCapable: canShareSiteDiaryPdfViaNativeFile(),
+      autosaveInFlight: Boolean(autosaveInFlightRef.current),
     }
     if (!shouldRunBackgroundPdfPrepare(prepareInput)) {
       return
     }
 
-    try {
-      await flushPendingAutosave()
-    } catch {
-      return
-    }
+    const startedGeneration = pdfPrepareGenerationRef.current
+    const startedReportId = String(live.reportId || '')
+    const backgroundStartedAt = Date.now()
+    pdfBackgroundPrepareAbortRef.current?.abort()
+    const prepareAbort = new AbortController()
+    pdfBackgroundPrepareAbortRef.current = prepareAbort
 
-    if (pdfPrepareGenerationRef.current !== startedGeneration) {
-      return
-    }
-    if (String(backgroundPrepareLiveRef.current.reportId || '') !== String(startedReportId || '')) {
-      return
-    }
-    if (locationWalkRef.current?.hasUnsavedAreaForShare?.() === true) {
-      return
-    }
-    if (
-      backgroundPrepareLiveRef.current.saving
-      || saveLockRef.current
-      || completingRef.current
-      || finalSaveInProgressRef.current
-    ) {
-      return
-    }
-
-    const labourPayload = labourFormToPersistRows(live.labourRows, live.reportId)
-    if (!labourPersistRowsEqual(labourPayload, lastPersistedLabourRef.current)) {
-      return
-    }
-    if (signatureRef.current?.file) {
-      return
-    }
-
-    const persistedRow = lastPersistedReportRef.current
-    const persistedTwPayload = temporaryWorksPayload(
-      temporaryWorksFromDb(persistedRow?.temporary_works),
-    )
-    const liveTwPayload = live.temporaryWorksApplicable === true
-      ? temporaryWorksPayload(live.temporaryWorks)
-      : []
-    const twIdentity = (rows) => JSON.stringify(
-      (rows || []).map((row) => [
-        row.type,
-        row.item,
-        row.location,
-        row.status,
-        row.reference,
-        row.checkResult,
-        row.notes,
-        row.scaffoldCheck,
-        row.scaffoldTag,
-      ]),
-    )
-    if (twIdentity(liveTwPayload) !== twIdentity(persistedTwPayload)) {
-      return
-    }
-
-    const walk = live.locationWalk || []
-    const userId = authUserIdRef.current
-    const flattened = flattenAreaGroups(walk)
-    if (
-      userId
-      && live.reportId
-      && flattened.some((photo) => photoRowNeedsPreparedUpload(photo, userId, live.reportId))
-    ) {
-      return
-    }
-
-    const livePhotos = durablePhotosToBaseline(flattened)
-    const photoIdentity = (baseline) => JSON.stringify(
-      (baseline || []).map((row) => ({
-        url: String(row?.url || '').trim(),
-        caption: String(row?.caption || '').trim() || null,
-        location: String(row?.location || '').trim() || null,
-        layout: row?.layout || 'grid4',
-        rotation: Number(row?.rotation_degrees) || 0,
-      })),
-    )
-    if (photoIdentity(livePhotos) !== photoIdentity(lastPersistedPhotosRef.current)) {
-      if (!userId || !live.reportId) {
-        return
-      }
-      for (const group of walk) {
-        if (!group?.id) continue
-        const result = await persistSaveAreaGroup(supabase, {
-          userId,
-          reportId: live.reportId,
-          savedGroup: group,
-          locationWalk: walk,
-        })
-        if (!result.ok) {
-          return
-        }
-        if (pdfPrepareGenerationRef.current !== startedGeneration) {
-          return
-        }
-      }
-      lastPersistedPhotosRef.current = livePhotos
-    }
-
-    if (pdfPrepareGenerationRef.current !== startedGeneration) {
-      return
-    }
-    if (String(backgroundPrepareLiveRef.current.reportId || '') !== String(startedReportId || '')) {
-      return
-    }
-    if (
-      backgroundPrepareLiveRef.current.saving
-      || saveLockRef.current
-      || completingRef.current
-      || finalSaveInProgressRef.current
-    ) {
-      return
-    }
-
-    const localPreparedPhotoSources = collectLocalPreparedPdfPhotoSources({
-      photos: flattened,
-      userId,
-      reportId: live.reportId,
+    emitShareDiag('background-pdf-prepare-start', {
+      surface: 'live-diary',
+      reportId: startedReportId,
+      projectId: live.projectId || null,
+      startedAt: backgroundStartedAt,
     })
-    const coverBlob = coverPhotoRef.current?.preparedBlob
-    const localPreparedCoverBlob =
-      coverBlob instanceof Blob && coverBlob.size > 0 ? coverBlob : null
 
     let prepared
     try {
-      prepared = await prepareSiteDiaryPdf({
-        projectId: live.projectId,
-        reportId: live.reportId,
-        localPreparedPhotoSources,
-        localPreparedCoverBlob,
-        skipShareCacheWrite: true,
+      prepared = await runSiteDiaryPdfExportToShareReadyArtifact(supabase, startedReportId, {
+        signal: prepareAbort.signal,
       })
     } catch {
       return
     }
 
+    if (prepareAbort.signal.aborted) {
+      return
+    }
+
+    const shareStillInProgress = Boolean(
+      live.saving
+      || saveLockRef.current
+      || completingRef.current
+      || finalSaveInProgressRef.current,
+    )
     if (!shouldAdoptBackgroundPreparedPdf({
       prepared,
       startedGeneration,
       currentGeneration: pdfPrepareGenerationRef.current,
       startedReportId,
-      currentReportId: backgroundPrepareLiveRef.current.reportId,
-      shareInProgress: Boolean(
-        backgroundPrepareLiveRef.current.saving
-        || saveLockRef.current
-        || completingRef.current
-        || finalSaveInProgressRef.current,
-      ),
+      currentReportId: String(editingReportId || ''),
+      shareInProgress: shareStillInProgress,
     })) {
       return
     }
 
-    const pdfFile = prepared.file instanceof File
-      ? prepared.file
-      : new File(
-        [prepared.blob],
-        prepared.fileName || 'Zlog-Site-Diary.pdf',
-        { type: 'application/pdf' },
-      )
-    shareReadyPdfRef.current = {
-      ...prepared,
-      file: pdfFile,
+    const shareReadyEntry = buildWorkbenchShareReadyFromWorkerArtifact(prepared, {
+      fileReadyHandoff: SITE_DIARY_PDF_EXPORT_HANDOFF.fileReady,
+    })
+    if (!shareReadyEntry) {
+      return
     }
-    setShareReady(true)
-  }, [flushPendingAutosave, supabase])
+
+    shareReadyPdfRef.current = shareReadyEntry
+    flushSync(() => {
+      setShareReady(true)
+    })
+    emitShareDiag('background-pdf-ready', {
+      surface: 'live-diary',
+      reportId: startedReportId,
+      projectId: live.projectId || null,
+      elapsedMsSinceStart: Date.now() - backgroundStartedAt,
+      fileName: shareReadyEntry.fileName || null,
+      fileSize: shareReadyEntry.file?.size ?? shareReadyEntry.blob?.size ?? null,
+      exportId: shareReadyEntry.exportId || null,
+      handoff: shareReadyEntry.handoff,
+    })
+  }, [editingReportId, supabase])
 
   pdfBackgroundPrepareRunRef.current = runBackgroundPdfPrepare
 
@@ -2450,9 +2391,20 @@ export default function SiteDiaryPage() {
 
   useEffect(() => {
     if (!hydrateComplete || !isDiaryEditMode || !editingReportId || sessionExpired) return undefined
+    if (!diaryPersistedClean) return undefined
+    if (saving || finalSaveInProgressRef.current) return undefined
     pdfBackgroundPrepareSchedulerRef.current?.schedule()
     return undefined
-  }, [hydrateComplete, isDiaryEditMode, editingReportId, sessionExpired])
+  }, [
+    hydrateComplete,
+    isDiaryEditMode,
+    editingReportId,
+    sessionExpired,
+    diaryPersistedClean,
+    autosaveStatus,
+    saving,
+    shareReady,
+  ])
 
   const updateLabour = (key, field, value) => {
     dismissAutosaveSuccessClaim()
@@ -2724,7 +2676,7 @@ export default function SiteDiaryPage() {
       projectId,
       saveLocked: saveLockRef.current,
       completing: completingRef.current,
-      shareReady: Boolean(shareReadyPdfRef.current?.file),
+      shareReady: isWorkbenchSharePrepared(shareReadyPdfRef.current),
     })
 
     // Clear stale locks so Save is never silently no-op.
@@ -2733,7 +2685,7 @@ export default function SiteDiaryPage() {
       completingRef.current = false
     }
 
-    if (!shareReadyPdfRef.current?.file && (saveLockRef.current || justSaved || completingRef.current)) {
+    if (!isWorkbenchSharePrepared(shareReadyPdfRef.current) && (saveLockRef.current || justSaved || completingRef.current)) {
       const blockMsg = justSaved || completingRef.current
         ? 'Save already completed for this attempt. Change a field or reopen the report.'
         : 'Save is already in progress.'
@@ -2797,6 +2749,15 @@ export default function SiteDiaryPage() {
         )
       const tapUserActivation = snapshotUserActivation()
       const tapStartedAt = Date.now()
+      emitShareDiag('share-cta-prepared-file', {
+        surface: 'live-diary',
+        handoff: prepared.handoff || null,
+        fileReady: Boolean(pdfFile?.size > 0),
+        fileSize: pdfFile?.size ?? null,
+        exportId: prepared.exportId || null,
+        reportId: prepared.reportId || editingReportId || null,
+        userActivationIsActive: tapUserActivation.isActive,
+      })
       saveLockRef.current = true
       flushSync(() => {
         setSaving(true)
@@ -2805,7 +2766,12 @@ export default function SiteDiaryPage() {
       })
       try {
         // Do NOT silent-download. Second tap only — gesture still active.
-        if (canNativeShare()) {
+        const nativeFileShare =
+          pdfFile instanceof File
+          && pdfFile.size > 0
+          && canSharePdfFile(pdfFile)
+
+        if (nativeFileShare) {
           const shareResult = await shareSiteDiaryPdfNative({
             file: pdfFile,
             title: prepared.title,
@@ -2834,6 +2800,32 @@ export default function SiteDiaryPage() {
           )
           return
         }
+
+        if (
+          prepared.handoff === SITE_DIARY_PDF_EXPORT_HANDOFF.exportReady
+          && prepared.exportId
+          && prepared.reportId
+        ) {
+          const authorized = await fetchSiteDiaryPdfExportAuthorization(
+            prepared.reportId,
+            prepared.exportId,
+          )
+          if (!authorized.ok) {
+            failSave(userMessageForSiteDiaryPdfExportFailure(authorized))
+            return
+          }
+          const downloaded = downloadSiteDiaryPdfViaSignedUrl({
+            signedUrl: authorized.signedUrl,
+            fileName: authorized.fileName || prepared.fileName,
+          })
+          if (!downloaded.ok) {
+            failSave(downloaded.message || 'We couldn’t share the PDF. Try again.')
+            return
+          }
+          finishAfterSuccessfulShare('downloaded')
+          return
+        }
+
         const downloaded = await downloadSiteDiaryPdf({
           blob: prepared.blob,
           fileName: prepared.fileName,
@@ -2864,7 +2856,7 @@ export default function SiteDiaryPage() {
     // Unfinished photo-area drafts must never reuse a previously prepared PDF.
     if (locationWalkRef.current?.hasUnsavedAreaForShare?.() === true) {
       invalidatePreparedSharePdf('draft-dirty')
-    } else if (shareReadyPdfRef.current?.file && !saving) {
+    } else if (isWorkbenchSharePrepared(shareReadyPdfRef.current) && !saving) {
       await sharePreparedFile(shareReadyPdfRef.current)
       return
     }
@@ -2879,6 +2871,8 @@ export default function SiteDiaryPage() {
       projectId,
     })
     emitShareDiag('cta-tap', {
+      tapStartedAt,
+      elapsedMsSinceTap: 0,
       userActivationIsActive: tapUserActivation.isActive,
       userActivationHasBeenActive: tapUserActivation.hasBeenActive,
       reportId: editingReportId,
@@ -2890,6 +2884,8 @@ export default function SiteDiaryPage() {
       userActivation: tapUserActivation,
     })
     pdfPrepareGenerationRef.current = bumpPdfPrepareGeneration(pdfPrepareGenerationRef.current)
+    pdfPrepareAbortRef.current?.abort()
+    pdfPrepareAbortRef.current = null
     pdfBackgroundPrepareSchedulerRef.current?.cancel()
     await pdfBackgroundPrepareSchedulerRef.current?.waitUntilIdle?.()
     shareReadyPdfRef.current = null
@@ -3222,6 +3218,13 @@ export default function SiteDiaryPage() {
         return
       }
 
+      emitShareDiag('share-timing-t1-save-finalized', {
+        tapStartedAt,
+        elapsedMsSinceTap: Date.now() - tapStartedAt,
+        reportId: saved.id,
+        projectId,
+      })
+
       // Persist first, then prepare the PDF on this tap. Native share waits for
       // a fresh second tap so Android user activation stays live.
       if (requiredCoverPath) {
@@ -3245,46 +3248,48 @@ export default function SiteDiaryPage() {
       setReportIsDraft(false)
       diarySaveLog('success', { reportId: saved.id })
 
-      const localPreparedPhotoSources = collectLocalPreparedPdfPhotoSources({
-        photos: flattenAreaGroups(walkForPersist),
-        userId: user.id,
-        reportId: saved.id,
-      })
-      for (const [path, blob] of sharePreparedPdfBlobs) {
-        localPreparedPhotoSources.set(path, blob)
+      const startedPrepareGeneration = pdfPrepareGenerationRef.current
+      const startedPrepareReportId = String(saved.id)
+      const prepareAbort = new AbortController()
+      pdfPrepareAbortRef.current = prepareAbort
+
+      const dismissStaleWorkerPrepare = () => {
+        if (
+          pdfPrepareGenerationRef.current !== startedPrepareGeneration
+          || String(editingReportId || '') !== startedPrepareReportId
+        ) {
+          saveLockRef.current = false
+          completingRef.current = false
+          finalSaveInProgressRef.current = false
+          flushSync(() => {
+            setSaving(false)
+          })
+          return true
+        }
+        return false
       }
-      const prepared = await prepareSiteDiaryPdf({
-        projectId,
-        reportId: saved.id,
-        localPreparedPhotoSources,
-        localPreparedCoverBlob,
-      })
-      if (!prepared.ok) {
-        failSave(prepared.message || 'We couldn’t prepare the PDF. Check your connection and try again.')
+
+      const useNativeFileShareOnPrepare = canShareSiteDiaryPdfViaNativeFile()
+      const prepared = useNativeFileShareOnPrepare
+        ? await runSiteDiaryPdfExportToShareReadyArtifact(supabase, saved.id, {
+          signal: prepareAbort.signal,
+          tapStartedAt,
+        })
+        : await runSiteDiaryPdfExportToExportReady(supabase, saved.id, {
+          signal: prepareAbort.signal,
+          tapStartedAt,
+        })
+
+      if (dismissStaleWorkerPrepare()) {
         return
       }
-      if (
-        prepared.coverMigrated
-        && prepared.coverPhotoPath
-        && isPreparedCoverStoragePath(prepared.coverPhotoPath)
-      ) {
-        const keepPreview = coverPhotoRef.current?.preview || null
-        const migratedBlob =
-          prepared.coverPreparedBlob instanceof Blob && prepared.coverPreparedBlob.size > 0
-            ? prepared.coverPreparedBlob
-            : null
-        const nextCover = coverPhotoStateAfterUpload(prepared.coverPhotoPath, keepPreview, {
-          preparedBlob: migratedBlob,
-        })
-        coverPhotoRef.current = nextCover
-        loadedCoverPathRef.current = prepared.coverPhotoPath
-        setCoverPhoto(nextCover)
-        if (ackedSnapshotRef.current) {
-          ackedSnapshotRef.current = {
-            ...ackedSnapshotRef.current,
-            cover_photo_url: prepared.coverPhotoPath,
-          }
+
+      if (!prepared.ok) {
+        if (isSiteDiaryPdfExportUserAbortResult(prepared) && dismissStaleWorkerPrepare()) {
+          return
         }
+        failSave(userMessageForSiteDiaryPdfExportFailure(prepared))
+        return
       }
 
       const pdfReadyAt = Date.now()
@@ -3298,24 +3303,45 @@ export default function SiteDiaryPage() {
         fileName: prepared.file?.name || prepared.fileName || null,
         fileSize: prepared.file?.size ?? prepared.blob?.size ?? null,
         hasShareApi: canNativeShare(),
+        nativeFileShare: useNativeFileShareOnPrepare,
+        handoff: prepared.handoff || (useNativeFileShareOnPrepare ? SITE_DIARY_PDF_EXPORT_HANDOFF.fileReady : null),
       })
       emitShareDiag('pdf-ready', {
+        tapStartedAt,
+        elapsedMsSinceTap: elapsedMsToPdfReady,
         elapsedMsToPdfReady,
         fileReady: Boolean(prepared.file?.size > 0),
         fileName: prepared.file?.name || prepared.fileName || null,
         fileSize: prepared.file?.size ?? prepared.blob?.size ?? null,
         hasShareApi: canNativeShare(),
+        nativeFileShare: useNativeFileShareOnPrepare,
+        handoff: prepared.handoff || (useNativeFileShareOnPrepare ? SITE_DIARY_PDF_EXPORT_HANDOFF.fileReady : null),
       })
-      const pdfFile = prepared.file instanceof File
-        ? prepared.file
-        : new File(
-          [prepared.blob],
-          prepared.fileName || 'Zlog-Site-Diary.pdf',
-          { type: 'application/pdf' },
-        )
-      shareReadyPdfRef.current = {
-        ...prepared,
-        file: pdfFile,
+      if (useNativeFileShareOnPrepare) {
+        const pdfFile = prepared.file instanceof File
+          ? prepared.file
+          : new File(
+            [prepared.blob],
+            prepared.fileName || 'Zlog-Site-Diary.pdf',
+            { type: 'application/pdf' },
+          )
+        shareReadyPdfRef.current = {
+          handoff: SITE_DIARY_PDF_EXPORT_HANDOFF.fileReady,
+          file: pdfFile,
+          blob: prepared.blob,
+          fileName: prepared.fileName,
+          title: prepared.title,
+          text: prepared.text,
+        }
+      } else {
+        shareReadyPdfRef.current = {
+          handoff: SITE_DIARY_PDF_EXPORT_HANDOFF.exportReady,
+          reportId: prepared.reportId,
+          exportId: prepared.exportId,
+          fileName: prepared.fileName,
+          title: prepared.title,
+          text: prepared.text,
+        }
       }
       saveLockRef.current = false
       completingRef.current = false
@@ -3341,6 +3367,8 @@ export default function SiteDiaryPage() {
     return () => {
       // Do not cancel an in-flight handoff to Report Complete (Strict Mode / remount).
       if (completingRef.current) return
+      pdfPrepareAbortRef.current?.abort()
+      pdfPrepareAbortRef.current = null
       if (saveNavTimerRef.current) clearTimeout(saveNavTimerRef.current)
     }
   }, [])
@@ -4277,6 +4305,7 @@ export default function SiteDiaryPage() {
       )}
         </>
       ) : null}
+
     </PremiumShell>
   )
 }
