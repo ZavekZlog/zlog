@@ -82,6 +82,7 @@ export default function LabourOcrClaudeBenchmarkPage() {
     }))
   }, [matchedBreakRows])
 
+  /* eslint-disable react-hooks/set-state-in-effect -- ESLINT-E15 */
   useEffect(() => {
     if (!result || !Array.isArray(result.operatives)) {
       setBreakReviewOperatives([])
@@ -93,6 +94,7 @@ export default function LabourOcrClaudeBenchmarkPage() {
       applyBulkBreakDeductionToMatchedOperatives(result.operatives, CLAUDE_BENCHMARK_BREAK_NONE),
     )
   }, [result])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleBulkBreakChange = useCallback((nextValue) => {
     const value = nextValue || CLAUDE_BENCHMARK_BREAK_NONE
