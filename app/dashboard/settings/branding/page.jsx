@@ -13,6 +13,10 @@ import {
   BRAND_ACCENT,
 } from '@/lib/premium-ui'
 import { extractBrandColorFromFile } from '@/lib/extract-brand-color'
+import {
+  prepareBrandLogoFile,
+  fetchBrandCompanyNameAnalysis,
+} from '@/lib/prepare-brand-logo-image'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
 
 const DEFAULT_BRAND_COLOR = '#FF5000'
@@ -40,6 +44,8 @@ export default function BrandingSettingsPage() {
   const [extracting, setExtracting] = useState(false)
   const [isDefault, setIsDefault] = useState(false)
   const [editingId, setEditingId] = useState(null)
+  const [nameManuallyEdited, setNameManuallyEdited] = useState(false)
+  const [namePrefilledFromLogo, setNamePrefilledFromLogo] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -79,6 +85,8 @@ export default function BrandingSettingsPage() {
     setExtracting(false)
     setIsDefault(false)
     setEditingId(null)
+    setNameManuallyEdited(false)
+    setNamePrefilledFromLogo(false)
   }
 
   const startEdit = (row) => {
@@ -89,6 +97,8 @@ export default function BrandingSettingsPage() {
     setIsDefault(!!row.is_default)
     setLogoFile(null)
     setLogoPreview(null)
+    setNameManuallyEdited(true)
+    setNamePrefilledFromLogo(false)
   }
 
   const handleLogoPicked = async (file) => {
@@ -114,11 +124,25 @@ export default function BrandingSettingsPage() {
       return
     }
 
-    setLogoFile(file)
-    setLogoPreview(URL.createObjectURL(file))
     setExtracting(true)
     const hex = await extractBrandColorFromFile(file, DEFAULT_BRAND_COLOR)
     setBrandColor(hex)
+
+    const prepared = await prepareBrandLogoFile(file)
+    const logoFile = prepared.file || file
+    setLogoFile(logoFile)
+    setLogoPreview(prepared.previewUrl || URL.createObjectURL(logoFile))
+
+    if (!editingId && !nameManuallyEdited) {
+      const analyzed = await fetchBrandCompanyNameAnalysis(logoFile)
+      if (analyzed.confidence === 'high' && analyzed.company_name) {
+        setCompanyName(analyzed.company_name)
+        setNamePrefilledFromLogo(true)
+      } else {
+        setNamePrefilledFromLogo(false)
+      }
+    }
+
     setExtracting(false)
   }
 
@@ -144,15 +168,19 @@ export default function BrandingSettingsPage() {
     }
 
     let logoUrl = undefined
-    let colorToSave = brandColor || DEFAULT_BRAND_COLOR
+    const colorToSave = brandColor || DEFAULT_BRAND_COLOR
     if (logoFile) {
-      colorToSave = await extractBrandColorFromFile(logoFile, colorToSave)
-      setBrandColor(colorToSave)
-      const ext = logoFile.name.split('.').pop()?.toLowerCase() || 'png'
+      const ext =
+        logoFile.type === 'image/png'
+          ? 'png'
+          : logoFile.name.split('.').pop()?.toLowerCase() || 'png'
       const path = `${user.id}/branding/${Date.now()}.${ext}`
       const { error: upErr } = await supabase.storage
         .from('site-photos')
-        .upload(path, logoFile, { contentType: logoFile.type, upsert: false })
+        .upload(path, logoFile, {
+          contentType: logoFile.type || 'image/png',
+          upsert: false,
+        })
       if (upErr) {
         setError(upErr.message)
         setSaving(false)
@@ -255,10 +283,19 @@ export default function BrandingSettingsPage() {
           <input
             style={inputStyle}
             value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
+            onChange={(e) => {
+              setCompanyName(e.target.value)
+              setNameManuallyEdited(true)
+              setNamePrefilledFromLogo(false)
+            }}
             placeholder="e.g. Forge Construction Ltd"
             required
           />
+          {namePrefilledFromLogo && companyName ? (
+            <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '4px 0 0' }}>
+              Detected from your logo — edit if needed.
+            </p>
+          ) : null}
 
           <label style={labelStyle}>Logo / letterhead photo</label>
           <ImageSourceButtons
@@ -270,12 +307,29 @@ export default function BrandingSettingsPage() {
           {(logoPreview || brandColor) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               {logoPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element -- ESLINT-BRAND-LOGO-IMG
-                <img
-                  src={logoPreview}
-                  alt="Logo preview"
-                  style={{ width: 56, height: 56, objectFit: 'contain', borderRadius: 8, background: '#fff', border: '1px solid var(--edge)' }}
-                />
+                <div
+                  style={{
+                    width: 56,
+                    height: 56,
+                    flexShrink: 0,
+                    borderRadius: 8,
+                    background: brandColor || 'var(--plate)',
+                    border: '1px solid var(--edge)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- ESLINT-BRAND-LOGO-IMG */}
+                  <img
+                    src={logoPreview}
+                    alt="Logo preview"
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'contain',
+                    }}
+                  />
+                </div>
               ) : null}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span
@@ -345,7 +399,16 @@ export default function BrandingSettingsPage() {
               >
                 {previews[row.id] ? (
                   // eslint-disable-next-line @next/next/no-img-element -- ESLINT-BRAND-LOGO-IMG
-                  <img src={previews[row.id]} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                  <img
+                    src={previews[row.id]}
+                    alt=""
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'contain',
+                    }}
+                  />
                 ) : null}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>

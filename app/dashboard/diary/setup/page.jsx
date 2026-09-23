@@ -1197,10 +1197,10 @@ function SiteDiarySetupPage() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 height: 92,
-                padding: 8,
                 borderRadius: 12,
                 background: 'color-mix(in srgb, var(--plate) 70%, var(--ink))',
                 border: '1px solid var(--edge)',
+                overflow: 'hidden',
               }}
             >
               <img

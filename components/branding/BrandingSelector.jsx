@@ -11,6 +11,10 @@ import {
   DIARY_ACCENT,
 } from '@/lib/premium-ui'
 import { extractBrandColorFromFile } from '@/lib/extract-brand-color'
+import {
+  prepareBrandLogoFile,
+  fetchBrandCompanyNameAnalysis,
+} from '@/lib/prepare-brand-logo-image'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
 import { brandingPayload } from '@/lib/branding-payload'
 
@@ -41,6 +45,8 @@ export function BrandingSelector({
   const [extracting, setExtracting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [nameManuallyEdited, setNameManuallyEdited] = useState(false)
+  const [namePrefilledFromLogo, setNamePrefilledFromLogo] = useState(false)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -125,11 +131,25 @@ export function BrandingSelector({
       return
     }
 
-    setQuickLogoFile(file)
-    setLogoPreview(URL.createObjectURL(file))
     setExtracting(true)
     const hex = await extractBrandColorFromFile(file, DEFAULT_BRAND_COLOR)
     setQuickColor(hex)
+
+    const prepared = await prepareBrandLogoFile(file)
+    const logoFile = prepared.file || file
+    setQuickLogoFile(logoFile)
+    setLogoPreview(prepared.previewUrl || URL.createObjectURL(logoFile))
+
+    if (!nameManuallyEdited) {
+      const analyzed = await fetchBrandCompanyNameAnalysis(logoFile)
+      if (analyzed.confidence === 'high' && analyzed.company_name) {
+        setQuickName(analyzed.company_name)
+        setNamePrefilledFromLogo(true)
+      } else {
+        setNamePrefilledFromLogo(false)
+      }
+    }
+
     setExtracting(false)
   }
 
@@ -141,6 +161,8 @@ export function BrandingSelector({
     setLogoPreview(null)
     setShowQuickAdd(false)
     setExtracting(false)
+    setNameManuallyEdited(false)
+    setNamePrefilledFromLogo(false)
   }
 
   const handleQuickAdd = async (e) => {
@@ -162,17 +184,19 @@ export function BrandingSelector({
       return
     }
 
-    let extracted = quickColor
-    if (!extracted || extracted === DEFAULT_BRAND_COLOR) {
-      extracted = await extractBrandColorFromFile(quickLogoFile, DEFAULT_BRAND_COLOR)
-      setQuickColor(extracted)
-    }
+    const extracted = quickColor || DEFAULT_BRAND_COLOR
 
-    const ext = quickLogoFile.name.split('.').pop()?.toLowerCase() || 'png'
+    const ext =
+      quickLogoFile.type === 'image/png'
+        ? 'png'
+        : quickLogoFile.name.split('.').pop()?.toLowerCase() || 'png'
     const path = `${user.id}/branding/${Date.now()}.${ext}`
     const { error: upErr } = await supabase.storage
       .from('site-photos')
-      .upload(path, quickLogoFile, { contentType: quickLogoFile.type, upsert: false })
+      .upload(path, quickLogoFile, {
+        contentType: quickLogoFile.type || 'image/png',
+        upsert: false,
+      })
     if (upErr) {
       setError(upErr.message)
       setSaving(false)
@@ -275,9 +299,18 @@ export function BrandingSelector({
           <input
             style={inputStyle}
             value={quickName}
-            onChange={(e) => setQuickName(e.target.value)}
+            onChange={(e) => {
+              setQuickName(e.target.value)
+              setNameManuallyEdited(true)
+              setNamePrefilledFromLogo(false)
+            }}
             placeholder="e.g. ABC Construction Ltd"
           />
+          {namePrefilledFromLogo && quickName ? (
+            <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '4px 0 0' }}>
+              Detected from your logo — edit if needed.
+            </p>
+          ) : null}
 
           <label style={labelStyle}>Logo / letterhead photo</label>
           <ImageSourceButtons
@@ -289,12 +322,29 @@ export function BrandingSelector({
           {(logoPreview || extracting) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               {logoPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element -- ESLINT-BRAND-LOGO-IMG
-                <img
-                  src={logoPreview}
-                  alt="Logo preview"
-                  style={{ width: 56, height: 56, objectFit: 'contain', borderRadius: 8, background: '#fff', border: '1px solid var(--edge)' }}
-                />
+                <div
+                  style={{
+                    width: 56,
+                    height: 56,
+                    flexShrink: 0,
+                    borderRadius: 8,
+                    background: quickColor || 'var(--plate)',
+                    border: '1px solid var(--edge)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- ESLINT-BRAND-LOGO-IMG */}
+                  <img
+                    src={logoPreview}
+                    alt="Logo preview"
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'contain',
+                    }}
+                  />
+                </div>
               ) : null}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span
