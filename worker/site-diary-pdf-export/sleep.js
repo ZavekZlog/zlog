@@ -9,9 +9,6 @@ export function sleep(ms, shutdown = {}) {
       resolve()
       return
     }
-    const timer = setTimeout(resolve, delay)
-    if (typeof timer.unref === 'function') {
-      timer.unref()
-    }
+    setTimeout(resolve, delay)
   })
 }
