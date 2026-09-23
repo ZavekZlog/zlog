@@ -92,9 +92,8 @@ const SECTION_PRESENCE_AHEAD = 72
  * them is ordinary flow layout, so the information architecture does not
  * depend on per-element coordinates.
  */
-const PAGE1_FRAME_INSET = 26
+const PAGE1_FRAME_INSET = PDF_PAGE_PAD_X
 const PAGE1_FRAME_W = PDF_PAGE_W - PAGE1_FRAME_INSET * 2
-const PAGE1_FRAME_H = PDF_PAGE_H - PAGE1_FRAME_INSET * 2
 const PAGE1_BANNER_H = 48
 const PAGE1_GUTTER = 42
 const PAGE1_INNER_W = PDF_PAGE_W - PAGE1_GUTTER * 2
@@ -102,7 +101,7 @@ const PAGE1_BODY_TOP = PAGE1_FRAME_INSET + PAGE1_BANNER_H + 16
 const PAGE1_FOOTER_TOP = 778
 // The cover photograph is the centre of gravity: full content width, deep frame.
 const PAGE1_COVER_W = PAGE1_INNER_W
-const PAGE1_COVER_H = 232
+const PAGE1_COVER_H = 384
 /**
  * The Project / Report Details grid takes the height released by the cover
  * photograph, so page 1 stays balanced and the schedule — not the photograph —
@@ -214,11 +213,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: PAGE1_FRAME_INSET,
     left: PAGE1_FRAME_INSET,
-    width: PAGE1_FRAME_W,
-    height: PAGE1_FRAME_H,
+    right: PAGE1_FRAME_INSET,
+    bottom: PDF_PAGE_H - PAGE1_FOOTER_TOP - 6,
     borderWidth: 0.9,
     borderStyle: 'solid',
     borderColor: '#7C858D',
+    borderBottomWidth: 0,
   },
   // Shallow banner: company identity, then a restrained report title. The
   // banner must not out-weigh the project name or the cover photograph.
