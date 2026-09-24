@@ -397,6 +397,68 @@ function workbenchShareEntryToPreparedResult(entry) {
   }
 }
 
+/**
+ * Join post-hydrate reconcile artifact work (Save + background prepare).
+ * @returns {Promise<object | null>} prepared result, or null to fall through to one hydrate
+ */
+async function tryJoinPostHydrateReconcilePreparedPdf({
+  reconcileOp,
+  reportId,
+  generation,
+  identity,
+  shareReadyEntry,
+  diagStage,
+  diagPayload,
+  isJoinStillValid,
+}) {
+  if (!identity?.ok) return null
+  if (!postHydrateReconcileArtifactJoinMatches(reconcileOp, reportId, generation, identity)) {
+    return null
+  }
+
+  const identityExportId = trimPdfExportId(identity.exportId)
+  const refPrepared = workbenchShareEntryToPreparedResult(shareReadyEntry)
+  const refExportId = trimPdfExportId(refPrepared?.exportId)
+  const refFingerprint = trimPdfFingerprint(refPrepared?.contentFingerprint)
+  const identityFingerprint = trimPdfFingerprint(identity.contentFingerprint)
+  if (
+    refPrepared
+    && refExportId
+    && refExportId === identityExportId
+    && (!identityFingerprint || !refFingerprint || refFingerprint === identityFingerprint)
+  ) {
+    emitShareDiag(diagStage, {
+      ...diagPayload,
+      exportId: identityExportId,
+      mode: 'ref-ready',
+    })
+    return refPrepared
+  }
+
+  if (!reconcileOp?.artifactPromise) {
+    return null
+  }
+
+  emitShareDiag(diagStage, {
+    ...diagPayload,
+    exportId: identityExportId,
+    mode: reconcileOp.artifactSettled ? 'settled-promise' : 'in-flight',
+  })
+  try {
+    const joinedPrepared = await reconcileOp.artifactPromise
+    if (
+      joinedPrepared?.ok
+      && isJoinStillValid()
+      && postHydrateReconcileArtifactJoinMatches(reconcileOp, reportId, generation, identity)
+    ) {
+      return joinedPrepared
+    }
+  } catch {
+    /* fall through to one foreground/background hydrate */
+  }
+  return null
+}
+
 const COVER_UPLOAD_FAIL_MESSAGE =
   'We couldn’t upload the cover photo. Check your connection and try Share again.'
 
@@ -2712,14 +2774,54 @@ export default function SiteDiaryPage() {
         backgroundIdentity = null
       }
     }
+    const isBackgroundJoinStillValid = () => (
+      pdfPrepareGenerationRef.current === startedGeneration
+      && String(editingReportId || '') === startedReportId
+      && !prepareAbort.signal.aborted
+      && isDiaryPersistedCleanForBackgroundPdf({
+        latestPayload: latestPayloadRef.current,
+        ackedSnapshot: ackedSnapshotRef.current,
+        payloadsEqual: autosavePayloadsEqual,
+        photoWorkspaceDraftDirty: photoWorkspaceDraftDirtyRef.current,
+      })
+      && locationWalkRef.current?.hasUnsavedAreaForShare?.() !== true
+    )
+
     try {
-      if (backgroundIdentity) {
-        prepared = await hydrateShareReadyArtifactFromExportIdentity(
-          supabase,
-          startedReportId,
-          backgroundIdentity,
-          { signal: prepareAbort.signal },
-        )
+      if (backgroundIdentity?.ok) {
+        const joinedPrepared = await tryJoinPostHydrateReconcilePreparedPdf({
+          reconcileOp,
+          reportId: startedReportId,
+          generation: startedGeneration,
+          identity: backgroundIdentity,
+          shareReadyEntry: shareReadyPdfRef.current,
+          diagStage: 'background-join-post-hydrate-pdf-artifact',
+          diagPayload: {
+            surface: 'live-diary',
+            reportId: startedReportId,
+            projectId: live.projectId || null,
+          },
+          isJoinStillValid: isBackgroundJoinStillValid,
+        })
+        if (joinedPrepared?.ok) {
+          if (hasAdoptableWorkbenchShareFile(shareReadyPdfRef.current)) {
+            return
+          }
+          prepared = joinedPrepared
+        } else {
+          emitShareDiag('background-artifact-hydrate', {
+            surface: 'live-diary',
+            reportId: startedReportId,
+            projectId: live.projectId || null,
+            exportId: backgroundIdentity.exportId || null,
+          })
+          prepared = await hydrateShareReadyArtifactFromExportIdentity(
+            supabase,
+            startedReportId,
+            backgroundIdentity,
+            { signal: prepareAbort.signal },
+          )
+        }
       } else {
         prepared = await runSiteDiaryPdfExportToShareReadyArtifact(supabase, startedReportId, {
           signal: prepareAbort.signal,
@@ -3867,60 +3969,25 @@ export default function SiteDiaryPage() {
       }
 
       const obtainPreparedPdfForSave = async () => {
-        if (
-          joinedExportIdentity?.ok
-          && postHydrateReconcileArtifactJoinMatches(
-            saveReconcileOp,
-            startedPrepareReportId,
-            startedPrepareGeneration,
-            joinedExportIdentity,
-          )
-        ) {
-          const refPrepared = workbenchShareEntryToPreparedResult(shareReadyPdfRef.current)
-          const refExportId = trimPdfExportId(refPrepared?.exportId)
-          const identityExportId = trimPdfExportId(joinedExportIdentity.exportId)
-          const refFingerprint = trimPdfFingerprint(refPrepared?.contentFingerprint)
-          const identityFingerprint = trimPdfFingerprint(joinedExportIdentity.contentFingerprint)
-          if (
-            refPrepared
-            && refExportId
-            && refExportId === identityExportId
-            && (!identityFingerprint || !refFingerprint || refFingerprint === identityFingerprint)
-          ) {
-            emitShareDiag('save-join-post-hydrate-pdf-artifact', {
+        if (joinedExportIdentity?.ok) {
+          const joinedPrepared = await tryJoinPostHydrateReconcilePreparedPdf({
+            reconcileOp: saveReconcileOp,
+            reportId: startedPrepareReportId,
+            generation: startedPrepareGeneration,
+            identity: joinedExportIdentity,
+            shareReadyEntry: shareReadyPdfRef.current,
+            diagStage: 'save-join-post-hydrate-pdf-artifact',
+            diagPayload: {
               reportId: saved.id,
               projectId,
-              exportId: identityExportId,
-              mode: 'ref-ready',
-            })
-            return refPrepared
-          }
-
-          if (saveReconcileOp?.artifactPromise) {
-            emitShareDiag('save-join-post-hydrate-pdf-artifact', {
-              reportId: saved.id,
-              projectId,
-              exportId: identityExportId,
-              mode: saveReconcileOp.artifactSettled ? 'settled-promise' : 'in-flight',
-            })
-            try {
-              const joinedPrepared = await saveReconcileOp.artifactPromise
-              if (
-                joinedPrepared?.ok
-                && pdfPrepareGenerationRef.current === startedPrepareGeneration
-                && String(editingReportId || '') === startedPrepareReportId
-                && postHydrateReconcileArtifactJoinMatches(
-                  saveReconcileOp,
-                  startedPrepareReportId,
-                  startedPrepareGeneration,
-                  joinedExportIdentity,
-                )
-              ) {
-                return joinedPrepared
-              }
-            } catch {
-              /* fall through to one foreground hydrate */
-            }
+            },
+            isJoinStillValid: () => (
+              pdfPrepareGenerationRef.current === startedPrepareGeneration
+              && String(editingReportId || '') === startedPrepareReportId
+            ),
+          })
+          if (joinedPrepared?.ok) {
+            return joinedPrepared
           }
         }
 
