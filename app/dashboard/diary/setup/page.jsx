@@ -306,13 +306,27 @@ function SiteDiarySetupPage() {
     writeSetupFormDraft(next)
   }, [])
 
-  const applyLogoSuggestedCompanyName = () => {
-    const suggested = String(logoSuggestedCompanyName || '').trim()
-    if (!suggested) return
-    setReportingCompany(suggested)
+  const applyDetectedReportingCompanyName = (detectedName) => {
+    const trimmed = String(detectedName || '').trim()
+    if (!trimmed) return
+    const oldReportingCompany = String(reportingCompany || '').trim()
+    const reportingOnBehalf = String(reportingOnBehalfOf || '').trim()
+    setReportingCompany(trimmed)
+    if (
+      oldReportingCompany
+      && reportingOnBehalf.toLowerCase() === oldReportingCompany.toLowerCase()
+    ) {
+      setReportingOnBehalfOf(trimmed)
+    }
     setNamePrefilledFromLogo(true)
     setLogoSuggestedCompanyName(null)
     setShowLogoCompanyManualHint(false)
+  }
+
+  const applyLogoSuggestedCompanyName = () => {
+    const suggested = String(logoSuggestedCompanyName || '').trim()
+    if (!suggested) return
+    applyDetectedReportingCompanyName(suggested)
   }
 
   const applyFormSnapshot = useCallback((snapshot) => {
@@ -818,10 +832,7 @@ function SiteDiarySetupPage() {
           : ''
 
         if (analyzed.confidence === 'high' && detectedName) {
-          setReportingCompany(detectedName)
-          setNamePrefilledFromLogo(true)
-          setLogoSuggestedCompanyName(null)
-          setShowLogoCompanyManualHint(false)
+          applyDetectedReportingCompanyName(detectedName)
         } else if (analyzed.confidence === 'medium' && detectedName) {
           setNamePrefilledFromLogo(false)
           setLogoSuggestedCompanyName(detectedName)
