@@ -8,7 +8,7 @@
     "exhaustive-deps:acceptedDescription": "CapturePhotoPreview caption effect is keyed on photo?.id only. Adding photo?.acceptedDescription would clobber in-progress typing."
   },
   "photo001NoImgSurfaces": [
-    "app/dashboard/diary/setup/page.jsx",
+    "components/site-diary/SiteDiaryProjectDetailsSection.jsx",
     "app/dashboard/project/[id]/diary/page.jsx",
     "app/dashboard/project/[id]/diary/view/page.jsx",
     "components/photo-workspace/CapturePhotoPreview.jsx",
@@ -25,14 +25,14 @@
       "classification": "no-unused-vars"
     },
     {
-      "file": "app/dashboard/diary/setup/page.jsx",
+      "file": "components/site-diary/SiteDiaryProjectDetailsSection.jsx",
       "rule": "@next/next/no-img-element",
       "messageKey": "no-img-element",
       "sourceHint": "<img src={logoPreview} alt=\"Reporting company logo preview\" style={{ display: 'block', maxHeight: '100%', maxWidth: '100%', width: 'auto',",
       "classification": "no-img-element"
     },
     {
-      "file": "app/dashboard/diary/setup/page.jsx",
+      "file": "components/site-diary/SiteDiaryProjectDetailsSection.jsx",
       "rule": "@next/next/no-img-element",
       "messageKey": "no-img-element",
       "sourceHint": "<img src={coverPhoto.preview} alt=\"Cover\" style={SETUP_COVER_PREVIEW_IMG_STYLE} />",

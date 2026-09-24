@@ -99,12 +99,12 @@
     {
       "id": "COPY-PROJECT-REFERENCE",
       "label": "Project Reference",
-      "files": ["app/dashboard/diary/setup/page.jsx"]
+      "files": ["components/site-diary/SiteDiaryProjectDetailsSection.jsx"]
     },
     {
       "id": "COPY-REPORT-DATE",
       "label": "Report Date",
-      "files": ["app/dashboard/diary/setup/page.jsx"]
+      "files": ["components/site-diary/SiteDiaryProjectDetailsSection.jsx"]
     },
     {
       "id": "COPY-PROJECT-COMMENCEMENT-DATE",

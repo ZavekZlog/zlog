@@ -178,7 +178,7 @@
     },
     {
       "id": "ESLINT-SETUP-HYDRATE-DEPS",
-      "file": "app/dashboard/diary/setup/page.jsx",
+      "file": "lib/use-site-diary-project-details.js",
       "rule": "react-hooks/exhaustive-deps",
       "reason": "Setup hydrate loads once per edit target; createClient() is not referentially stable.",
       "preserves": "Project & Report Details hydrate / SDSC fast path",
