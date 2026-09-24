@@ -143,8 +143,10 @@ import {
   fetchAuthoritativeSiteDiaryPdfExportFingerprint,
   fetchSiteDiaryPdfExportAuthorization,
   isSiteDiaryPdfExportUserAbortResult,
+  reconcileAuthoritativeSiteDiaryPdfExportToShareReady,
   runSiteDiaryPdfExportToExportReady,
   runSiteDiaryPdfExportToShareReadyArtifact,
+  SITE_DIARY_PDF_EXPORT_CLIENT_CODE,
   SITE_DIARY_PDF_EXPORT_HANDOFF,
   userMessageForSiteDiaryPdfExportFailure,
 } from '@/lib/site-diary-pdf-export-client'
@@ -517,6 +519,9 @@ export default function SiteDiaryPage() {
   const pdfBackgroundPrepareSchedulerRef = useRef(null)
   const pdfBackgroundPrepareRunRef = useRef(null)
   const pdfBackgroundPrepareAbortRef = useRef(null)
+  const postHydratePdfReconcileRef = useRef(null)
+  const postHydratePdfReconcileAbortRef = useRef(null)
+  const postHydratePdfReconcileStartedRef = useRef(false)
   const backgroundPrepareLiveRef = useRef({})
   const [shareReady, setShareReady] = useState(false)
   const invalidatePreparedSharePdf = useCallback((reason) => {
@@ -525,6 +530,8 @@ export default function SiteDiaryPage() {
     pdfPrepareAbortRef.current = null
     pdfBackgroundPrepareAbortRef.current?.abort()
     pdfBackgroundPrepareAbortRef.current = null
+    postHydratePdfReconcileAbortRef.current?.abort()
+    postHydratePdfReconcileAbortRef.current = null
     shareReadyPdfRef.current = null
     pdfPrepareGenerationRef.current = bumpPdfPrepareGeneration(pdfPrepareGenerationRef.current)
     setShareReady((prev) => (prev ? false : prev))
@@ -590,6 +597,10 @@ export default function SiteDiaryPage() {
     lastPersistedPlantRef.current = null
     lastPersistedPhotosRef.current = null
     suppressAutosaveRef.current = true
+    postHydratePdfReconcileStartedRef.current = false
+    postHydratePdfReconcileRef.current = null
+    postHydratePdfReconcileAbortRef.current?.abort()
+    postHydratePdfReconcileAbortRef.current = null
   }, [editingReportId, invalidatePreparedSharePdf])
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -2379,6 +2390,137 @@ export default function SiteDiaryPage() {
     diaryPersistedClean,
   }
 
+  const runPostHydratePdfReconcile = useCallback(async () => {
+    const live = backgroundPrepareLiveRef.current
+    if (!live.hydrateComplete || !live.writable || !live.reportId || live.sessionExpired) {
+      return
+    }
+    if (locationWalkRef.current?.hasUnsavedAreaForShare?.() === true) {
+      return
+    }
+    if (!canShareSiteDiaryPdfViaNativeFile()) {
+      return
+    }
+    if (!isDiaryPersistedCleanForBackgroundPdf({
+      latestPayload: latestPayloadRef.current,
+      ackedSnapshot: ackedSnapshotRef.current,
+      payloadsEqual: autosavePayloadsEqual,
+      photoWorkspaceDraftDirty: photoWorkspaceDraftDirtyRef.current,
+    })) {
+      return
+    }
+    if (hasAdoptableWorkbenchShareFile(shareReadyPdfRef.current)) {
+      return
+    }
+
+    const startedGeneration = pdfPrepareGenerationRef.current
+    const startedReportId = String(live.reportId || '')
+    postHydratePdfReconcileAbortRef.current?.abort()
+    const reconcileAbort = new AbortController()
+    postHydratePdfReconcileAbortRef.current = reconcileAbort
+
+    const isStillValidForReconcile = () => (
+      pdfPrepareGenerationRef.current === startedGeneration
+      && String(editingReportId || '') === startedReportId
+      && isDiaryPersistedCleanForBackgroundPdf({
+        latestPayload: latestPayloadRef.current,
+        ackedSnapshot: ackedSnapshotRef.current,
+        payloadsEqual: autosavePayloadsEqual,
+        photoWorkspaceDraftDirty: photoWorkspaceDraftDirtyRef.current,
+      })
+      && !photoWorkspaceDraftDirtyRef.current
+      && locationWalkRef.current?.hasUnsavedAreaForShare?.() !== true
+    )
+
+    const promise = (async () => {
+      emitShareDiag('post-hydrate-pdf-reconcile-start', {
+        reportId: startedReportId,
+        projectId: live.projectId || null,
+      })
+
+      let prepared
+      try {
+        prepared = await reconcileAuthoritativeSiteDiaryPdfExportToShareReady(
+          supabase,
+          startedReportId,
+          {
+            signal: reconcileAbort.signal,
+            isStillValid: isStillValidForReconcile,
+          },
+        )
+      } catch {
+        return
+      }
+
+      if (reconcileAbort.signal.aborted) {
+        return
+      }
+
+      if (!prepared?.ok) {
+        if (prepared?.code === SITE_DIARY_PDF_EXPORT_CLIENT_CODE.reconcileDiscarded) {
+          emitShareDiag('post-hydrate-pdf-reconcile-discarded', {
+            reportId: startedReportId,
+          })
+        }
+        return
+      }
+
+      const shareInProgress = Boolean(
+        completingRef.current
+        || finalSaveInProgressRef.current,
+      )
+      if (!shouldAdoptBackgroundPreparedPdf({
+        prepared,
+        startedGeneration,
+        currentGeneration: pdfPrepareGenerationRef.current,
+        startedReportId,
+        currentReportId: String(editingReportId || ''),
+        shareInProgress,
+      })) {
+        return
+      }
+
+      const shareReadyEntry = buildWorkbenchShareReadyFromWorkerArtifact(prepared, {
+        fileReadyHandoff: SITE_DIARY_PDF_EXPORT_HANDOFF.fileReady,
+      })
+      if (!shareReadyEntry) {
+        return
+      }
+
+      if (prepared.contentFingerprint) {
+        shareReadyEntry.contentFingerprint = prepared.contentFingerprint
+      }
+
+      shareReadyPdfRef.current = shareReadyEntry
+      flushSync(() => {
+        setShareReady(true)
+      })
+      emitShareDiag('post-hydrate-pdf-reconcile-ready', {
+        reportId: startedReportId,
+        projectId: live.projectId || null,
+        exportId: shareReadyEntry.exportId || null,
+        enqueueReturnedStatus: prepared.enqueueReturnedStatus || null,
+      })
+    })()
+
+    const op = {
+      reportId: startedReportId,
+      generation: startedGeneration,
+      promise,
+      settled: false,
+    }
+    promise.finally(() => {
+      op.settled = true
+    })
+    postHydratePdfReconcileRef.current = op
+
+    try {
+      await promise
+    } catch {
+      /* Post-hydrate PDF re-adoption is non-fatal. */
+    }
+  }, [editingReportId, supabase])
+
   const runBackgroundPdfPrepare = useCallback(async () => {
     const live = backgroundPrepareLiveRef.current
     const shareInProgress = Boolean(
@@ -2410,6 +2552,22 @@ export default function SiteDiaryPage() {
 
     const startedGeneration = pdfPrepareGenerationRef.current
     const startedReportId = String(live.reportId || '')
+    const reconcileOp = postHydratePdfReconcileRef.current
+    if (
+      reconcileOp
+      && String(reconcileOp.reportId) === startedReportId
+      && !reconcileOp.settled
+    ) {
+      try {
+        await reconcileOp.promise
+      } catch {
+        /* non-fatal */
+      }
+      if (hasAdoptableWorkbenchShareFile(shareReadyPdfRef.current)) {
+        return
+      }
+    }
+
     const backgroundStartedAt = Date.now()
     pdfBackgroundPrepareAbortRef.current?.abort()
     const prepareAbort = new AbortController()
@@ -2488,6 +2646,27 @@ export default function SiteDiaryPage() {
       pdfBackgroundPrepareSchedulerRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    if (!hydrateComplete || !isDiaryEditMode || !editingReportId || sessionExpired) return undefined
+    if (!diaryPersistedClean) return undefined
+    if (saving || finalSaveInProgressRef.current) return undefined
+    if (postHydratePdfReconcileStartedRef.current) return undefined
+    if (locationWalkRef.current?.hasUnsavedAreaForShare?.() === true) return undefined
+    if (!canShareSiteDiaryPdfViaNativeFile()) return undefined
+    postHydratePdfReconcileStartedRef.current = true
+    void runPostHydratePdfReconcile()
+    return undefined
+  }, [
+    hydrateComplete,
+    isDiaryEditMode,
+    editingReportId,
+    sessionExpired,
+    diaryPersistedClean,
+    autosaveStatus,
+    saving,
+    runPostHydratePdfReconcile,
+  ])
 
   useEffect(() => {
     if (!hydrateComplete || !isDiaryEditMode || !editingReportId || sessionExpired) return undefined
@@ -2991,6 +3170,18 @@ export default function SiteDiaryPage() {
         projectId,
       })
       return
+    }
+    const reconcileOp = postHydratePdfReconcileRef.current
+    if (reconcileOp && String(reconcileOp.reportId) === String(editingReportId || '')) {
+      emitShareDiag('save-join-post-hydrate-pdf-reconcile', {
+        reportId: editingReportId,
+        reconcileSettled: reconcileOp.settled,
+      })
+      try {
+        await reconcileOp.promise
+      } catch {
+        /* non-fatal */
+      }
     }
     finalSaveInProgressRef.current = true
     const tapUserActivation = snapshotUserActivation()
