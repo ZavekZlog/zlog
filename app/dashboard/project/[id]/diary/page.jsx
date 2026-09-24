@@ -143,7 +143,8 @@ import {
   fetchAuthoritativeSiteDiaryPdfExportFingerprint,
   fetchSiteDiaryPdfExportAuthorization,
   isSiteDiaryPdfExportUserAbortResult,
-  reconcileAuthoritativeSiteDiaryPdfExportToShareReady,
+  hydrateShareReadyArtifactFromExportIdentity,
+  resolveAuthoritativeSiteDiaryPdfExportIdentity,
   runSiteDiaryPdfExportToExportReady,
   runSiteDiaryPdfExportToShareReadyArtifact,
   SITE_DIARY_PDF_EXPORT_CLIENT_CODE,
@@ -341,6 +342,59 @@ function isWorkbenchSharePrepared(entry) {
     return Boolean(entry.exportId && entry.reportId)
   }
   return Boolean(entry.file)
+}
+
+function trimPdfExportId(value) {
+  if (value == null) return ''
+  return String(value).trim()
+}
+
+function trimPdfFingerprint(value) {
+  return trimPdfExportId(value).toLowerCase()
+}
+
+/**
+ * @param {{ reportId?: string, generation?: number, identity?: { exportId?: string, contentFingerprint?: string } } | null} reconcileOp
+ * @param {string} reportId
+ * @param {number} generation
+ * @param {{ ok?: boolean, exportId?: string, contentFingerprint?: string }} identity
+ */
+function postHydrateReconcileArtifactJoinMatches(reconcileOp, reportId, generation, identity) {
+  if (!reconcileOp || !identity?.ok) return false
+  if (String(reconcileOp.reportId || '') !== String(reportId || '')) return false
+  if (reconcileOp.generation !== generation) return false
+
+  const identityExportId = trimPdfExportId(identity.exportId)
+  const opExportId = trimPdfExportId(reconcileOp.identity?.exportId) || identityExportId
+  if (!identityExportId || opExportId !== identityExportId) return false
+
+  const identityFingerprint = trimPdfFingerprint(identity.contentFingerprint)
+  const opFingerprint =
+    trimPdfFingerprint(reconcileOp.identity?.contentFingerprint) || identityFingerprint
+  if (identityFingerprint && opFingerprint && opFingerprint !== identityFingerprint) {
+    return false
+  }
+
+  return true
+}
+
+function workbenchShareEntryToPreparedResult(entry) {
+  if (!isWorkbenchSharePrepared(entry)) return null
+  if (!(entry.file instanceof File) || entry.file.size <= 0) {
+    return null
+  }
+  return {
+    ok: true,
+    file: entry.file,
+    blob: entry.blob,
+    fileName: entry.fileName,
+    title: entry.title,
+    text: entry.text,
+    exportId: entry.exportId,
+    reportId: entry.reportId,
+    handoff: entry.handoff,
+    contentFingerprint: entry.contentFingerprint ?? null,
+  }
 }
 
 const COVER_UPLOAD_FAIL_MESSAGE =
@@ -2432,30 +2486,32 @@ export default function SiteDiaryPage() {
       && locationWalkRef.current?.hasUnsavedAreaForShare?.() !== true
     )
 
-    const promise = (async () => {
-      emitShareDiag('post-hydrate-pdf-reconcile-start', {
-        reportId: startedReportId,
+    const reconcileStartedAt = Date.now()
+    const onReconcileDiag = (stage, payload) => {
+      emitShareDiag(stage, {
+        ...payload,
         projectId: live.projectId || null,
       })
+    }
 
-      let prepared
+    const identityPromise = (async () => {
       try {
-        prepared = await reconcileAuthoritativeSiteDiaryPdfExportToShareReady(
+        return await resolveAuthoritativeSiteDiaryPdfExportIdentity(
           supabase,
           startedReportId,
           {
             signal: reconcileAbort.signal,
             isStillValid: isStillValidForReconcile,
+            reconcileStartedAt,
+            onReconcileDiag,
           },
         )
       } catch {
-        return
+        return { ok: false, code: SITE_DIARY_PDF_EXPORT_CLIENT_CODE.enqueueInvalid }
       }
+    })()
 
-      if (reconcileAbort.signal.aborted) {
-        return
-      }
-
+    const adoptPreparedIfCurrent = (prepared) => {
       if (!prepared?.ok) {
         if (prepared?.code === SITE_DIARY_PDF_EXPORT_CLIENT_CODE.reconcileDiscarded) {
           emitShareDiag('post-hydrate-pdf-reconcile-discarded', {
@@ -2501,24 +2557,83 @@ export default function SiteDiaryPage() {
         exportId: shareReadyEntry.exportId || null,
         enqueueReturnedStatus: prepared.enqueueReturnedStatus || null,
       })
-    })()
+    }
+
+    const artifactPromise = identityPromise.then(async (identity) => {
+      if (reconcileAbort.signal.aborted) {
+        return { ok: false, code: SITE_DIARY_PDF_EXPORT_CLIENT_CODE.pollAborted }
+      }
+      if (!identity?.ok) {
+        return identity
+      }
+      if (!isStillValidForReconcile()) {
+        onReconcileDiag('post-hydrate-reconcile-r9-discarded', {
+          reportId: startedReportId,
+          reason: 'stale-before-hydrate',
+          tapStartedAt: reconcileStartedAt,
+          elapsedMsSinceTap: Date.now() - reconcileStartedAt,
+        })
+        return {
+          ok: false,
+          code: SITE_DIARY_PDF_EXPORT_CLIENT_CODE.reconcileDiscarded,
+          exportId: identity.exportId,
+        }
+      }
+
+      let prepared
+      try {
+        prepared = await hydrateShareReadyArtifactFromExportIdentity(
+          supabase,
+          startedReportId,
+          identity,
+          {
+            signal: reconcileAbort.signal,
+            reconcileStartedAt,
+            onReconcileDiag,
+          },
+        )
+      } catch {
+        return { ok: false, code: SITE_DIARY_PDF_EXPORT_CLIENT_CODE.artifactHttp }
+      }
+
+      if (!prepared?.ok) {
+        return prepared
+      }
+
+      onReconcileDiag('post-hydrate-reconcile-r9-complete', {
+        reportId: startedReportId,
+        exportId: identity.exportId,
+        enqueueReturnedStatus: identity.enqueueReturnedStatus,
+        tapStartedAt: reconcileStartedAt,
+        elapsedMsSinceTap: Date.now() - reconcileStartedAt,
+      })
+
+      adoptPreparedIfCurrent(prepared)
+      return prepared
+    })
 
     const op = {
       reportId: startedReportId,
       generation: startedGeneration,
-      promise,
+      reconcileStartedAt,
+      identity: null,
+      identityPromise,
+      identitySettled: false,
+      artifactPromise,
+      artifactSettled: false,
+      promise: artifactPromise,
       settled: false,
     }
-    promise.finally(() => {
+    identityPromise.then((identity) => {
+      op.identity = identity
+    }).finally(() => {
+      op.identitySettled = true
+    })
+    artifactPromise.finally(() => {
+      op.artifactSettled = true
       op.settled = true
     })
     postHydratePdfReconcileRef.current = op
-
-    try {
-      await promise
-    } catch {
-      /* Post-hydrate PDF re-adoption is non-fatal. */
-    }
   }, [editingReportId, supabase])
 
   const runBackgroundPdfPrepare = useCallback(async () => {
@@ -2556,10 +2671,11 @@ export default function SiteDiaryPage() {
     if (
       reconcileOp
       && String(reconcileOp.reportId) === startedReportId
-      && !reconcileOp.settled
+      && reconcileOp.generation === startedGeneration
+      && !reconcileOp.identitySettled
     ) {
       try {
-        await reconcileOp.promise
+        await reconcileOp.identityPromise
       } catch {
         /* non-fatal */
       }
@@ -2581,10 +2697,34 @@ export default function SiteDiaryPage() {
     })
 
     let prepared
+    let backgroundIdentity = null
+    if (
+      reconcileOp
+      && String(reconcileOp.reportId) === startedReportId
+      && reconcileOp.generation === startedGeneration
+    ) {
+      try {
+        const identity = reconcileOp.identity ?? await reconcileOp.identityPromise
+        if (identity?.ok) {
+          backgroundIdentity = identity
+        }
+      } catch {
+        backgroundIdentity = null
+      }
+    }
     try {
-      prepared = await runSiteDiaryPdfExportToShareReadyArtifact(supabase, startedReportId, {
-        signal: prepareAbort.signal,
-      })
+      if (backgroundIdentity) {
+        prepared = await hydrateShareReadyArtifactFromExportIdentity(
+          supabase,
+          startedReportId,
+          backgroundIdentity,
+          { signal: prepareAbort.signal },
+        )
+      } else {
+        prepared = await runSiteDiaryPdfExportToShareReadyArtifact(supabase, startedReportId, {
+          signal: prepareAbort.signal,
+        })
+      }
     } catch {
       return
     }
@@ -3171,18 +3311,6 @@ export default function SiteDiaryPage() {
       })
       return
     }
-    const reconcileOp = postHydratePdfReconcileRef.current
-    if (reconcileOp && String(reconcileOp.reportId) === String(editingReportId || '')) {
-      emitShareDiag('save-join-post-hydrate-pdf-reconcile', {
-        reportId: editingReportId,
-        reconcileSettled: reconcileOp.settled,
-      })
-      try {
-        await reconcileOp.promise
-      } catch {
-        /* non-fatal */
-      }
-    }
     finalSaveInProgressRef.current = true
     const tapUserActivation = snapshotUserActivation()
     const tapStartedAt = Date.now()
@@ -3234,6 +3362,23 @@ export default function SiteDiaryPage() {
       projectId,
       userActivation: tapUserActivation,
     })
+    const reconcileOp = postHydratePdfReconcileRef.current
+    if (
+      reconcileOp
+      && String(reconcileOp.reportId) === String(editingReportId || '')
+      && reconcileOp.generation === pdfPrepareGenerationRef.current
+      && !reconcileOp.identitySettled
+    ) {
+      emitShareDiag('save-join-post-hydrate-pdf-identity', {
+        reportId: editingReportId,
+        identitySettled: reconcileOp.identitySettled,
+      })
+      try {
+        await reconcileOp.identityPromise
+      } catch {
+        /* non-fatal */
+      }
+    }
     const { joinBackgroundInFlight, invalidatedPrepared } = coordinateBackgroundPdfOnSaveStart({
       retainCurrentPreparedFile: retainPreparedFile,
       bumpGeneration: bumpPdfPrepareGeneration,
@@ -3704,15 +3849,113 @@ export default function SiteDiaryPage() {
       })
 
       const useNativeFileShareOnPrepare = canShareSiteDiaryPdfViaNativeFile()
-      const prepared = useNativeFileShareOnPrepare
-        ? await runSiteDiaryPdfExportToShareReadyArtifact(supabase, saved.id, {
+      const saveReconcileOp = postHydratePdfReconcileRef.current
+      let joinedExportIdentity = null
+      if (
+        saveReconcileOp
+        && String(saveReconcileOp.reportId) === startedPrepareReportId
+        && saveReconcileOp.generation === startedPrepareGeneration
+      ) {
+        try {
+          const identity = saveReconcileOp.identity ?? await saveReconcileOp.identityPromise
+          if (identity?.ok) {
+            joinedExportIdentity = identity
+          }
+        } catch {
+          joinedExportIdentity = null
+        }
+      }
+
+      const obtainPreparedPdfForSave = async () => {
+        if (
+          joinedExportIdentity?.ok
+          && postHydrateReconcileArtifactJoinMatches(
+            saveReconcileOp,
+            startedPrepareReportId,
+            startedPrepareGeneration,
+            joinedExportIdentity,
+          )
+        ) {
+          const refPrepared = workbenchShareEntryToPreparedResult(shareReadyPdfRef.current)
+          const refExportId = trimPdfExportId(refPrepared?.exportId)
+          const identityExportId = trimPdfExportId(joinedExportIdentity.exportId)
+          const refFingerprint = trimPdfFingerprint(refPrepared?.contentFingerprint)
+          const identityFingerprint = trimPdfFingerprint(joinedExportIdentity.contentFingerprint)
+          if (
+            refPrepared
+            && refExportId
+            && refExportId === identityExportId
+            && (!identityFingerprint || !refFingerprint || refFingerprint === identityFingerprint)
+          ) {
+            emitShareDiag('save-join-post-hydrate-pdf-artifact', {
+              reportId: saved.id,
+              projectId,
+              exportId: identityExportId,
+              mode: 'ref-ready',
+            })
+            return refPrepared
+          }
+
+          if (saveReconcileOp?.artifactPromise) {
+            emitShareDiag('save-join-post-hydrate-pdf-artifact', {
+              reportId: saved.id,
+              projectId,
+              exportId: identityExportId,
+              mode: saveReconcileOp.artifactSettled ? 'settled-promise' : 'in-flight',
+            })
+            try {
+              const joinedPrepared = await saveReconcileOp.artifactPromise
+              if (
+                joinedPrepared?.ok
+                && pdfPrepareGenerationRef.current === startedPrepareGeneration
+                && String(editingReportId || '') === startedPrepareReportId
+                && postHydrateReconcileArtifactJoinMatches(
+                  saveReconcileOp,
+                  startedPrepareReportId,
+                  startedPrepareGeneration,
+                  joinedExportIdentity,
+                )
+              ) {
+                return joinedPrepared
+              }
+            } catch {
+              /* fall through to one foreground hydrate */
+            }
+          }
+        }
+
+        emitShareDiag('foreground-artifact-hydrate', {
+          reportId: saved.id,
+          projectId,
+          exportId: joinedExportIdentity?.exportId || null,
+        })
+
+        if (joinedExportIdentity?.ok) {
+          return hydrateShareReadyArtifactFromExportIdentity(
+            supabase,
+            saved.id,
+            joinedExportIdentity,
+            {
+              signal: prepareAbort.signal,
+              tapStartedAt,
+            },
+          )
+        }
+
+        if (useNativeFileShareOnPrepare) {
+          return runSiteDiaryPdfExportToShareReadyArtifact(supabase, saved.id, {
+            signal: prepareAbort.signal,
+            tapStartedAt,
+          })
+        }
+
+        return runSiteDiaryPdfExportToExportReady(supabase, saved.id, {
           signal: prepareAbort.signal,
           tapStartedAt,
         })
-        : await runSiteDiaryPdfExportToExportReady(supabase, saved.id, {
-          signal: prepareAbort.signal,
-          tapStartedAt,
-        })
+      }
+
+      const prepared = await obtainPreparedPdfForSave()
 
       if (dismissStaleWorkerPrepare()) {
         return
