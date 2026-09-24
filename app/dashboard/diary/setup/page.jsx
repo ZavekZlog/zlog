@@ -18,6 +18,10 @@ import {
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
 import { SETUP_COVER_PREVIEW_IMG_STYLE } from '@/lib/diary-setup-cover-preview'
 import { extractBrandColorFromFile } from '@/lib/extract-brand-color'
+import {
+  prepareBrandLogoFile,
+  fetchBrandCompanyNameAnalysis,
+} from '@/lib/prepare-brand-logo-image'
 import { ProjectDatesFields } from '@/components/project/ProjectDatesFields'
 import { ProjectStickyFields } from '@/components/project/ProjectStickyFields'
 import { validateProjectDates } from '@/lib/project-day'
@@ -108,6 +112,60 @@ const logoControlButtonStyle = {
   minHeight: 0,
   padding: '8px 10px',
   boxSizing: 'border-box',
+}
+
+const SETUP_BRAND_COLOR_FALLBACK = '#4B5563'
+
+const brandingHowToDetailsStyle = {
+  marginBottom: 14,
+  border: '1px solid var(--edge)',
+  borderRadius: 10,
+  background: 'var(--plate)',
+  padding: '10px 12px',
+  fontSize: 16,
+  lineHeight: 1.45,
+  color: 'var(--text-2)',
+}
+
+function BrandingHowToDisclosure() {
+  return (
+    <details style={brandingHowToDetailsStyle}>
+      <summary
+        style={{
+          cursor: 'pointer',
+          fontSize: 15,
+          fontWeight: 600,
+          color: 'var(--text)',
+          listStyle: 'none',
+        }}
+      >
+        How to add your company branding
+      </summary>
+      <div style={{ marginTop: 10 }}>
+        <p style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600, color: 'var(--text)' }}>
+          Adding your branding
+        </p>
+        <ol style={{ margin: '0 0 10px', paddingLeft: 20, fontSize: 'inherit' }}>
+          <li style={{ marginBottom: 6 }}>
+            Use a clear image containing your company logo — a website, letterhead or document works well.
+          </li>
+          <li style={{ marginBottom: 6 }}>
+            Crop reasonably close to the logo. Avoid images containing several different logos.
+          </li>
+          <li style={{ marginBottom: 6 }}>
+            Upload it here. Zlog will identify the branding colour and, where possible, the company name.
+          </li>
+          <li style={{ marginBottom: 6 }}>
+            Check the preview and company name. You can edit either if needed.
+          </li>
+          <li style={{ marginBottom: 0 }}>Save. Your branding will then be applied to your report.</li>
+        </ol>
+        <p style={{ margin: 0, fontSize: 14, color: 'var(--text-3)' }}>
+          Tip: A clear logo on a plain background gives the best result.
+        </p>
+      </div>
+    </details>
+  )
 }
 
 const NEW_PROJECT_VALUE = NEW_PROJECT_SENTINEL
@@ -228,6 +286,8 @@ function SiteDiarySetupPage() {
   const detailsTouchedRef = useRef(false)
   const userChangedLogoRef = useRef(false)
   const userChangedCoverRef = useRef(false)
+  const [reportingCompanyManuallyEdited, setReportingCompanyManuallyEdited] = useState(false)
+  const [namePrefilledFromLogo, setNamePrefilledFromLogo] = useState(false)
 
   const existingProjects = useMemo(
     () => (projects || []).filter((p) => p?.id && p?.name),
@@ -693,7 +753,7 @@ function SiteDiarySetupPage() {
     }
   }
 
-  const handleLogoFiles = (files) => {
+  const handleLogoFiles = async (files) => {
     const file = files?.[0]
     if (!file) return
     if (editingReportId) {
@@ -701,12 +761,46 @@ function SiteDiarySetupPage() {
       userChangedLogoRef.current = true
     }
     setError('')
+
+    const isPdf =
+      file.type === 'application/pdf' ||
+      /\.pdf$/i.test(file.name || '')
+    const isImage =
+      (file.type && file.type.startsWith('image/')) ||
+      /\.(jpe?g|png|webp|gif|heic|heif|bmp|tiff?)$/i.test(file.name || '')
+
+    if (isPdf || !isImage) {
+      setError('Use a photo or screenshot of the logo/letterhead so we can extract the brand colour.')
+      return
+    }
+
     if (logoObjectUrl) URL.revokeObjectURL(logoObjectUrl)
-    const url = URL.createObjectURL(file)
-    setLogoObjectUrl(url)
-    setLogoFile(file)
-    setLogoPreview(url)
+
+    const hex = await extractBrandColorFromFile(file, SETUP_BRAND_COLOR_FALLBACK)
+    setBrandColor(hex)
+
+    const prepared = await prepareBrandLogoFile(file)
+    const nextLogoFile = prepared.file || file
+    const previewUrl = prepared.previewUrl || URL.createObjectURL(nextLogoFile)
+
+    setLogoObjectUrl(previewUrl)
+    setLogoFile(nextLogoFile)
+    setLogoPreview(previewUrl)
     setLogoStoragePath(null)
+
+    if (!reportingCompanyManuallyEdited) {
+      try {
+        const analyzed = await fetchBrandCompanyNameAnalysis(nextLogoFile)
+        if (analyzed.confidence === 'high' && analyzed.company_name) {
+          setReportingCompany(analyzed.company_name)
+          setNamePrefilledFromLogo(true)
+        } else {
+          setNamePrefilledFromLogo(false)
+        }
+      } catch {
+        setNamePrefilledFromLogo(false)
+      }
+    }
   }
 
   const removeLogo = () => {
@@ -845,10 +939,11 @@ function SiteDiarySetupPage() {
       let brandLogoUrl = logoStoragePath
       let candidateBrandColor = brandColor
       if (logoFile) {
-        ;[brandLogoUrl, candidateBrandColor] = await Promise.all([
-          uploadLogoIfNeeded(user.id),
-          extractBrandColorFromFile(logoFile, '#4B5563'),
-        ])
+        brandLogoUrl = await uploadLogoIfNeeded(user.id)
+        candidateBrandColor = brandColor || await extractBrandColorFromFile(
+          logoFile,
+          SETUP_BRAND_COLOR_FALLBACK,
+        )
       }
 
       // Persist Reporting Company as one identity (name + logo + metadata) before draft write.
@@ -1163,13 +1258,22 @@ function SiteDiarySetupPage() {
           </h2>
           <input
             value={reportingCompany}
-            onChange={(e) => setReportingCompany(e.target.value)}
+            onChange={(e) => {
+              setReportingCompany(e.target.value)
+              setReportingCompanyManuallyEdited(true)
+              setNamePrefilledFromLogo(false)
+            }}
             placeholder="Your company name"
             autoComplete="organization"
             style={{ ...setupInputStyle, marginBottom: 0 }}
             aria-label="Reporting Company Name"
           />
         </div>
+        {namePrefilledFromLogo && reportingCompany ? (
+          <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 12px' }}>
+            Detected from your logo — edit if needed.
+          </p>
+        ) : null}
 
         <label style={{ ...setupLabelStyle, marginBottom: 6 }}>LOGO</label>
         <p
@@ -1181,6 +1285,7 @@ function SiteDiarySetupPage() {
         >
           Your logo helps Zlog create your report’s corporate branding, including colours and report styling.
         </p>
+        <BrandingHowToDisclosure />
         {logoPreview ? (
           <div
             style={{
@@ -1198,7 +1303,7 @@ function SiteDiarySetupPage() {
                 justifyContent: 'center',
                 height: 92,
                 borderRadius: 12,
-                background: 'color-mix(in srgb, var(--plate) 70%, var(--ink))',
+                background: brandColor || 'color-mix(in srgb, var(--plate) 70%, var(--ink))',
                 border: '1px solid var(--edge)',
                 overflow: 'hidden',
               }}
@@ -1236,7 +1341,7 @@ function SiteDiarySetupPage() {
                   onChange={(e) => {
                     const file = e.target.files?.[0]
                     e.target.value = ''
-                    if (file) handleLogoFiles([file])
+                    if (file) void handleLogoFiles([file])
                   }}
                   style={{
                     position: 'absolute',
@@ -1255,7 +1360,7 @@ function SiteDiarySetupPage() {
         ) : (
           <div style={{ marginBottom: 0 }}>
             <ImageSourceButtons
-              onFiles={handleLogoFiles}
+              onFiles={(files) => { void handleLogoFiles(files) }}
               cameraLabel="Take Photo"
               galleryLabel="Upload Photo"
               stacked
