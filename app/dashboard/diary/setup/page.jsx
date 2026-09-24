@@ -288,6 +288,7 @@ function SiteDiarySetupPage() {
   const userChangedCoverRef = useRef(false)
   const [reportingCompanyManuallyEdited, setReportingCompanyManuallyEdited] = useState(false)
   const reportingCompanyManuallyEditedRef = useRef(false)
+  const reportingCompanyUserInteractedRef = useRef(false)
   const [namePrefilledFromLogo, setNamePrefilledFromLogo] = useState(false)
   const [logoSuggestedCompanyName, setLogoSuggestedCompanyName] = useState(null)
   const [showLogoCompanyManualHint, setShowLogoCompanyManualHint] = useState(false)
@@ -1294,13 +1295,21 @@ function SiteDiarySetupPage() {
           </h2>
           <input
             value={reportingCompany}
+            onPointerDown={() => {
+              reportingCompanyUserInteractedRef.current = true
+            }}
+            onKeyDown={() => {
+              reportingCompanyUserInteractedRef.current = true
+            }}
             onChange={(e) => {
               setReportingCompany(e.target.value)
-              setReportingCompanyManuallyEdited(true)
-              reportingCompanyManuallyEditedRef.current = true
-              setNamePrefilledFromLogo(false)
-              setLogoSuggestedCompanyName(null)
-              setShowLogoCompanyManualHint(false)
+              if (reportingCompanyUserInteractedRef.current) {
+                setReportingCompanyManuallyEdited(true)
+                reportingCompanyManuallyEditedRef.current = true
+                setNamePrefilledFromLogo(false)
+                setLogoSuggestedCompanyName(null)
+                setShowLogoCompanyManualHint(false)
+              }
             }}
             placeholder="Your company name"
             autoComplete="organization"
