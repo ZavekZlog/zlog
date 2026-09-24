@@ -112,10 +112,14 @@ import {
   diaryEditHref,
   diaryComposeHref,
   existingDiaryHref,
-  isTodaysDiary,
   openExistingDiaryHref,
-  projectAndReportDetailsHref,
 } from '@/lib/diary-routing'
+import { SiteDiaryWorkbenchProjectDetails } from '@/components/site-diary/SiteDiaryProjectDetailsSection'
+import {
+  applyProjectDetailsPersistToWorkbench,
+  buildWorkbenchProjectDetailsSeed,
+  useSiteDiaryProjectDetailsController,
+} from '@/lib/use-site-diary-project-details'
 import {
   diaryModeBanner,
   resolveDiaryInteractionMode,
@@ -797,6 +801,116 @@ export default function SiteDiaryPage() {
   const [carriedDelaysIssues, setCarriedDelaysIssues] = useState(false)
   const [projectReference, setProjectReference] = useState('')
   const [setupLogoPreview, setSetupLogoPreview] = useState(null)
+  const [projectDetailsExpanded, setProjectDetailsExpanded] = useState(
+    () => searchParams.get('details') === 'open',
+  )
+
+  const showInlineProjectDetails = Boolean(editingReportId) && diaryMode !== 'compose'
+
+  const workbenchProjectDetailsSeed = useMemo(() => {
+    if (!showInlineProjectDetails || !hydrateComplete || !project) return null
+    const reportRow = lastPersistedReportRef.current
+    if (!reportRow) return null
+    return buildWorkbenchProjectDetailsSeed({
+      projectRow: project,
+      reportRow,
+      projectReference,
+      creatorName,
+      creatorRole,
+      companyReportingFor,
+      shiftType,
+      reportDate,
+      coverPhoto,
+      logoPreview: setupLogoPreview,
+      brandingSelection,
+      projectId,
+      reportId: editingReportId,
+    })
+  }, [
+    showInlineProjectDetails,
+    hydrateComplete,
+    project,
+    editingReportId,
+    projectId,
+    projectReference,
+    creatorName,
+    creatorRole,
+    companyReportingFor,
+    shiftType,
+    reportDate,
+    coverPhoto,
+    setupLogoPreview,
+    brandingSelection,
+  ])
+
+  const handleInlineProjectDetailsPersistSuccess = useCallback((payload) => {
+    const sync = applyProjectDetailsPersistToWorkbench(payload)
+    setCreatorName(sync.creatorName)
+    setCreatorRole(sync.creatorRole)
+    setCompanyReportingFor(sync.companyReportingFor)
+    setShiftType(sync.shiftType)
+    setReportDate(sync.reportDate)
+    setProjectReference(sync.projectReference)
+    setBrandingSelection(sync.brandingSelection)
+    if (sync.logoPreviewUrl) setSetupLogoPreview(sync.logoPreviewUrl)
+    if (sync.coverPhoto !== undefined) {
+      coverPhotoRef.current = sync.coverPhoto
+      setCoverPhoto(sync.coverPhoto)
+      loadedCoverPathRef.current = sync.coverPhoto?.storagePath || loadedCoverPathRef.current
+    }
+    if (project && sync.projectRowPatch) {
+      setProject({
+        ...project,
+        name: sync.projectRowPatch.name || project.name,
+        start_date: sync.projectRowPatch.start_date ?? project.start_date,
+        planned_completion_date: sync.projectRowPatch.planned_completion_date ?? project.planned_completion_date,
+        site_address: sync.projectRowPatch.site_address ?? project.site_address,
+        client_pm: sync.projectRowPatch.client_pm ?? project.client_pm,
+        working_days_per_week: sync.projectRowPatch.working_days_per_week ?? project.working_days_per_week,
+        project_reference: sync.projectRowPatch.project_reference ?? project.project_reference,
+      })
+    }
+    if (lastPersistedReportRef.current) {
+      lastPersistedReportRef.current = {
+        ...lastPersistedReportRef.current,
+        creator_name: sync.creatorName,
+        creator_role: sync.creatorRole,
+        company_reporting_for: sync.companyReportingFor,
+        shift: sync.shiftType,
+        report_date: sync.reportDate,
+        current_phase: sync.currentPhase,
+        branding_id: sync.brandingSelection?.brandingId ?? lastPersistedReportRef.current.branding_id,
+        brand_color: sync.brandingSelection?.brandColor ?? lastPersistedReportRef.current.brand_color,
+        brand_logo_url: sync.brandingSelection?.brandLogoUrl ?? lastPersistedReportRef.current.brand_logo_url,
+        cover_photo_url: sync.coverPhoto?.storagePath ?? lastPersistedReportRef.current.cover_photo_url,
+      }
+    }
+    invalidatePreparedSharePdf('committed-diary-change')
+    setProjectDetailsExpanded(false)
+  }, [invalidatePreparedSharePdf, project])
+
+  const inlineProjectDetailsHydrateEnabled = showInlineProjectDetails
+    && isDiaryEditMode
+    && projectDetailsExpanded
+    && hydrateComplete
+
+  const {
+    loading: inlineProjectDetailsLoading,
+    saving: inlineProjectDetailsSaving,
+    error: inlineProjectDetailsError,
+    persistProjectDetails,
+    detailsTouchedRef: inlineProjectDetailsTouchedRef,
+    sectionProps: inlineProjectDetailsSectionProps,
+  } = useSiteDiaryProjectDetailsController({
+    supabase,
+    router,
+    editingReportId: showInlineProjectDetails ? editingReportId : null,
+    editingProjectId: projectId,
+    hostMode: 'workbench',
+    hydrateEnabled: inlineProjectDetailsHydrateEnabled,
+    workbenchSeed: workbenchProjectDetailsSeed,
+    onPersistSuccess: handleInlineProjectDetailsPersistSuccess,
+  })
 
   const openReportForm = useCallback((reportId, { mode = 'view', reportDate: entryDate = null } = {}) => {
     const href =
@@ -2912,16 +3026,12 @@ export default function SiteDiaryPage() {
     persistUiErrorRef.current = ''
     setJustSaved(false)
     setShowSaveBanner(false)
-    const href = isTodaysDiary(reportDate)
-      ? projectAndReportDetailsHref(projectId, editingReportId)
-      : diaryEditHref(projectId, editingReportId)
+    const href = diaryEditHref(projectId, editingReportId)
     if (href) router.replace(href)
-    // Re-load canonical saved Cover Photo + Project Reference (not stale client blanks).
     markDiaryHydrationTiming('hydration-mode-transition', {
       to: 'edit',
       reportId: editingReportId,
     })
-    setFormReloadToken((n) => n + 1)
   }
 
   const handleCancelEditMode = () => {
@@ -4240,11 +4350,7 @@ export default function SiteDiaryPage() {
     )
   }
 
-  // Contextual Back → same-diary Project Details (not hub). Hub only if report id missing.
-  const workbenchBackHref =
-    projectAndReportDetailsHref(projectId, editingReportId)
-    || diaryHubHref({ projectId })
-    || '/dashboard/diary'
+  const workbenchBackHref = diaryHubHref({ projectId }) || '/dashboard/diary'
 
   const autosaveStatusCopy = visibleDiaryAutosaveStatusCopy({
     error: visiblePageError,
@@ -4369,7 +4475,37 @@ export default function SiteDiaryPage() {
         </div>
       )}
 
-      {(project?.name || reportDate) && (
+      {(project?.name || reportDate) && showInlineProjectDetails ? (
+        <SiteDiaryWorkbenchProjectDetails
+          summary={{
+            projectName: linkedProject.projectName || project?.name || 'Project',
+            projectReference,
+            reportDateDisplay: reportDate
+              ? new Date(`${reportDate}T12:00:00`).toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })
+              : '',
+            shiftLabel: shiftType ? `${shiftType} Shift` : '',
+            reportingCompany: inlineProjectDetailsExpanded && !inlineProjectDetailsLoading
+              ? (inlineProjectDetailsSectionProps?.reportingCompany || '')
+              : '',
+            logoPreview: setupLogoPreview,
+          }}
+          expanded={isDiaryEditMode && projectDetailsExpanded}
+          onToggleExpanded={isDiaryEditMode
+            ? () => setProjectDetailsExpanded((open) => !open)
+            : null}
+          sectionProps={inlineProjectDetailsSectionProps}
+          onSaveProjectDetails={persistProjectDetails}
+          saving={inlineProjectDetailsSaving}
+          loading={inlineProjectDetailsLoading}
+          error={inlineProjectDetailsError}
+          detailsTouchedRef={inlineProjectDetailsTouchedRef}
+          editingReportId={editingReportId}
+        />
+      ) : (project?.name || reportDate) ? (
         <div
           style={{
             background: 'var(--plate)',
@@ -4417,17 +4553,8 @@ export default function SiteDiaryPage() {
               </p>
             </div>
           </div>
-          {isDiaryEditMode ? (
-            <SecondaryButton
-              type="button"
-              href={projectAndReportDetailsHref(projectId, editingReportId) || undefined}
-              style={{ width: '100%', minHeight: 48, marginTop: 12 }}
-            >
-              {'Review / Edit Project & Report Details'}
-            </SecondaryButton>
-          ) : null}
         </div>
-      )}
+      ) : null}
 
       <form
         method="post"

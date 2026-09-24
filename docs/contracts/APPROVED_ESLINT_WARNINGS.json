@@ -39,6 +39,13 @@
       "classification": "no-img-element"
     },
     {
+      "file": "components/site-diary/SiteDiaryProjectDetailsSection.jsx",
+      "rule": "@next/next/no-img-element",
+      "messageKey": "no-img-element",
+      "sourceHint": "<img src={logoPreview} alt=\"\" style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 8,",
+      "classification": "no-img-element"
+    },
+    {
       "file": "app/dashboard/page.jsx",
       "rule": "react-hooks/exhaustive-deps",
       "messageKey": "supabase",

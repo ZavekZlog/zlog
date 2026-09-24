@@ -22,14 +22,14 @@
       "label": "Project & Report Details",
       "files": [
         "app/dashboard/diary/setup/page.jsx",
-        "app/dashboard/project/[id]/diary/page.jsx"
+        "components/site-diary/SiteDiaryProjectDetailsSection.jsx"
       ]
     },
     {
       "id": "COPY-REVIEW-EDIT-PROJECT-REPORT-DETAILS",
       "label": "Review / Edit Project & Report Details",
-      "files": ["app/dashboard/project/[id]/diary/page.jsx"],
-      "notes": "Workbench action back to the pre-flight screen — says the details already exist and may be amended."
+      "files": ["components/site-diary/SiteDiaryProjectDetailsSection.jsx"],
+      "notes": "Workbench inline expand — existing diary project/report details on the same mounted workbench."
     },
     {
       "id": "COPY-TODAYS-SITE-DIARY",

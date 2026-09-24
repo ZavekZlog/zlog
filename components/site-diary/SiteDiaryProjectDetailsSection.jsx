@@ -3,6 +3,7 @@
 import {
   GlassSection,
   SecondaryButton,
+  PrimaryCTA,
   labelStyle,
   inputStyle,
   DIARY_ACCENT,
@@ -568,5 +569,133 @@ export function SiteDiaryProjectDetailsSection(props) {
       </GlassSection>
     
     </>
+  )
+}
+
+/**
+ * Inline Project Details on the Site Diary workbench — compact summary + expandable editor.
+ */
+export function SiteDiaryWorkbenchProjectDetails({
+  summary = {},
+  expanded = false,
+  onToggleExpanded,
+  sectionProps,
+  onSaveProjectDetails,
+  saving = false,
+  loading = false,
+  error = '',
+  detailsTouchedRef,
+  editingReportId,
+}) {
+  const {
+    projectName = '',
+    projectReference = '',
+    reportDateDisplay = '',
+    shiftLabel = '',
+    reportingCompany = '',
+    logoPreview = null,
+  } = summary
+
+  const summaryLine = [
+    reportDateDisplay,
+    shiftLabel,
+    projectReference,
+    reportingCompany,
+  ].filter(Boolean).join(' · ')
+
+  return (
+    <div
+      style={{
+        background: 'var(--plate)',
+        border: '1px solid var(--edge)',
+        borderRadius: 12,
+        padding: '14px 16px',
+        marginBottom: 16,
+        boxShadow: 'inset 0 1px 0 var(--edge-highlight)',
+      }}
+    >
+      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+        {logoPreview ? (
+          <img
+            src={logoPreview}
+            alt=""
+            style={{
+              width: 48,
+              height: 48,
+              objectFit: 'contain',
+              borderRadius: 8,
+              background: 'color-mix(in srgb, var(--ink) 40%, var(--plate))',
+              border: '1px solid var(--edge)',
+              flexShrink: 0,
+              padding: 4,
+            }}
+          />
+        ) : null}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3 }}>
+            {projectName || 'Project'}
+          </p>
+          {summaryLine ? (
+            <p style={{ margin: '6px 0 0', fontSize: 14, color: 'color-mix(in srgb, var(--text) 82%, var(--text-2))', lineHeight: 1.45 }}>
+              {summaryLine}
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      {typeof onToggleExpanded === 'function' ? (
+        <SecondaryButton
+          type="button"
+          onClick={onToggleExpanded}
+          style={{ width: '100%', minHeight: 48, marginTop: 12 }}
+          aria-expanded={expanded}
+        >
+          {expanded ? 'Hide Project & Report Details' : 'Review / Edit Project & Report Details'}
+        </SecondaryButton>
+      ) : null}
+
+      {expanded ? (
+        <div
+          style={{ marginTop: 16 }}
+          onChange={() => {
+            if (editingReportId && detailsTouchedRef) detailsTouchedRef.current = true
+          }}
+        >
+          {loading ? (
+            <p style={{ color: 'var(--text-2)', fontSize: 16, margin: '0 0 12px' }}>Loading…</p>
+          ) : null}
+          {!loading ? (
+          <>
+          {error ? (
+            <div
+              role="alert"
+              style={{
+                background: 'rgba(220,50,50,0.1)',
+                border: '1px solid rgba(220,50,50,0.3)',
+                color: '#ff6b6b',
+                padding: '12px 14px',
+                fontSize: 14,
+                marginBottom: 16,
+                borderRadius: 10,
+                lineHeight: 1.45,
+              }}
+            >
+              {error}
+            </div>
+          ) : null}
+          <SiteDiaryProjectDetailsSection {...sectionProps} />
+          <PrimaryCTA
+            type="button"
+            onClick={onSaveProjectDetails}
+            disabled={saving}
+            style={{ minHeight: 52, fontSize: 16, marginTop: 8, marginBottom: 4 }}
+          >
+            {saving ? 'Saving project details…' : 'Save Project & Report Details'}
+          </PrimaryCTA>
+          </>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   )
 }
