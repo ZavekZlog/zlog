@@ -287,16 +287,32 @@ function SiteDiarySetupPage() {
   const userChangedLogoRef = useRef(false)
   const userChangedCoverRef = useRef(false)
   const [reportingCompanyManuallyEdited, setReportingCompanyManuallyEdited] = useState(false)
+  const reportingCompanyManuallyEditedRef = useRef(false)
   const [namePrefilledFromLogo, setNamePrefilledFromLogo] = useState(false)
+  const [logoSuggestedCompanyName, setLogoSuggestedCompanyName] = useState(null)
+  const [showLogoCompanyManualHint, setShowLogoCompanyManualHint] = useState(false)
 
   const existingProjects = useMemo(
     () => (projects || []).filter((p) => p?.id && p?.name),
     [projects],
   )
 
+  useEffect(() => {
+    reportingCompanyManuallyEditedRef.current = reportingCompanyManuallyEdited
+  }, [reportingCompanyManuallyEdited])
+
   const persistForm = useCallback((next) => {
     writeSetupFormDraft(next)
   }, [])
+
+  const applyLogoSuggestedCompanyName = () => {
+    const suggested = String(logoSuggestedCompanyName || '').trim()
+    if (!suggested) return
+    setReportingCompany(suggested)
+    setNamePrefilledFromLogo(true)
+    setLogoSuggestedCompanyName(null)
+    setShowLogoCompanyManualHint(false)
+  }
 
   const applyFormSnapshot = useCallback((snapshot) => {
     if (!snapshot) return
@@ -788,17 +804,37 @@ function SiteDiarySetupPage() {
     setLogoPreview(previewUrl)
     setLogoStoragePath(null)
 
-    if (!reportingCompanyManuallyEdited) {
+    setLogoSuggestedCompanyName(null)
+    setShowLogoCompanyManualHint(false)
+
+    if (!reportingCompanyManuallyEditedRef.current) {
       try {
         const analyzed = await fetchBrandCompanyNameAnalysis(nextLogoFile)
-        if (analyzed.confidence === 'high' && analyzed.company_name) {
-          setReportingCompany(analyzed.company_name)
+        if (reportingCompanyManuallyEditedRef.current) return
+
+        const detectedName = analyzed.company_name != null
+          ? String(analyzed.company_name).trim()
+          : ''
+
+        if (analyzed.confidence === 'high' && detectedName) {
+          setReportingCompany(detectedName)
           setNamePrefilledFromLogo(true)
+          setLogoSuggestedCompanyName(null)
+          setShowLogoCompanyManualHint(false)
+        } else if (analyzed.confidence === 'medium' && detectedName) {
+          setNamePrefilledFromLogo(false)
+          setLogoSuggestedCompanyName(detectedName)
+          setShowLogoCompanyManualHint(false)
         } else {
           setNamePrefilledFromLogo(false)
+          setLogoSuggestedCompanyName(null)
+          setShowLogoCompanyManualHint(true)
         }
       } catch {
+        if (reportingCompanyManuallyEditedRef.current) return
         setNamePrefilledFromLogo(false)
+        setLogoSuggestedCompanyName(null)
+        setShowLogoCompanyManualHint(true)
       }
     }
   }
@@ -1261,7 +1297,10 @@ function SiteDiarySetupPage() {
             onChange={(e) => {
               setReportingCompany(e.target.value)
               setReportingCompanyManuallyEdited(true)
+              reportingCompanyManuallyEditedRef.current = true
               setNamePrefilledFromLogo(false)
+              setLogoSuggestedCompanyName(null)
+              setShowLogoCompanyManualHint(false)
             }}
             placeholder="Your company name"
             autoComplete="organization"
@@ -1272,6 +1311,44 @@ function SiteDiarySetupPage() {
         {namePrefilledFromLogo && reportingCompany ? (
           <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 12px' }}>
             Detected from your logo — edit if needed.
+          </p>
+        ) : null}
+        {logoSuggestedCompanyName && !reportingCompanyManuallyEdited ? (
+          <p
+            style={{
+              fontSize: 15,
+              color: 'var(--text-2)',
+              margin: '0 0 12px',
+              lineHeight: 1.45,
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: '8px 10px',
+            }}
+          >
+            <span>Logo suggests {logoSuggestedCompanyName}</span>
+            <button
+              type="button"
+              onClick={applyLogoSuggestedCompanyName}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                fontSize: 15,
+                fontWeight: 600,
+                color: DIARY_ACCENT,
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                textUnderlineOffset: 2,
+              }}
+            >
+              Use {logoSuggestedCompanyName}
+            </button>
+          </p>
+        ) : null}
+        {showLogoCompanyManualHint && !reportingCompanyManuallyEdited ? (
+          <p style={{ fontSize: 14, color: 'var(--text-3)', margin: '0 0 12px', lineHeight: 1.45 }}>
+            Company name wasn&apos;t detected — you can enter it manually.
           </p>
         ) : null}
 
