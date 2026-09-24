@@ -22,6 +22,58 @@ export { brandingPayload }
 
 const DEFAULT_BRAND_COLOR = '#FF5000'
 
+const brandingHowToDetailsStyle = {
+  marginBottom: 16,
+  border: '1px solid var(--edge)',
+  borderRadius: 10,
+  background: 'var(--plate)',
+  padding: '10px 12px',
+  fontSize: 16,
+  lineHeight: 1.45,
+  color: 'var(--text-2)',
+}
+
+function BrandingHowToDisclosure() {
+  return (
+    <details style={brandingHowToDetailsStyle}>
+      <summary
+        style={{
+          cursor: 'pointer',
+          fontSize: 15,
+          fontWeight: 600,
+          color: 'var(--text)',
+          listStyle: 'none',
+        }}
+      >
+        How to add your company branding
+      </summary>
+      <div style={{ marginTop: 10 }}>
+        <p style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600, color: 'var(--text)' }}>
+          Adding your branding
+        </p>
+        <ol style={{ margin: '0 0 10px', paddingLeft: 20, fontSize: 'inherit' }}>
+          <li style={{ marginBottom: 6 }}>
+            Use a clear image containing your company logo — a website, letterhead or document works well.
+          </li>
+          <li style={{ marginBottom: 6 }}>
+            Crop reasonably close to the logo. Avoid images containing several different logos.
+          </li>
+          <li style={{ marginBottom: 6 }}>
+            Upload it here. Zlog will identify the branding colour and, where possible, the company name.
+          </li>
+          <li style={{ marginBottom: 6 }}>
+            Check the preview and company name. You can edit either if needed.
+          </li>
+          <li style={{ marginBottom: 0 }}>Save. Your branding will then be applied to your report.</li>
+        </ol>
+        <p style={{ margin: 0, fontSize: 14, color: 'var(--text-3)' }}>
+          Tip: A clear logo on a plain background gives the best result.
+        </p>
+      </div>
+    </details>
+  )
+}
+
 /**
  * Loads company_brandings for the signed-in user and renders a Report Branding selector.
  * value shape: { brandingId, brandColor, brandLogoUrl, companyName } | null
@@ -317,7 +369,7 @@ export function BrandingSelector({
             onFiles={(files) => handleLogoPicked(files[0] || null)}
             hint="We extract the primary brand colour from the image automatically."
           />
-          <div style={{ height: 8 }} />
+          <BrandingHowToDisclosure />
 
           {(logoPreview || extracting) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
