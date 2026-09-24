@@ -21,6 +21,7 @@ import { extractBrandColorFromFile } from '@/lib/extract-brand-color'
 import {
   prepareBrandLogoFile,
   fetchBrandCompanyNameAnalysis,
+  classifyLogoPresentationFromImageUrl,
 } from '@/lib/prepare-brand-logo-image'
 import { ProjectDatesFields } from '@/components/project/ProjectDatesFields'
 import { ProjectStickyFields } from '@/components/project/ProjectStickyFields'
@@ -115,6 +116,8 @@ const logoControlButtonStyle = {
 }
 
 const SETUP_BRAND_COLOR_FALLBACK = '#4B5563'
+
+const LOGO_PREVIEW_BACKDROP_FALLBACK = 'color-mix(in srgb, var(--plate) 70%, var(--ink))'
 
 const brandingHowToDetailsStyle = {
   marginBottom: 14,
@@ -271,6 +274,7 @@ function SiteDiarySetupPage() {
 
   const [logoFile, setLogoFile] = useState(null)
   const [logoPreview, setLogoPreview] = useState(null)
+  const [logoPreviewBackdrop, setLogoPreviewBackdrop] = useState(null)
   const [logoStoragePath, setLogoStoragePath] = useState(null)
   const [logoObjectUrl, setLogoObjectUrl] = useState(null)
   const [brandingId, setBrandingId] = useState(null)
@@ -328,6 +332,20 @@ function SiteDiarySetupPage() {
     if (!suggested) return
     applyDetectedReportingCompanyName(suggested)
   }
+
+  useEffect(() => {
+    if (!logoPreview) return undefined
+
+    let cancelled = false
+    classifyLogoPresentationFromImageUrl(logoPreview).then((presentation) => {
+      if (cancelled) return
+      setLogoPreviewBackdrop(presentation?.backdropColor || null)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [logoPreview])
 
   const applyFormSnapshot = useCallback((snapshot) => {
     if (!snapshot) return
@@ -814,6 +832,7 @@ function SiteDiarySetupPage() {
     const nextLogoFile = prepared.file || file
     const previewUrl = prepared.previewUrl || URL.createObjectURL(nextLogoFile)
 
+    setLogoPreviewBackdrop(prepared.presentation?.backdropColor || null)
     setLogoObjectUrl(previewUrl)
     setLogoFile(nextLogoFile)
     setLogoPreview(previewUrl)
@@ -860,6 +879,7 @@ function SiteDiarySetupPage() {
     setLogoObjectUrl(null)
     setLogoFile(null)
     setLogoPreview(null)
+    setLogoPreviewBackdrop(null)
     setLogoStoragePath(null)
   }
 
@@ -1386,23 +1406,25 @@ function SiteDiarySetupPage() {
         {logoPreview ? (
           <div
             style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(0, 1.75fr) minmax(0, 0.85fr)',
+              display: 'flex',
+              flexWrap: 'wrap',
               gap: 10,
-              alignItems: 'stretch',
+              alignItems: 'flex-start',
               marginBottom: 14,
             }}
           >
             <div
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: 92,
+                display: 'inline-flex',
+                width: 'fit-content',
+                maxWidth: '100%',
+                maxHeight: 92,
+                height: 'fit-content',
                 borderRadius: 12,
-                background: brandColor || 'color-mix(in srgb, var(--plate) 70%, var(--ink))',
                 border: '1px solid var(--edge)',
                 overflow: 'hidden',
+                flexShrink: 0,
+                background: logoPreviewBackdrop || LOGO_PREVIEW_BACKDROP_FALLBACK,
               }}
             >
               <img
@@ -1425,6 +1447,8 @@ function SiteDiarySetupPage() {
                 gap: 8,
                 height: 92,
                 minHeight: 92,
+                minWidth: 108,
+                flex: '1 1 108px',
               }}
             >
               <div style={{ position: 'relative', minHeight: 0 }}>
