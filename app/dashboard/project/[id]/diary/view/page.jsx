@@ -12,6 +12,9 @@
  */
 
 import { Suspense, useEffect, useRef, useState } from 'react'
+
+/** Re-warm Edit workbench prefetch after long saved-viewer dwell (Next route cache TTL). */
+const EDIT_PREFETCH_FRESHNESS_MS = 60_000
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { CopyPlus, Pencil, Share2, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -415,6 +418,24 @@ function SavedDiaryViewer() {
   const attendancePreviewUrlRef = useRef(null)
   const viewerReadyAtRef = useRef(null)
   const editPrefetchHrefRef = useRef(null)
+  const editPrefetchIssuedAtRef = useRef(0)
+  const editPrefetchTtlTimerRef = useRef(null)
+  const issueEditWorkbenchPrefetchRef = useRef(null)
+
+  const clearEditPrefetchTtlTimer = () => {
+    const timerId = editPrefetchTtlTimerRef.current
+    if (timerId != null) {
+      clearTimeout(timerId)
+      editPrefetchTtlTimerRef.current = null
+    }
+  }
+
+  const isEditPrefetchFresh = (href) => {
+    if (!href || editPrefetchHrefRef.current !== href) return false
+    const issuedAt = editPrefetchIssuedAtRef.current
+    if (!issuedAt) return false
+    return Date.now() - issuedAt < EDIT_PREFETCH_FRESHNESS_MS
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -516,52 +537,113 @@ function SavedDiaryViewer() {
 
   // Warm Edit workbench route/chunks while the user reads the saved diary (no navigation).
   useEffect(() => {
-    if (loading || !view?.reportId || !view?.projectId) return
-    if (typeof router.prefetch !== 'function') return
+    const issuePrefetch = (href, reason) => {
+      if (!href || typeof router.prefetch !== 'function') return
+      if (!view?.reportId || !view?.projectId) return
+
+      const viewerReadyAt = viewerReadyAtRef.current ?? Date.now()
+      const diagBase = {
+        reportId: view.reportId,
+        projectId: view.projectId,
+        surface: 'saved-diary-view',
+        reason,
+      }
+      const elapsedSinceViewerReady = () => Math.max(0, Date.now() - viewerReadyAt)
+
+      emitShareDiag('edit-prefetch-start', {
+        ...diagBase,
+        elapsedMs: elapsedSinceViewerReady(),
+      })
+
+      const logPrefetchComplete = () => {
+        emitShareDiag('edit-prefetch-complete', {
+          ...diagBase,
+          elapsedMs: elapsedSinceViewerReady(),
+        })
+      }
+
+      try {
+        const maybePromise = router.prefetch(href)
+        if (maybePromise != null && typeof maybePromise.then === 'function') {
+          void maybePromise.then(logPrefetchComplete).catch(logPrefetchComplete)
+        } else {
+          emitShareDiag('edit-prefetch-issued', {
+            ...diagBase,
+            elapsedMs: elapsedSinceViewerReady(),
+          })
+        }
+      } catch {
+        emitShareDiag('edit-prefetch-issued', {
+          ...diagBase,
+          elapsedMs: elapsedSinceViewerReady(),
+        })
+      }
+
+      editPrefetchHrefRef.current = href
+      editPrefetchIssuedAtRef.current = Date.now()
+
+      clearEditPrefetchTtlTimer()
+      editPrefetchTtlTimerRef.current = setTimeout(() => {
+        if (editPrefetchHrefRef.current !== href) return
+        if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+        if (isEditPrefetchFresh(href)) return
+        issuePrefetch(href, 'ttl-refresh')
+      }, EDIT_PREFETCH_FRESHNESS_MS)
+    }
+
+    issueEditWorkbenchPrefetchRef.current = issuePrefetch
+
+    if (loading || !view?.reportId || !view?.projectId) {
+      return () => {
+        clearEditPrefetchTtlTimer()
+        issueEditWorkbenchPrefetchRef.current = null
+      }
+    }
 
     const href = editExistingDiaryHref({
       projectId: view.projectId,
       reportId: view.reportId,
       reportDate: view.reportDate,
     })
-    if (!href || editPrefetchHrefRef.current === href) return
-    editPrefetchHrefRef.current = href
 
-    const viewerReadyAt = viewerReadyAtRef.current ?? Date.now()
-    const diagBase = {
-      reportId: view.reportId,
-      projectId: view.projectId,
-      surface: 'saved-diary-view',
-    }
-    const elapsedSinceViewerReady = () => Math.max(0, Date.now() - viewerReadyAt)
-
-    emitShareDiag('edit-prefetch-start', {
-      ...diagBase,
-      elapsedMs: elapsedSinceViewerReady(),
-    })
-
-    const logPrefetchComplete = () => {
-      emitShareDiag('edit-prefetch-complete', {
-        ...diagBase,
-        elapsedMs: elapsedSinceViewerReady(),
-      })
-    }
-
-    try {
-      const maybePromise = router.prefetch(href)
-      if (maybePromise != null && typeof maybePromise.then === 'function') {
-        void maybePromise.then(logPrefetchComplete).catch(logPrefetchComplete)
-      } else {
-        emitShareDiag('edit-prefetch-issued', {
-          ...diagBase,
-          elapsedMs: elapsedSinceViewerReady(),
-        })
+    if (!href) {
+      return () => {
+        clearEditPrefetchTtlTimer()
+        issueEditWorkbenchPrefetchRef.current = null
       }
-    } catch {
-      emitShareDiag('edit-prefetch-issued', {
-        ...diagBase,
-        elapsedMs: elapsedSinceViewerReady(),
-      })
+    }
+
+    if (editPrefetchHrefRef.current !== href) {
+      clearEditPrefetchTtlTimer()
+      editPrefetchIssuedAtRef.current = 0
+    }
+
+    if (!isEditPrefetchFresh(href)) {
+      const reason =
+        editPrefetchIssuedAtRef.current === 0 || editPrefetchHrefRef.current !== href
+          ? 'initial'
+          : 'ttl-refresh'
+      issuePrefetch(href, reason)
+    }
+
+    const onVisibilityChange = () => {
+      if (typeof document === 'undefined' || document.visibilityState !== 'visible') return
+      const activeHref = editPrefetchHrefRef.current
+      if (!activeHref) return
+      if (isEditPrefetchFresh(activeHref)) return
+      issuePrefetch(activeHref, 'visibility-refresh')
+    }
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityChange)
+    }
+
+    return () => {
+      clearEditPrefetchTtlTimer()
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityChange)
+      }
+      issueEditWorkbenchPrefetchRef.current = null
     }
   }, [loading, view, router])
 
@@ -1080,6 +1162,9 @@ function SavedDiaryViewer() {
                     hydrationSessionId,
                     elapsedMs: Math.max(0, Date.now() - tapStartedAtMs),
                   })
+                  if (editHref && !isEditPrefetchFresh(editHref)) {
+                    issueEditWorkbenchPrefetchRef.current?.(editHref, 'edit-stale-refresh')
+                  }
                   router.push(editHref)
                 } catch {
                   setEditBusy(false)
