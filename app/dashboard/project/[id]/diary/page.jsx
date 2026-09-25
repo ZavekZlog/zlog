@@ -1058,7 +1058,16 @@ export default function SiteDiaryPage() {
           hydrationSessionId: editNavTiming?.hydrationSessionId || null,
         })
 
+        markDiaryHydrationTiming('project-hydrate-start', {
+          progressiveEdit,
+          progressiveCompose,
+        })
         const proj = await fetchProjectRowForEditHydrate(supabase, projectId)
+        markDiaryHydrationTiming('project-hydrate-end', {
+          progressiveEdit,
+          progressiveCompose,
+          ok: Boolean(proj),
+        })
 
         const allProjectsPromise = progressiveCompose
           ? supabase
@@ -1078,10 +1087,20 @@ export default function SiteDiaryPage() {
 
         // Edit Workbench does not consume the selector list — do not fetch it.
         if (!progressiveCompose && !progressiveEdit) {
+          markDiaryHydrationTiming('project-selector-fetch-start', {
+            progressiveEdit,
+            progressiveCompose,
+          })
           const { data: allProjects } = await supabase
             .from('projects')
             .select(diaryProjectSelectorSelectColumns())
             .order('name')
+          markDiaryHydrationTiming('project-selector-fetch-end', {
+            progressiveEdit,
+            progressiveCompose,
+            rowCount: (allProjects || []).length,
+            ok: true,
+          })
           if (cancelled) return
           setProjects(allProjects || [])
         }
@@ -1242,6 +1261,10 @@ export default function SiteDiaryPage() {
           }),
         })
 
+        markDiaryHydrationTiming('report-row-fetch-start', {
+          progressiveEdit,
+          progressiveCompose,
+        })
         const { data: existing, error: existingError } = await withTimeout(
           supabase
             .from('daily_reports')
@@ -1252,6 +1275,11 @@ export default function SiteDiaryPage() {
           DIARY_WORKBENCH_LOAD_TIMEOUT_MS,
           'daily_reports-timeout',
         )
+        markDiaryHydrationTiming('report-row-fetch-end', {
+          progressiveEdit,
+          progressiveCompose,
+          ok: !existingError && Boolean(existing),
+        })
 
         if (cancelled) return
 
