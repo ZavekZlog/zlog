@@ -243,6 +243,21 @@ const SiteDiaryWorkbenchProjectDetailsEditor = dynamic(
   },
 )
 
+const SITE_DIARY_EDIT_NAV_TIMING_KEY = 'zlog.siteDiary.editNavTiming.v1'
+
+function readSavedDiaryEditNavTiming(reportId) {
+  if (typeof window === 'undefined' || !reportId) return null
+  try {
+    const raw = sessionStorage.getItem(SITE_DIARY_EDIT_NAV_TIMING_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || parsed.reportId !== reportId) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
 const makeUuid = () => {
   const c = globalThis.crypto;
   if (c?.randomUUID) return c.randomUUID();
@@ -1020,6 +1035,19 @@ export default function SiteDiaryPage() {
         const progressiveEdit =
           editFlag === '1' || editFlag === 'true' || editFlag === 'edit'
 
+        const editNavTiming = progressiveEdit
+          ? readSavedDiaryEditNavTiming(editingReportId)
+          : null
+        if (editNavTiming?.hydrationSessionId && editNavTiming.tapStartedAtMs) {
+          emitShareDiag('edit-workbench-client-entry', {
+            reportId: editingReportId,
+            projectId,
+            surface: 'workbench',
+            hydrationSessionId: editNavTiming.hydrationSessionId,
+            elapsedMs: Math.max(0, Date.now() - editNavTiming.tapStartedAtMs),
+          })
+        }
+
         beginDiaryHydrationTiming({
           surface: 'workbench',
           reportId: editingReportId,
@@ -1027,6 +1055,7 @@ export default function SiteDiaryPage() {
           mode: progressiveEdit ? 'edit' : progressiveCompose ? 'compose' : 'legacy',
           progressiveCompose,
           progressiveEdit,
+          hydrationSessionId: editNavTiming?.hydrationSessionId || null,
         })
 
         const proj = await fetchProjectRowForEditHydrate(supabase, projectId)

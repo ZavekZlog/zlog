@@ -52,6 +52,8 @@ import {
   snapshotUserActivation,
 } from '@/lib/diary-share'
 import { emitShareDiag } from '@/lib/share-diag-beacon'
+
+const SITE_DIARY_EDIT_NAV_TIMING_KEY = 'zlog.siteDiary.editNavTiming.v1'
 import { runShareCapabilityProbe } from '@/lib/share-capability-probe'
 import {
   fingerprintFromSavedDiaryView,
@@ -984,7 +986,31 @@ function SavedDiaryViewer() {
               onClick={() => {
                 if (editBusy) return
                 setEditBusy(true)
+                const tapStartedAtMs = Date.now()
+                const hydrationSessionId = `${tapStartedAtMs}-${Math.random().toString(36).slice(2, 9)}`
+                const editNavReportId = view.reportId
+                const editNavProjectId = view.projectId
                 try {
+                  try {
+                    sessionStorage.setItem(
+                      SITE_DIARY_EDIT_NAV_TIMING_KEY,
+                      JSON.stringify({
+                        hydrationSessionId,
+                        tapStartedAtMs,
+                        reportId: editNavReportId,
+                        projectId: editNavProjectId,
+                      }),
+                    )
+                  } catch {
+                    /* diagnostic only */
+                  }
+                  emitShareDiag('edit-navigation-start', {
+                    reportId: editNavReportId,
+                    projectId: editNavProjectId,
+                    surface: 'saved-diary-view',
+                    hydrationSessionId,
+                    elapsedMs: 0,
+                  })
                   const seed = sdscSeedRef.current
                   if (seed) {
                     try {
@@ -993,6 +1019,13 @@ function SavedDiaryViewer() {
                       /* shadow isolation — fail closed to existing Edit navigation */
                     }
                   }
+                  emitShareDiag('edit-navigation-router-push', {
+                    reportId: editNavReportId,
+                    projectId: editNavProjectId,
+                    surface: 'saved-diary-view',
+                    hydrationSessionId,
+                    elapsedMs: Math.max(0, Date.now() - tapStartedAtMs),
+                  })
                   router.push(editHref)
                 } catch {
                   setEditBusy(false)
@@ -1003,7 +1036,7 @@ function SavedDiaryViewer() {
             >
               <Pencil size={15} strokeWidth={2.25} aria-hidden className="zlog-secondary-cta__icon" />
               <span className="zlog-secondary-cta__label">
-                {editBusy ? 'Opening diary…' : 'Edit This Diary'}
+                {editBusy ? 'Opening diary for editing…' : 'Edit This Diary'}
               </span>
             </SecondaryButton>
           ) : null}
