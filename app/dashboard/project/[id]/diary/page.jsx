@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { flushSync } from 'react-dom'
 import SignaturePad from 'signature_pad'
 import { createClient } from '@/lib/supabase/client'
@@ -229,6 +230,18 @@ import {
   loginUrlWithReturn,
   SESSION_EXPIRED_SAVE_MESSAGE,
 } from '@/lib/auth/return-path'
+
+const SiteDiaryWorkbenchProjectDetailsEditor = dynamic(
+  () => import('@/components/site-diary/SiteDiaryWorkbenchProjectDetailsEditor'),
+  {
+    loading: () => (
+      <p style={{ color: 'var(--text-2)', fontSize: 16, margin: '0 0 16px' }}>
+        Loading Project Details…
+      </p>
+    ),
+    ssr: false,
+  },
+)
 
 const makeUuid = () => {
   const c = globalThis.crypto;
@@ -795,7 +808,61 @@ export default function SiteDiaryPage() {
   const [carriedDelaysIssues, setCarriedDelaysIssues] = useState(false)
   const [projectReference, setProjectReference] = useState('')
   const [setupLogoPreview, setSetupLogoPreview] = useState(null)
-  // DIAGNOSTIC (S10): Unit 2 inline Project Details removed from workbench bundle — isolation build only.
+  const [projectDetailsExpanded, setProjectDetailsExpanded] = useState(
+    () => searchParams.get('details') === 'open',
+  )
+
+  const showInlineProjectDetails = Boolean(editingReportId) && diaryMode !== 'compose'
+
+  const getPersistedReportRow = useCallback(() => lastPersistedReportRef.current, [])
+
+  const handleWorkbenchProjectDetailsSync = useCallback((sync) => {
+    setCreatorName(sync.creatorName)
+    setCreatorRole(sync.creatorRole)
+    setCompanyReportingFor(sync.companyReportingFor)
+    setShiftType(sync.shiftType)
+    setReportDate(sync.reportDate)
+    setProjectReference(sync.projectReference)
+    setBrandingSelection(sync.brandingSelection)
+    if (sync.logoPreviewUrl) setSetupLogoPreview(sync.logoPreviewUrl)
+    if (sync.coverPhoto !== undefined) {
+      coverPhotoRef.current = sync.coverPhoto
+      setCoverPhoto(sync.coverPhoto)
+      loadedCoverPathRef.current = sync.coverPhoto?.storagePath || loadedCoverPathRef.current
+    }
+    if (project && sync.projectRowPatch) {
+      setProject({
+        ...project,
+        name: sync.projectRowPatch.name || project.name,
+        start_date: sync.projectRowPatch.start_date ?? project.start_date,
+        planned_completion_date: sync.projectRowPatch.planned_completion_date ?? project.planned_completion_date,
+        site_address: sync.projectRowPatch.site_address ?? project.site_address,
+        client_pm: sync.projectRowPatch.client_pm ?? project.client_pm,
+        working_days_per_week: sync.projectRowPatch.working_days_per_week ?? project.working_days_per_week,
+        project_reference: sync.projectRowPatch.project_reference ?? project.project_reference,
+      })
+    }
+    if (lastPersistedReportRef.current) {
+      lastPersistedReportRef.current = {
+        ...lastPersistedReportRef.current,
+        creator_name: sync.creatorName,
+        creator_role: sync.creatorRole,
+        company_reporting_for: sync.companyReportingFor,
+        shift: sync.shiftType,
+        report_date: sync.reportDate,
+        current_phase: sync.currentPhase,
+        branding_id: sync.brandingSelection?.brandingId ?? lastPersistedReportRef.current.branding_id,
+        brand_color: sync.brandingSelection?.brandColor ?? lastPersistedReportRef.current.brand_color,
+        brand_logo_url: sync.brandingSelection?.brandLogoUrl ?? lastPersistedReportRef.current.brand_logo_url,
+        cover_photo_url: sync.coverPhoto?.storagePath ?? lastPersistedReportRef.current.cover_photo_url,
+      }
+    }
+    invalidatePreparedSharePdf('committed-diary-change')
+  }, [invalidatePreparedSharePdf, project])
+
+  const collapseInlineProjectDetails = useCallback(() => {
+    setProjectDetailsExpanded(false)
+  }, [])
 
   const openReportForm = useCallback((reportId, { mode = 'view', reportDate: entryDate = null } = {}) => {
     const href =
@@ -4360,7 +4427,90 @@ export default function SiteDiaryPage() {
         </div>
       )}
 
-      {(project?.name || reportDate) ? (
+      {showInlineProjectDetails && (project?.name || reportDate) && !projectDetailsExpanded ? (
+        <div
+          style={{
+            background: 'var(--plate)',
+            border: '1px solid var(--edge)',
+            borderRadius: 12,
+            padding: '14px 16px',
+            marginBottom: 16,
+            boxShadow: 'inset 0 1px 0 var(--edge-highlight)',
+          }}
+        >
+          <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+            {setupLogoPreview ? (
+              /* eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG */
+              <img
+                src={setupLogoPreview}
+                alt=""
+                style={{
+                  width: 48,
+                  height: 48,
+                  objectFit: 'contain',
+                  borderRadius: 8,
+                  background: 'color-mix(in srgb, var(--ink) 40%, var(--plate))',
+                  border: '1px solid var(--edge)',
+                  flexShrink: 0,
+                  padding: 4,
+                }}
+              />
+            ) : null}
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3 }}>
+                {linkedProject.projectName || project?.name || 'Project'}
+              </p>
+              <p style={{ margin: '6px 0 0', fontSize: 14, color: 'color-mix(in srgb, var(--text) 82%, var(--text-2))', lineHeight: 1.45 }}>
+                {[
+                  reportDate &&
+                    new Date(`${reportDate}T12:00:00`).toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    }),
+                  shiftType && `${shiftType} Shift`,
+                  projectProgrammeCard.projectDayLine,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            </div>
+          </div>
+          {isDiaryEditMode ? (
+            <SecondaryButton
+              type="button"
+              onClick={() => setProjectDetailsExpanded(true)}
+              style={{ width: '100%', minHeight: 48, marginTop: 12 }}
+            >
+              Review / Edit Project & Report Details
+            </SecondaryButton>
+          ) : null}
+        </div>
+      ) : null}
+      {showInlineProjectDetails && projectDetailsExpanded && editingReportId ? (
+        <SiteDiaryWorkbenchProjectDetailsEditor
+          supabase={supabase}
+          projectId={projectId}
+          editingReportId={editingReportId}
+          hydrateComplete={hydrateComplete}
+          project={project}
+          getPersistedReportRow={getPersistedReportRow}
+          projectReference={projectReference}
+          creatorName={creatorName}
+          creatorRole={creatorRole}
+          companyReportingFor={companyReportingFor}
+          shiftType={shiftType}
+          reportDate={reportDate}
+          coverPhoto={coverPhoto}
+          setupLogoPreview={setupLogoPreview}
+          brandingSelection={brandingSelection}
+          linkedProjectName={linkedProject.projectName || project?.name || ''}
+          isDiaryEditMode={isDiaryEditMode}
+          onWorkbenchPersistSync={handleWorkbenchProjectDetailsSync}
+          onCollapse={collapseInlineProjectDetails}
+        />
+      ) : null}
+      {!showInlineProjectDetails && (project?.name || reportDate) ? (
         <div
           style={{
             background: 'var(--plate)',

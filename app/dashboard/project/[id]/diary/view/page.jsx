@@ -404,6 +404,7 @@ function SavedDiaryViewer() {
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [basisBusy, setBasisBusy] = useState(false)
+  const [editBusy, setEditBusy] = useState(false)
   const [basisError, setBasisError] = useState('')
   const pdfReadyRef = useRef(null)
   const pdfCacheGenRef = useRef(0)
@@ -906,7 +907,7 @@ function SavedDiaryViewer() {
     }
   }
 
-  const actionsBusy = generatingPdf || deleting || basisBusy
+  const actionsBusy = generatingPdf || deleting || basisBusy || editBusy
   const sharePreparing = pdfCacheState === 'preparing'
   const shareLabel = sharePreparing
     ? 'Preparing report…'
@@ -981,21 +982,29 @@ function SavedDiaryViewer() {
               type="button"
               disabled={actionsBusy}
               onClick={() => {
-                const seed = sdscSeedRef.current
-                if (seed) {
-                  try {
-                    mergeSiteDiarySessionSnapshot(seed)
-                  } catch {
-                    /* shadow isolation — fail closed to existing Edit navigation */
+                if (editBusy) return
+                setEditBusy(true)
+                try {
+                  const seed = sdscSeedRef.current
+                  if (seed) {
+                    try {
+                      mergeSiteDiarySessionSnapshot(seed)
+                    } catch {
+                      /* shadow isolation — fail closed to existing Edit navigation */
+                    }
                   }
+                  router.push(editHref)
+                } catch {
+                  setEditBusy(false)
                 }
-                router.push(editHref)
               }}
               className="zlog-saved-diary-review__action-btn"
               style={reviewActionStyle}
             >
               <Pencil size={15} strokeWidth={2.25} aria-hidden className="zlog-secondary-cta__icon" />
-              <span className="zlog-secondary-cta__label">Edit This Diary</span>
+              <span className="zlog-secondary-cta__label">
+                {editBusy ? 'Opening diary…' : 'Edit This Diary'}
+              </span>
             </SecondaryButton>
           ) : null}
           <SecondaryButton
