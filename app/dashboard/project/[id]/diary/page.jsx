@@ -1697,10 +1697,15 @@ export default function SiteDiaryPage() {
           }
 
           if (editHydration.coverStoragePath && !pendingCoverGeneration) {
+            markDiaryHydrationTiming('cover-refresh-start', { progressive: 'edit' })
             const preview = await resolveCoverPhotoPreviewUrl(
               supabase,
               editHydration.coverStoragePath,
             )
+            markDiaryHydrationTiming('cover-refresh-end', {
+              progressive: 'edit',
+              hasPreview: Boolean(preview),
+            })
             if (!cancelled && commit()) {
               setCoverPhoto(coverPhotoStateFromSaved(editHydration.coverStoragePath, preview))
               markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H8, {
@@ -1714,13 +1719,24 @@ export default function SiteDiaryPage() {
           {
             const logoPath = existing.brand_logo_url || null
             if (logoPath) {
+              markDiaryHydrationTiming('logo-sign-start', { progressive: 'edit' })
               const preview = await signedUrlForPath(supabase, logoPath)
+              markDiaryHydrationTiming('logo-sign-end', { progressive: 'edit' })
               if (!cancelled && commit()) setSetupLogoPreview(preview)
             }
           }
 
           if (reportPhotos?.length) {
+            const photoRows = reportPhotos
+            const photoRowsWithGridSrc = photoRows.filter((row) => Boolean(gridImageSrc(row))).length
+            markDiaryHydrationTiming('photo-sign-start', {
+              progressive: 'edit',
+              totalPhotoRows: photoRows.length,
+              photoRowsWithGridSrc,
+              photoRowsNeedingSign: photoRows.length - photoRowsWithGridSrc,
+            })
             const withPreview = await signReportPhotoRows(reportPhotos)
+            markDiaryHydrationTiming('photo-sign-end', { progressive: 'edit' })
             if (!cancelled && commit()) {
               commitPhotoSourcesToUi('signed-progressive-edit', withPreview)
               setPhotos(withPreview)
