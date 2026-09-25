@@ -17,8 +17,8 @@ const ENABLE_RE = /\/\*\s*eslint-enable(?:\s+([^*]*?))?\*\//g
 
 export const PHOTO_001_NO_IMG_SURFACES = [
   'app/dashboard/diary/setup/page.jsx',
-  'app/dashboard/project/[id]/diary/page.jsx',
-  'app/dashboard/project/[id]/diary/view/page.jsx',
+  'components/site-diary/SiteDiaryWorkbenchSurface.jsx',
+  'components/site-diary/SavedDiaryViewerSurface.jsx',
   'components/photo-workspace/CapturePhotoPreview.jsx',
   'components/ai-annotation/AreaPhotoViewer.jsx',
   'components/ai-annotation/AiLocationWalk.jsx',

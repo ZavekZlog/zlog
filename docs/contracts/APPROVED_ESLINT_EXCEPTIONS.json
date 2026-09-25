@@ -25,7 +25,7 @@
     },
     {
       "id": "ESLINT-E3",
-      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "file": "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
       "rule": "react-hooks/set-state-in-effect",
       "reason": "Switching editingReportId must clear save/share locks so Save is never silently blocked.",
       "preserves": "Diary Save & Share stale-lock reset on report identity change",
@@ -38,7 +38,7 @@
     },
     {
       "id": "ESLINT-E4",
-      "file": "app/dashboard/project/[id]/diary/view/page.jsx",
+      "file": "components/site-diary/SavedDiaryViewerSurface.jsx",
       "rule": "react-hooks/set-state-in-effect",
       "reason": "Opening/changing a saved diary must reset pdfCacheState before hydrate so a previous PDF cannot display.",
       "preserves": "Saved-diary share PDF reuse / Android gesture-safe hydrate (DIARY-034)",
@@ -130,8 +130,8 @@
       "id": "ESLINT-PHOTO-001-IMG",
       "files": [
         "app/dashboard/diary/labour-ocr-claude-benchmark/page.jsx",
-        "app/dashboard/project/[id]/diary/page.jsx",
-        "app/dashboard/project/[id]/diary/view/page.jsx",
+        "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
+        "components/site-diary/SavedDiaryViewerSurface.jsx",
         "components/diary/SiteDiaryLabourSection.jsx",
         "components/ai-annotation/AreaPhotoViewer.jsx",
         "components/ai-annotation/AnnotationPendingReview.jsx",
@@ -166,7 +166,7 @@
     },
     {
       "id": "ESLINT-DIARY-WORKBENCH-HYDRATE-DEPS",
-      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "file": "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
       "rule": "react-hooks/exhaustive-deps",
       "reason": "Workbench load effect intentionally omits labourScan — including it would re-run full hydrate on every labour hook identity change.",
       "preserves": "Site Diary edit hydrate stability / SDSC fast path",

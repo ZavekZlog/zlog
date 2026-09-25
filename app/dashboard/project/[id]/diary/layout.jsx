@@ -1,10 +1,14 @@
 import { SiteDiarySessionProvider } from '@/lib/site-diary-report-session'
+import SiteDiaryReportShell from '@/components/site-diary/SiteDiaryReportShell'
 
 /**
- * Persistent Site Diary route boundary (S1).
+ * Persistent Site Diary route boundary (S1 + S3A shell).
  * Survives navigation between saved viewer and workbench child routes.
- * No chrome, data fetch, or surface imports — provider only.
  */
 export default function SiteDiaryLayout({ children }) {
-  return <SiteDiarySessionProvider>{children}</SiteDiarySessionProvider>
+  return (
+    <SiteDiarySessionProvider>
+      <SiteDiaryReportShell>{children}</SiteDiaryReportShell>
+    </SiteDiarySessionProvider>
+  )
 }

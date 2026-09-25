@@ -82,7 +82,7 @@ describe('change-scope gate', () => {
       'lib/diary-setup-blank.js',
       'lib/diary-report-date.test.js',
       'app/dashboard/diary/setup/page.jsx',
-      'app/dashboard/project/[id]/diary/page.jsx',
+      'components/site-diary/SiteDiaryWorkbenchSurface.jsx',
       // extra product files that match prefix? report-date allowlist is tight —
       // inject via extraFiles still counts toward budget
     ].join(',')
@@ -105,7 +105,7 @@ describe('change-scope gate', () => {
       'lib/report-setup.js',
       'app/dashboard/diary/setup/page.jsx',
       'app/dashboard/diary/page.jsx',
-      'app/dashboard/project/[id]/diary/page.jsx',
+      'components/site-diary/SiteDiaryWorkbenchSurface.jsx',
       'lib/diary-new-sticky-defaults.test.js',
       'lib/diary-report-date.test.js',
       'lib/diary-fetch-resilience.test.js',
@@ -120,7 +120,7 @@ describe('change-scope gate', () => {
           'lib/diary-draft.js',
           'lib/diary-setup-blank.js',
           'app/dashboard/diary/setup/page.jsx',
-          'app/dashboard/project/[id]/diary/page.jsx',
+          'components/site-diary/SiteDiaryWorkbenchSurface.jsx',
           'lib/diary-save.js',
           'lib/diary-cover-photo.js',
           'lib/diary-edit-hydrate.js',

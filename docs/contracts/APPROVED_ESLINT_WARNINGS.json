@@ -9,8 +9,8 @@
   },
   "photo001NoImgSurfaces": [
     "components/site-diary/SiteDiaryProjectDetailsSection.jsx",
-    "app/dashboard/project/[id]/diary/page.jsx",
-    "app/dashboard/project/[id]/diary/view/page.jsx",
+    "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
+    "components/site-diary/SavedDiaryViewerSurface.jsx",
     "components/photo-workspace/CapturePhotoPreview.jsx",
     "components/ai-annotation/AreaPhotoViewer.jsx",
     "components/ai-annotation/AiLocationWalk.jsx",
@@ -53,91 +53,91 @@
       "classification": "exhaustive-deps"
     },
     {
-      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "file": "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "resequencePhotos",
       "sourceHint": "function resequencePhotos(photos) {",
       "classification": "no-unused-vars"
     },
     {
-      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "file": "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "PHOTO_LAYOUT_SECTIONS",
       "sourceHint": "const PHOTO_LAYOUT_SECTIONS = [",
       "classification": "no-unused-vars"
     },
     {
-      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "file": "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "plantFromDbRow",
       "sourceHint": "function plantFromDbRow(row) {",
       "classification": "no-unused-vars"
     },
     {
-      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "file": "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "projects",
       "sourceHint": "const [projects, setProjects] = useState([])",
       "classification": "no-unused-vars"
     },
     {
-      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "file": "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "prefilledFromLast",
       "sourceHint": "const [prefilledFromLast, setPrefilledFromLast] = useState(false)",
       "classification": "no-unused-vars"
     },
     {
-      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "file": "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "duplicatedFromReport",
       "sourceHint": "const [duplicatedFromReport, setDuplicatedFromReport] = useState(false)",
       "classification": "no-unused-vars"
     },
     {
-      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "file": "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "projectReference",
       "sourceHint": "const [projectReference, setProjectReference] = useState('')",
       "classification": "no-unused-vars"
     },
     {
-      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "file": "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "refreshStartData",
       "sourceHint": "const refreshStartData = useCallback(async () => {",
       "classification": "no-unused-vars"
     },
     {
-      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "file": "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "onCoverDrop",
       "sourceHint": "const onCoverDrop = useCallback((accepted) => {",
       "classification": "no-unused-vars"
     },
     {
-      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "file": "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "removeCoverPhoto",
       "sourceHint": "const removeCoverPhoto = () => {",
       "classification": "no-unused-vars"
     },
     {
-      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "file": "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
       "rule": "react-hooks/exhaustive-deps",
       "messageKey": "markSessionExpired",
       "sourceHint": "const markSessionExpired = () => {",
       "classification": "exhaustive-deps"
     },
     {
-      "file": "app/dashboard/project/[id]/diary/page.jsx",
+      "file": "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
       "rule": "@next/next/no-img-element",
       "messageKey": "no-img-element",
       "sourceHint": "<img src={setupLogoPreview} alt=\"\" style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 8,",
       "classification": "no-img-element"
     },
     {
-      "file": "app/dashboard/project/[id]/diary/view/page.jsx",
+      "file": "components/site-diary/SavedDiaryViewerSurface.jsx",
       "rule": "@typescript-eslint/no-unused-vars",
       "messageKey": "groupIndex",
       "sourceHint": "{view.detailGroups.map((group, groupIndex) => (",

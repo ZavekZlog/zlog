@@ -9,7 +9,7 @@
       "files": [
         "app/dashboard/diary/page.jsx",
         "app/dashboard/diary/setup/page.jsx",
-        "app/dashboard/project/[id]/diary/page.jsx"
+        "components/site-diary/SiteDiaryWorkbenchSurface.jsx"
       ]
     },
     {
@@ -34,15 +34,15 @@
     {
       "id": "COPY-TODAYS-SITE-DIARY",
       "label": "Today’s Site Diary",
-      "files": ["app/dashboard/project/[id]/diary/page.jsx"],
+      "files": ["components/site-diary/SiteDiaryWorkbenchSurface.jsx"],
       "notes": "Section divider marking where persistent project/report details end and today's diary content begins. Rendered uppercase."
     },
     {
       "id": "COPY-EDIT-THIS-DIARY",
       "label": "Edit This Diary",
       "files": [
-        "app/dashboard/project/[id]/diary/page.jsx",
-        "app/dashboard/project/[id]/diary/view/page.jsx"
+        "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
+        "components/site-diary/SavedDiaryViewerSurface.jsx"
       ]
     },
     {
@@ -66,15 +66,15 @@
     {
       "id": "COPY-SHARE-REPORT",
       "label": "Share Report",
-      "files": ["app/dashboard/project/[id]/diary/view/page.jsx"],
+      "files": ["components/site-diary/SavedDiaryViewerSurface.jsx"],
       "notes": "Opened saved-diary review primary action. User goal is sharing; PDF generation stays behind the scenes. PrimaryCTA surface=workbench (equal-choice plate + ZLOG_POWDER_CTA_ORANGE perimeter, not landing powder-coat fill)."
     },
     {
       "id": "COPY-USE-AS-BASIS",
       "label": "Use as Basis for New Diary",
       "files": [
-        "app/dashboard/project/[id]/diary/page.jsx",
-        "app/dashboard/project/[id]/diary/view/page.jsx",
+        "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
+        "components/site-diary/SavedDiaryViewerSurface.jsx",
         "app/dashboard/project/[id]/page.jsx"
       ],
       "notes": "Creates a new diary ID from the opened saved diary. Source diary is never modified."
@@ -156,7 +156,7 @@
       "label": "Temporary Works & Scaffolding Checks",
       "files": [
         "components/diary/DiaryTemporaryWorksSection.jsx",
-        "app/dashboard/project/[id]/diary/view/page.jsx"
+        "components/site-diary/SavedDiaryViewerSurface.jsx"
       ]
     },
     {
@@ -179,7 +179,7 @@
       "label": "Delete Diary",
       "files": [
         "lib/report-deletion.js",
-        "app/dashboard/project/[id]/diary/view/page.jsx",
+        "components/site-diary/SavedDiaryViewerSurface.jsx",
         "app/dashboard/project/[id]/page.jsx"
       ],
       "notes": "Count-aware helper returns Delete Diary for one saved diary. Viewer and project recent list use this label. Saved Diaries browsing rows do not offer Delete."
