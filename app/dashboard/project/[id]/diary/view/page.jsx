@@ -11,7 +11,7 @@
  * (app/dashboard/project/[id]/diary/page.jsx) and are unchanged.
  */
 
-import { Suspense, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { CopyPlus, Pencil, Share2, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -33,6 +33,10 @@ import {
 } from '@/lib/diary-saved-view'
 import { evictSignInSheetSessionEvidence } from '@/lib/diary-sign-in-sheet-session-cache'
 import { mergeSiteDiarySessionSnapshot } from '@/lib/site-diary-session-context'
+import {
+  readSnapshotsFromSavedDiaryView,
+  useSiteDiaryReportSession,
+} from '@/lib/site-diary-report-session'
 import {
   gridImageSrc,
   shouldEagerLoadSavedReviewThumb,
@@ -415,9 +419,34 @@ function SavedDiaryViewer() {
   const attendancePreviewUrlRef = useRef(null)
   const viewerReadyAtRef = useRef(null)
   const editPrefetchHrefRef = useRef(null)
+  const viewerPublishGenerationRef = useRef(0)
+  const { publishReadSnapshot, registerViewerPublicationLifecycle } =
+    useSiteDiaryReportSession()
+
+  useEffect(() => {
+    registerViewerPublicationLifecycle()
+  }, [registerViewerPublicationLifecycle])
+
+  const publishVerifiedViewerSnapshot = useCallback(
+    (viewModel, generation) => {
+      const readSnapshots = readSnapshotsFromSavedDiaryView(
+        viewModel,
+        sdscSeedRef.current,
+      )
+      if (!readSnapshots) return
+      publishReadSnapshot({
+        projectId: viewModel.projectId,
+        reportId: viewModel.reportId,
+        generation,
+        readSnapshots,
+      })
+    },
+    [publishReadSnapshot],
+  )
 
   useEffect(() => {
     let cancelled = false
+    const loadGeneration = ++viewerPublishGenerationRef.current
     const supabase = createClient()
 
     const load = async () => {
@@ -440,6 +469,9 @@ function SavedDiaryViewer() {
           projectId: result.view?.projectId || null,
         })
         setView(result.view)
+        if (!cancelled) {
+          publishVerifiedViewerSnapshot(result.view, loadGeneration)
+        }
         painted = true
         if (!cancelled) setLoading(false)
         logSavedDiaryOpen('first-useful-render', {
@@ -512,7 +544,16 @@ function SavedDiaryViewer() {
         attendancePreviewUrlRef.current = null
       }
     }
-  }, [projectId, reportId])
+  }, [projectId, reportId, publishVerifiedViewerSnapshot])
+
+  useEffect(() => {
+    if (!view?.secondaryReady || !view?.reportId || !view?.projectId) return
+    publishVerifiedViewerSnapshot(view, viewerPublishGenerationRef.current)
+  }, [
+    view,
+    view?.secondaryReady,
+    publishVerifiedViewerSnapshot,
+  ])
 
   // Warm Edit workbench route/chunks while the user reads the saved diary (no navigation).
   useEffect(() => {
