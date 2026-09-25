@@ -413,6 +413,8 @@ function SavedDiaryViewer() {
   const sdscSeedRef = useRef(null)
   const hydrateDisplayMediaRef = useRef(null)
   const attendancePreviewUrlRef = useRef(null)
+  const viewerReadyAtRef = useRef(null)
+  const editPrefetchHrefRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -432,6 +434,7 @@ function SavedDiaryViewer() {
           return
         }
         sdscSeedRef.current = result.sdscSeed || null
+        viewerReadyAtRef.current = Date.now()
         logSavedDiaryOpen('core-report-ready', {
           reportId: result.view?.reportId || null,
           projectId: result.view?.projectId || null,
@@ -510,6 +513,57 @@ function SavedDiaryViewer() {
       }
     }
   }, [projectId, reportId])
+
+  // Warm Edit workbench route/chunks while the user reads the saved diary (no navigation).
+  useEffect(() => {
+    if (loading || !view?.reportId || !view?.projectId) return
+    if (typeof router.prefetch !== 'function') return
+
+    const href = editExistingDiaryHref({
+      projectId: view.projectId,
+      reportId: view.reportId,
+      reportDate: view.reportDate,
+    })
+    if (!href || editPrefetchHrefRef.current === href) return
+    editPrefetchHrefRef.current = href
+
+    const viewerReadyAt = viewerReadyAtRef.current ?? Date.now()
+    const diagBase = {
+      reportId: view.reportId,
+      projectId: view.projectId,
+      surface: 'saved-diary-view',
+    }
+    const elapsedSinceViewerReady = () => Math.max(0, Date.now() - viewerReadyAt)
+
+    emitShareDiag('edit-prefetch-start', {
+      ...diagBase,
+      elapsedMs: elapsedSinceViewerReady(),
+    })
+
+    const logPrefetchComplete = () => {
+      emitShareDiag('edit-prefetch-complete', {
+        ...diagBase,
+        elapsedMs: elapsedSinceViewerReady(),
+      })
+    }
+
+    try {
+      const maybePromise = router.prefetch(href)
+      if (maybePromise != null && typeof maybePromise.then === 'function') {
+        void maybePromise.then(logPrefetchComplete).catch(logPrefetchComplete)
+      } else {
+        emitShareDiag('edit-prefetch-issued', {
+          ...diagBase,
+          elapsedMs: elapsedSinceViewerReady(),
+        })
+      }
+    } catch {
+      emitShareDiag('edit-prefetch-issued', {
+        ...diagBase,
+        elapsedMs: elapsedSinceViewerReady(),
+      })
+    }
+  }, [loading, view, router])
 
   const retryAttendanceRegister = async () => {
     const path = view?.attendanceRegisterPath
