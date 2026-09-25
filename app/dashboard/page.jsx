@@ -15,7 +15,6 @@ import { DASHBOARD_CONTENT_GRID } from '@/lib/dashboard-content-grid'
 
 export default function DashboardPage() {
   const [project, setProject] = useState(null)
-  const [loading, setLoading] = useState(true)
   const supabase = createClient()
   const router = useRouter()
 
@@ -32,22 +31,12 @@ export default function DashboardPage() {
         if (!error) setProject(proj)
         else setProject(null)
       } catch {
-        // Network failures (Failed to fetch) must not leave the dashboard stuck on Loading.
+        // Network failures (Failed to fetch) must not block the Site Control Panel.
         setProject(null)
-      } finally {
-        setLoading(false)
       }
     }
     load()
   }, [])
-
-  if (loading) {
-    return (
-      <div className="dashboard-premium-bg" style={{ ...pageBackground, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        Loading...
-      </div>
-    )
-  }
 
   const renderCard = (card, index, wrapClassName = 'premium-dash-card-wrap') => {
     const isDiary = card.path === 'diary'
