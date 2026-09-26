@@ -233,6 +233,10 @@ import {
   loginUrlWithReturn,
   SESSION_EXPIRED_SAVE_MESSAGE,
 } from '@/lib/auth/return-path'
+import {
+  verifyDiaryPersistenceAuthUser,
+  verifyDiaryWorkbenchAuthUser,
+} from '@/lib/diary-auth-verification'
 
 const SiteDiaryWorkbenchProjectDetailsEditor = dynamic(
   () => import('@/components/site-diary/SiteDiaryWorkbenchProjectDetailsEditor'),
@@ -755,12 +759,10 @@ export default function SiteDiaryWorkbenchSurface() {
       completingRef.current = false
     }
 
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      applyAuthUser(user)
-    }).catch(() => {
-      // Non-Auth network failures (TypeError: Failed to fetch) must not surface as
-      // unhandled rejections — treat as unknown session until a later auth event.
-      if (!cancelled) applyAuthUser(null)
+    void verifyDiaryWorkbenchAuthUser({
+      getUser: () => supabase.auth.getUser(),
+      applyAuthUser,
+      isCancelled: () => cancelled,
     })
 
     const {
@@ -2015,17 +2017,25 @@ export default function SiteDiaryWorkbenchSurface() {
         || isCoverAutosavePendingToken(payload.cover_photo_url)
       ) {
         try {
-          const { data: { user }, error: authError } = await supabase.auth.getUser()
-          if (authError || !user) {
-            paintAutosaveStatus('auth')
+          const authVerification = await verifyDiaryWorkbenchAuthUser({
+            getUser: () => supabase.auth.getUser(),
+          })
+          if (authVerification.status !== 'authenticated') {
+            const indeterminate = authVerification.status === 'indeterminate'
+            const authError = authVerification.error
+            paintAutosaveStatus(indeterminate ? 'network' : 'auth')
             return {
               ok: false,
               reason: 'update-failed',
               acked: ackedSnapshotRef.current,
               wrote: false,
-              error: { message: authError?.message || 'not authenticated', code: '401' },
+              error: {
+                message: authError?.message || (indeterminate ? 'auth verification failed' : 'not authenticated'),
+                code: authError?.code || authError?.status || (indeterminate ? null : '401'),
+              },
             }
           }
+          const user = authVerification.user
           if (!liveCover?.file) {
             paintAutosaveStatus('db')
             return {
@@ -3255,11 +3265,17 @@ export default function SiteDiaryWorkbenchSurface() {
     if (!editingReportId) {
       return { ok: false, reason: 'missing-report', message: SAVE_AREA_PERSIST_FAIL_MESSAGE }
     }
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
+    const authVerification = await verifyDiaryWorkbenchAuthUser({
+      getUser: () => supabase.auth.getUser(),
+    })
+    if (authVerification.status === 'unauthenticated') {
       markSessionExpired()
       return { ok: false, reason: 'auth', message: SESSION_EXPIRED_SAVE_MESSAGE }
     }
+    if (authVerification.status !== 'authenticated') {
+      return { ok: false, reason: 'auth-verification-failed', message: SAVE_AREA_PERSIST_FAIL_MESSAGE }
+    }
+    const user = authVerification.user
     const walk = meta.locationWalk || locationWalk
     try {
       const result = await persistSaveAreaGroup(supabase, {
@@ -3649,15 +3665,18 @@ export default function SiteDiaryWorkbenchSurface() {
         }
       }
 
-      const { data: { user }, error: authError } = await supabase.auth.getUser()
-      diarySaveLog('auth check', {
-        userId: user?.id || null,
-        authError: authError?.message || null,
+      const authVerification = await verifyDiaryPersistenceAuthUser({
+        getUser: () => supabase.auth.getUser(),
+        onUnauthenticated: markSessionExpired,
+        onIndeterminate: () => failSave(friendlyDiarySaveError(null)),
       })
-      if (!user) {
-        markSessionExpired()
-        return
-      }
+      diarySaveLog('auth check', {
+        status: authVerification.status,
+        userId: authVerification.user?.id || null,
+        authError: authVerification.error?.message || null,
+      })
+      if (authVerification.status !== 'authenticated') return
+      const user = authVerification.user
 
       const pendingId = makeUuid()
       const liveCover = coverPhotoRef.current
