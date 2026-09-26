@@ -39,6 +39,7 @@ export default function Login() {
   const supabase = createClient()
   const router = useRouter()
   const formRef = useRef(null)
+  const submitInFlightRef = useRef(false)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -65,7 +66,7 @@ export default function Login() {
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const authenticate = async () => {
-    if (loading) return
+    if (loading || submitInFlightRef.current) return
 
     const form = formRef.current
     if (!form) return
@@ -103,6 +104,7 @@ export default function Login() {
       return
     }
 
+    submitInFlightRef.current = true
     setLoading(true)
     setErrorMsg('')
 
@@ -116,6 +118,7 @@ export default function Login() {
       })
 
       if (error) {
+        submitInFlightRef.current = false
         setErrorMsg(error.message)
         setLoading(false)
         return
@@ -130,6 +133,7 @@ export default function Login() {
       // Single replace — Site Control Panel by default; recovery=1 restores protected work URLs only.
       window.location.replace(destination)
     } catch {
+      submitInFlightRef.current = false
       setErrorMsg('An unexpected error occurred. Please try again.')
       setLoading(false)
     }
