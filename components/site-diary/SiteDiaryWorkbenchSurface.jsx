@@ -80,6 +80,7 @@ import {
   resolveHydrateAutosaveSuppress,
   snapshotFromLiveRow,
 } from '@/lib/diary-autosave'
+import { runDiaryWorkbenchBackNavigation } from '@/lib/diary-workbench-back-navigation'
 import {
   hsIncidentsFromDb,
   hsIncidentsPayload,
@@ -672,6 +673,7 @@ export default function SiteDiaryWorkbenchSurface() {
   const autosaveInFlightRef = useRef(null)
   const autosaveOperationQueueRef = useRef(null)
   const autosaveLifecycleOwnerRef = useRef(null)
+  const backNavigationInFlightRef = useRef(false)
   if (!autosaveOperationQueueRef.current) {
     autosaveOperationQueueRef.current = createDiaryAutosaveOperationQueue()
   }
@@ -726,6 +728,7 @@ export default function SiteDiaryWorkbenchSurface() {
     lastPersistedLabourRef.current = null
     lastPersistedPlantRef.current = null
     lastPersistedPhotosRef.current = null
+    backNavigationInFlightRef.current = false
     suppressAutosaveRef.current = true
     postHydratePdfReconcileStartedRef.current = false
     postHydratePdfReconcileRef.current = null
@@ -4485,6 +4488,45 @@ export default function SiteDiaryWorkbenchSurface() {
 
   const workbenchBackHref = diaryHubHref({ projectId }) || '/dashboard/diary'
 
+  const handleWorkbenchBack = async (event) => {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+
+    const latestPayload = latestPayloadRef.current
+    const payloadDirty = Boolean(
+      latestPayload
+      && !autosavePayloadsEqual(latestPayload, ackedSnapshotRef.current),
+    )
+
+    await runDiaryWorkbenchBackNavigation({
+      explicitPersistenceActive: Boolean(
+        saving
+        || finalSaveInProgressRef.current
+        || saveLockRef.current,
+      ),
+      navigationInFlight: backNavigationInFlightRef.current,
+      payloadDirty,
+      beginNavigation: () => {
+        backNavigationInFlightRef.current = true
+      },
+      endNavigation: () => {
+        backNavigationInFlightRef.current = false
+      },
+      flushPendingAutosave,
+      isExplicitPersistenceActive: () => Boolean(
+        finalSaveInProgressRef.current
+        || saveLockRef.current,
+      ),
+      isPayloadDirty: () => Boolean(
+        latestPayloadRef.current
+        && !autosavePayloadsEqual(latestPayloadRef.current, ackedSnapshotRef.current)
+      ),
+      navigate: () => {
+        router.push(workbenchBackHref)
+      },
+    })
+  }
+
   const autosaveStatusCopy = visibleDiaryAutosaveStatusCopy({
     error: visiblePageError,
     saving,
@@ -4497,6 +4539,7 @@ export default function SiteDiaryWorkbenchSurface() {
     <PremiumShell
       title="Site Diary"
       backHref={workbenchBackHref}
+      onBack={handleWorkbenchBack}
       accent={REPORT_THEMES.diary.accent}
       maxWidth={720}
     >
