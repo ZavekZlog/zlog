@@ -39,6 +39,7 @@ function SiteDiarySetupPage() {
     editingReportId,
     editingProjectId,
   })
+  const setupBackNavigationHref = saving ? null : setupBackHref
 
   useEffect(() => {
     if (!error) return
@@ -57,7 +58,7 @@ function SiteDiarySetupPage() {
   return (
     <PremiumShell
       title={setupTitle}
-      backHref={setupBackHref}
+      backHref={setupBackNavigationHref}
       accent={DIARY_ACCENT}
       maxWidth={520}
     >
@@ -129,7 +130,7 @@ function SiteDiarySetupPage() {
       ) : null}
 
       <ZlogBackControl
-        href={setupBackHref}
+        href={setupBackNavigationHref}
         disabled={saving}
         style={{ marginBottom: 32 }}
       />
