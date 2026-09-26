@@ -28,10 +28,10 @@ function SiteDiarySetupPage() {
 
   const {
     loading,
+    commitReady,
     saving,
     error,
     handleContinue,
-    detailsTouchedRef,
     sectionProps,
   } = useSiteDiaryProjectDetailsController({
     supabase,
@@ -92,18 +92,14 @@ function SiteDiarySetupPage() {
         </div>
       )}
 
-      <div
-        onChange={() => {
-          if (editingReportId) detailsTouchedRef.current = true
-        }}
-      >
+      <div>
         <SiteDiaryProjectDetailsSection {...sectionProps} />
       </div>
 
       <PrimaryCTA
         type="button"
         onClick={handleContinue}
-        disabled={saving}
+        disabled={saving || !commitReady}
         style={{ minHeight: 52, fontSize: 16, marginBottom: 12 }}
       >
         {saving
