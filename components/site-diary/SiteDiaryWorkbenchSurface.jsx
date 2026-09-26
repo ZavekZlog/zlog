@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { flushSync } from 'react-dom'
 import SignaturePad from 'signature_pad'
@@ -71,6 +71,9 @@ import {
   shouldShowManualSaveConfirmation,
   buildDiaryAutosavePayload,
   classifyAutosaveFailure,
+  createDiaryAutosaveOperationQueue,
+  diaryAutosaveOperationOwner,
+  nextDiaryAutosaveLifecycleGeneration,
   runDiaryAutosave,
   shouldRunDiaryAutosave,
   resolveHydrateAutosaveSuppress,
@@ -662,10 +665,37 @@ export default function SiteDiaryWorkbenchSurface() {
   const latestPayloadRef = useRef(null)
   const autosaveTimerRef = useRef(null)
   const autosaveInFlightRef = useRef(null)
-  const autosaveQueuedRef = useRef(false)
+  const autosaveOperationQueueRef = useRef(null)
+  const autosaveLifecycleOwnerRef = useRef(null)
+  if (!autosaveOperationQueueRef.current) {
+    autosaveOperationQueueRef.current = createDiaryAutosaveOperationQueue()
+  }
   const suppressAutosaveRef = useRef(false)
   /** Reuses identity from the existing auth effect — no extra auth query for SDSC shadow. */
   const authUserIdRef = useRef(null)
+
+  useLayoutEffect(() => {
+    const generation = nextDiaryAutosaveLifecycleGeneration()
+    if (!editingReportId || !projectId) {
+      autosaveLifecycleOwnerRef.current = null
+      return undefined
+    }
+
+    const owner = diaryAutosaveOperationOwner({
+      reportId: editingReportId,
+      projectId,
+      generation,
+    })
+    autosaveLifecycleOwnerRef.current = owner
+    autosaveOperationQueueRef.current.setActive(owner)
+
+    return () => {
+      autosaveOperationQueueRef.current.clearActive(owner)
+      if (autosaveLifecycleOwnerRef.current === owner) {
+        autosaveLifecycleOwnerRef.current = null
+      }
+    }
+  }, [composeQuery, editQuery, editingReportId, formReloadToken, projectId, supabase])
 
   // Clear stale locks when opening/switching a report so Save is never silently blocked.
   /* eslint-disable react-hooks/set-state-in-effect -- ESLINT-E3 */
@@ -1934,13 +1964,24 @@ export default function SiteDiaryWorkbenchSurface() {
 
   const performAutosave = useCallback(async () => {
     if (!editingReportId || !projectId || !isDiaryEditMode) return { ok: false, reason: 'missing-report' }
-    if (autosaveInFlightRef.current) {
-      autosaveQueuedRef.current = true
-      return autosaveInFlightRef.current
+    const operationOwner = autosaveLifecycleOwnerRef.current
+    if (
+      !operationOwner
+      || operationOwner.reportId !== String(editingReportId).trim()
+      || operationOwner.projectId !== String(projectId).trim()
+    ) {
+      return { ok: false, reason: 'missing-report' }
     }
+    const operationPayload = latestPayloadRef.current
+    const operationCover = coverPhotoRef.current
+    const operationLoadedCoverPath = loadedCoverPathRef.current
+    const operationCoverRemoved = coverRemovedRef.current
+    const operationCoverGeneration = coverPendingGenerationRef.current
+    const operationAckedSnapshot = ackedSnapshotRef.current
+    if (!operationPayload) return { ok: false, reason: 'missing-payload' }
 
-    const run = async () => {
-      let payload = latestPayloadRef.current
+    const run = async (ownedOwner, ownedPayload, { isCurrent }) => {
+      let payload = ownedPayload
       if (!payload || autosavePayloadsEqual(payload, ackedSnapshotRef.current)) {
         return { ok: true, reason: 'already-saved', wrote: false }
       }
@@ -1948,17 +1989,18 @@ export default function SiteDiaryWorkbenchSurface() {
       // Never autosave-null a cover that is still on the form / loaded path.
       if (
         (payload.cover_photo_url == null || payload.cover_photo_url === '')
-        && !coverRemovedRef.current
+        && !operationCoverRemoved
       ) {
         const keepPath =
-          coverPhotoRef.current?.storagePath || loadedCoverPathRef.current || null
+          operationCover?.storagePath || operationLoadedCoverPath || null
         if (keepPath) {
           payload = { ...payload, cover_photo_url: String(keepPath) }
-          latestPayloadRef.current = payload
+          if (isCurrent()) latestPayloadRef.current = payload
         }
       }
 
       const paintAutosaveStatus = (kind) => {
+        if (!isCurrent()) return
         if (persistUiErrorRef.current) return
         if (finalSaveInProgressRef.current) return
         setAutosaveStatus(kind)
@@ -1967,7 +2009,7 @@ export default function SiteDiaryWorkbenchSurface() {
       paintAutosaveStatus('saving')
 
       // Cover photo: upload local File to canonical site-photos path before PATCH.
-      const liveCover = coverPhotoRef.current
+      const liveCover = operationCover
       if (
         (liveCover?.file && !liveCover?.storagePath)
         || isCoverAutosavePendingToken(payload.cover_photo_url)
@@ -1994,14 +2036,14 @@ export default function SiteDiaryWorkbenchSurface() {
               error: { message: 'cover-file-missing', code: null },
             }
           }
-          let coverGen = coverPendingGenerationRef.current
+          let coverGen = operationCoverGeneration
           if (!coverGen) {
             coverGen = newCoverPendingGeneration()
-            coverPendingGenerationRef.current = coverGen
+            if (isCurrent()) coverPendingGenerationRef.current = coverGen
           }
           const { storagePath, error: coverUploadError, preparedBlob, coverProcessingVersion } = await persistCanonicalCoverUpload(supabase, {
             userId: user.id,
-            reportId: editingReportId,
+            reportId: ownedOwner.reportId,
             generation: coverGen,
             file: liveCover.file,
           })
@@ -2019,30 +2061,32 @@ export default function SiteDiaryWorkbenchSurface() {
             }
           }
           await updateDiarySetupFields(supabase, {
-            reportId: editingReportId,
-            projectId,
+            reportId: ownedOwner.reportId,
+            projectId: ownedOwner.projectId,
             fields: coverSetupFieldsFromSync({
               storagePath,
               coverProcessingVersion,
             }),
           })
-          loadedCoverPathRef.current = storagePath
-          coverRemovedRef.current = false
-          // Drop local File so Share will not re-upload this object.
-          // Keep the prepared JPEG blob for same-session PDF pass-through.
-          const nextCover = coverPhotoStateAfterUpload(storagePath, liveCover.preview, { preparedBlob })
-          coverPhotoRef.current = nextCover
-          setCoverPhoto(nextCover)
-          // Successful cover persistence must clear a stale red upload banner.
-          if (persistUiErrorRef.current === COVER_UPLOAD_FAIL_MESSAGE) {
-            persistUiErrorRef.current = ''
-            setError('')
+          if (isCurrent()) {
+            loadedCoverPathRef.current = storagePath
+            coverRemovedRef.current = false
+            // Drop local File so Share will not re-upload this object.
+            // Keep the prepared JPEG blob for same-session PDF pass-through.
+            const nextCover = coverPhotoStateAfterUpload(storagePath, liveCover.preview, { preparedBlob })
+            coverPhotoRef.current = nextCover
+            setCoverPhoto(nextCover)
+            // Successful cover persistence must clear a stale red upload banner.
+            if (persistUiErrorRef.current === COVER_UPLOAD_FAIL_MESSAGE) {
+              persistUiErrorRef.current = ''
+              setError('')
+            }
           }
           payload = {
             ...payload,
             cover_photo_url: storagePath,
           }
-          latestPayloadRef.current = payload
+          if (isCurrent()) latestPayloadRef.current = payload
         } catch (err) {
           paintAutosaveStatus('network')
           return {
@@ -2069,10 +2113,10 @@ export default function SiteDiaryWorkbenchSurface() {
       let result
       try {
         result = await runDiaryAutosave(supabase, {
-          reportId: editingReportId,
-          projectId,
+          reportId: ownedOwner.reportId,
+          projectId: ownedOwner.projectId,
           payload,
-          ackedSnapshot: ackedSnapshotRef.current,
+          ackedSnapshot: isCurrent() ? ackedSnapshotRef.current : operationAckedSnapshot,
         })
       } catch (err) {
         result = {
@@ -2085,16 +2129,18 @@ export default function SiteDiaryWorkbenchSurface() {
       }
 
       if (result.ok) {
-        ackedSnapshotRef.current = result.acked
-        lastPersistedReportRef.current = mergeAutosaveAckIntoReportRow(
-          lastPersistedReportRef.current,
-          result.acked,
-        )
-        paintAutosaveStatus(null)
+        if (isCurrent()) {
+          ackedSnapshotRef.current = result.acked
+          lastPersistedReportRef.current = mergeAutosaveAckIntoReportRow(
+            lastPersistedReportRef.current,
+            result.acked,
+          )
+          paintAutosaveStatus(null)
+        }
         return result
       }
 
-      if (result.reason === 'stale' && result.acked) {
+      if (result.reason === 'stale' && result.acked && isCurrent()) {
         suppressAutosaveRef.current = true
         ackedSnapshotRef.current = result.acked
         lastPersistedReportRef.current = mergeAutosaveAckIntoReportRow(
@@ -2126,16 +2172,16 @@ export default function SiteDiaryWorkbenchSurface() {
       return result
     }
 
-    const pending = run().finally(() => {
-      if (autosaveInFlightRef.current === pending) autosaveInFlightRef.current = null
-    }).then(async (result) => {
-      if (autosaveQueuedRef.current) {
-        autosaveQueuedRef.current = false
-        return performAutosave()
-      }
-      return result
+    const pending = autosaveOperationQueueRef.current.enqueue({
+      owner: operationOwner,
+      payload: operationPayload,
+      execute: run,
+      commit: () => {},
     })
     autosaveInFlightRef.current = pending
+    void pending.finally(() => {
+      if (autosaveInFlightRef.current === pending) autosaveInFlightRef.current = null
+    }).catch(() => {})
     return pending
   }, [applyAutosaveSnapshot, editingReportId, isDiaryEditMode, projectId, sessionExpired, supabase])
 
@@ -2146,8 +2192,14 @@ export default function SiteDiaryWorkbenchSurface() {
     }
     if (!hydrateComplete || !editingReportId || !isDiaryEditMode || sessionExpired) return
     const payload = latestPayloadRef.current
-    if (!payload || autosavePayloadsEqual(payload, ackedSnapshotRef.current)) return
-    await performAutosave()
+    if (payload && !autosavePayloadsEqual(payload, ackedSnapshotRef.current)) {
+      await performAutosave()
+      return
+    }
+    const operationOwner = autosaveLifecycleOwnerRef.current
+    if (operationOwner) {
+      await autosaveOperationQueueRef.current.waitFor(operationOwner)
+    }
   }, [editingReportId, hydrateComplete, isDiaryEditMode, performAutosave, sessionExpired])
 
   useEffect(() => {
