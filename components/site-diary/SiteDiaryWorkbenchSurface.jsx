@@ -76,6 +76,7 @@ import {
   nextDiaryAutosaveLifecycleGeneration,
   runDiaryAutosave,
   shouldRunDiaryAutosave,
+  shouldReconcileStaleAutosaveSnapshot,
   resolveHydrateAutosaveSuppress,
   snapshotFromLiveRow,
 } from '@/lib/diary-autosave'
@@ -796,27 +797,35 @@ export default function SiteDiaryWorkbenchSurface() {
   const [project, setProject] = useState(null)
   const [recentDiaries, setRecentDiaries] = useState([])
 
+  const localAutosaveMutationRevisionRef = useRef(0)
+  const markLocalAutosaveMutation = useCallback(() => {
+    localAutosaveMutationRevisionRef.current += 1
+  }, [])
+
   const [reportDate, setReportDate] = useState(todayIsoDate())
   const [weather, setWeather] = useState('')
   const [shiftType, setShiftType] = useState('Day')
   const [siteSummary, setSiteSummary] = useState('')
   const handleWeatherInput = (event) => {
+    markLocalAutosaveMutation()
     handlePdfVisibleTextInput(invalidatePreparedSharePdf, setWeather, event)
   }
   const handleSiteSummaryInput = (event) => {
+    markLocalAutosaveMutation()
     handlePdfVisibleTextInput(invalidatePreparedSharePdf, setSiteSummary, event)
   }
   const [labourRows, setLabourRows] = useState([emptyLabour()])
   const [visitors, setVisitors] = useState('')
   const [visitorsRegisterProvenance, setVisitorsRegisterProvenance] = useState([])
   const handleVisitorsFromLabourScan = useCallback((text, provenance) => {
+    markLocalAutosaveMutation()
     dismissAutosaveSuccessClaim()
     invalidatePreparedSharePdf('committed-diary-change')
     setVisitors(text)
     if (provenance !== undefined) {
       setVisitorsRegisterProvenance(normalizeVisitorsRegisterProvenance(provenance))
     }
-  }, [dismissAutosaveSuccessClaim, invalidatePreparedSharePdf])
+  }, [dismissAutosaveSuccessClaim, invalidatePreparedSharePdf, markLocalAutosaveMutation])
   const labourScan = useSiteDiaryLabour({
     reportDate,
     editingReportId,
@@ -879,6 +888,7 @@ export default function SiteDiaryWorkbenchSurface() {
   const getPersistedReportRow = useCallback(() => lastPersistedReportRef.current, [])
 
   const handleWorkbenchProjectDetailsSync = useCallback((sync) => {
+    if (sync.coverPhoto !== undefined) markLocalAutosaveMutation()
     setCreatorName(sync.creatorName)
     setCreatorRole(sync.creatorRole)
     setCompanyReportingFor(sync.companyReportingFor)
@@ -920,7 +930,7 @@ export default function SiteDiaryWorkbenchSurface() {
       }
     }
     invalidatePreparedSharePdf('committed-diary-change')
-  }, [invalidatePreparedSharePdf, project])
+  }, [invalidatePreparedSharePdf, markLocalAutosaveMutation, project])
 
   const collapseInlineProjectDetails = useCallback(() => {
     setProjectDetailsExpanded(false)
@@ -1975,6 +1985,7 @@ export default function SiteDiaryWorkbenchSurface() {
       return { ok: false, reason: 'missing-report' }
     }
     const operationPayload = latestPayloadRef.current
+    const operationLocalMutationRevision = localAutosaveMutationRevisionRef.current
     const operationCover = coverPhotoRef.current
     const operationLoadedCoverPath = loadedCoverPathRef.current
     const operationCoverRemoved = coverRemovedRef.current
@@ -2151,13 +2162,21 @@ export default function SiteDiaryWorkbenchSurface() {
       }
 
       if (result.reason === 'stale' && result.acked && isCurrent()) {
-        suppressAutosaveRef.current = true
+        const localStateHasNotAdvanced = shouldReconcileStaleAutosaveSnapshot(
+          payload,
+          latestPayloadRef.current,
+          operationLocalMutationRevision,
+          localAutosaveMutationRevisionRef.current,
+        )
         ackedSnapshotRef.current = result.acked
         lastPersistedReportRef.current = mergeAutosaveAckIntoReportRow(
           lastPersistedReportRef.current,
           result.acked,
         )
-        applyAutosaveSnapshot(result.acked)
+        if (localStateHasNotAdvanced) {
+          suppressAutosaveRef.current = true
+          applyAutosaveSnapshot(result.acked)
+        }
         const failure = classifyAutosaveFailure({
           reason: result.reason,
           error: result.error,
@@ -2362,6 +2381,7 @@ export default function SiteDiaryWorkbenchSurface() {
   const onCoverDrop = useCallback((accepted) => {
     const file = accepted[0]
     if (!file) return
+    markLocalAutosaveMutation()
     coverRemovedRef.current = false
     invalidatePreparedSharePdf('committed-diary-change')
     // New local cover replaces any previous failed upload banner.
@@ -2421,7 +2441,7 @@ export default function SiteDiaryWorkbenchSurface() {
         }
       })
     }
-  }, [editingReportId, invalidatePreparedSharePdf, projectId, supabase])
+  }, [editingReportId, invalidatePreparedSharePdf, markLocalAutosaveMutation, projectId, supabase])
 
   const canvasRef = useRef(null)
   const signaturePadRef = useRef(null)
@@ -3053,11 +3073,13 @@ export default function SiteDiaryWorkbenchSurface() {
   }
 
   const updateEquipmentHire = (key, field, value) => {
+    markLocalAutosaveMutation()
     invalidatePreparedSharePdf('committed-diary-change')
     setEquipmentHireRows((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)))
   }
 
   const removeCoverPhoto = () => {
+    markLocalAutosaveMutation()
     invalidatePreparedSharePdf('committed-diary-change')
     if (coverPhoto?.file && coverPhoto.preview) URL.revokeObjectURL(coverPhoto.preview)
     coverRemovedRef.current = true
@@ -4827,6 +4849,7 @@ export default function SiteDiaryWorkbenchSurface() {
             <DiaryNarrativeTextarea
               value={visitors}
               onChange={(e) => {
+                markLocalAutosaveMutation()
                 setVisitors(e.target.value)
                 setCarriedVisitors(false)
               }}
@@ -4841,9 +4864,18 @@ export default function SiteDiaryWorkbenchSurface() {
           hsIncidents={hsIncidents}
           rfis={rfis}
           variations={variations}
-          onHsChange={setHsIncidents}
-          onRfisChange={setRfis}
-          onVariationsChange={setVariations}
+          onHsChange={(rows) => {
+            markLocalAutosaveMutation()
+            setHsIncidents(rows)
+          }}
+          onRfisChange={(rows) => {
+            markLocalAutosaveMutation()
+            setRfis(rows)
+          }}
+          onVariationsChange={(rows) => {
+            markLocalAutosaveMutation()
+            setVariations(rows)
+          }}
         />
 
 
@@ -4893,6 +4925,7 @@ export default function SiteDiaryWorkbenchSurface() {
                   type="button"
                   style={removeRowStyle}
                   onClick={() => {
+                    markLocalAutosaveMutation()
                     invalidatePreparedSharePdf('committed-diary-change')
                     setEquipmentHireRows((rows) => rows.filter((r) => r.key !== row.key))
                   }}
@@ -4949,6 +4982,7 @@ export default function SiteDiaryWorkbenchSurface() {
             type="button"
             style={addRowButtonStyle}
             onClick={() => {
+              markLocalAutosaveMutation()
               invalidatePreparedSharePdf('committed-diary-change')
               setEquipmentHireRows((rows) => [...rows, emptyEquipmentHire()])
             }}
@@ -4963,11 +4997,13 @@ export default function SiteDiaryWorkbenchSurface() {
           applicable={temporaryWorksApplicable}
           rows={temporaryWorks}
           onApplicableChange={(value) => {
+            markLocalAutosaveMutation()
             dismissAutosaveSuccessClaim()
             invalidatePreparedSharePdf('committed-diary-change')
             setTemporaryWorksApplicable(value)
           }}
           onRowsChange={(rows) => {
+            markLocalAutosaveMutation()
             dismissAutosaveSuccessClaim()
             invalidatePreparedSharePdf('committed-diary-change')
             setTemporaryWorks(rows)
@@ -4984,6 +5020,7 @@ export default function SiteDiaryWorkbenchSurface() {
             <DiaryNarrativeTextarea
               value={delaysIssues}
               onChange={(e) => {
+                markLocalAutosaveMutation()
                 setDelaysIssues(e.target.value)
                 setCarriedDelaysIssues(false)
               }}
@@ -4995,7 +5032,10 @@ export default function SiteDiaryWorkbenchSurface() {
         <GlassSection title="Actions required" accent={DIARY_ACCENT}>
           <DiaryNarrativeTextarea
             value={actionsRequired}
-            onChange={(e) => setActionsRequired(e.target.value)}
+            onChange={(e) => {
+              markLocalAutosaveMutation()
+              setActionsRequired(e.target.value)
+            }}
             placeholder="Follow-ups, RFIs, instructions needed…"
           />
         </GlassSection>
