@@ -478,7 +478,21 @@ function SavedDiaryViewer() {
           reportId: result.view?.reportId || null,
         })
         const applyPatch = (patch) => {
-          if (!cancelled && patch) {
+          if (cancelled) {
+            const staleAttendancePreview = patch?.attendanceRegisterPreviewUrl
+            if (
+              typeof staleAttendancePreview === 'string'
+              && staleAttendancePreview.startsWith('blob:')
+            ) {
+              try {
+                URL.revokeObjectURL(staleAttendancePreview)
+              } catch {
+                /* ignore */
+              }
+            }
+            return
+          }
+          if (patch) {
             if (patch.attendanceRegisterPreviewUrl?.startsWith('blob:')) {
               if (
                 attendancePreviewUrlRef.current
