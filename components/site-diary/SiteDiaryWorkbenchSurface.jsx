@@ -1388,7 +1388,7 @@ export default function SiteDiaryWorkbenchSurface() {
         let pendingCoverGeneration = null
         try {
           const pending = await getPendingCover(editingReportId)
-          if (pending && !pending.removed && pending.blob) {
+          if (commit() && pending && !pending.removed && pending.blob) {
             const file = fileFromPendingCover(pending)
             if (file) {
               const localPreview = URL.createObjectURL(pending.blob)
