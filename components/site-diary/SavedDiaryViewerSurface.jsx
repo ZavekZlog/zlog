@@ -636,11 +636,22 @@ function SavedDiaryViewer() {
     })
     try {
       const patch = await hydrateAttendance()
+      if (hydrateDisplayMediaRef.current?.attendanceRegister !== hydrateAttendance) {
+        if (patch?.attendanceRegisterPreviewUrl?.startsWith('blob:')) {
+          try {
+            URL.revokeObjectURL(patch.attendanceRegisterPreviewUrl)
+          } catch {
+            /* ignore */
+          }
+        }
+        return
+      }
       if (patch?.attendanceRegisterPreviewUrl?.startsWith('blob:')) {
         attendancePreviewUrlRef.current = patch.attendanceRegisterPreviewUrl
       }
       setView((current) => (current ? { ...current, ...patch } : current))
     } catch {
+      if (hydrateDisplayMediaRef.current?.attendanceRegister !== hydrateAttendance) return
       setView((current) => {
         if (!current) return current
         return {
