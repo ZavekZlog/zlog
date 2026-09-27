@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import {
   isSignInOcrApplyEnabled,
@@ -107,6 +107,7 @@ export function useSiteDiaryLabour({
   }, [scanSheetPreview])
 
   useEffect(() => () => {
+    scanRequestIdRef.current = nextSignInSheetRequestId(scanRequestIdRef.current)
     if (scanSheetPreviewRef.current && String(scanSheetPreviewRef.current).startsWith('blob:')) {
       URL.revokeObjectURL(scanSheetPreviewRef.current)
     }
@@ -210,6 +211,20 @@ export function useSiteDiaryLabour({
     setSignInSheetPickerKey((key) => key + 1)
   }, [clearScanPreview])
 
+  const scanLifecycleReportIdRef = useRef(editingReportId)
+  useLayoutEffect(() => {
+    if (scanLifecycleReportIdRef.current === editingReportId) return
+    scanLifecycleReportIdRef.current = editingReportId
+    clearSignInSheetWorkingState()
+    setSignInSheetStoragePath(null)
+    loadedSignInSheetPathRef.current = null
+    setScanSignInPreviewLoadError('')
+    signInSheetRemovedRef.current = false
+    setLabourModeState('manual')
+    setManualLabourEditing(false)
+    manualLabourSnapshotRef.current = null
+  }, [editingReportId, clearSignInSheetWorkingState])
+
   const handleSignInSheetFiles = useCallback(async (files, { persistEvidence = true } = {}) => {
     // Camera cancel / empty picker — do not touch loading or draft state
     if (!shouldReplaceSignInSheet(files)) return
@@ -261,6 +276,7 @@ export function useSiteDiaryLabour({
       const mustPersist = Boolean(persistEvidence && editingReportId && projectId)
       if (mustPersist) {
         const { data: { user }, error: authError } = await supabase.auth.getUser()
+        if (!isSignInSheetRequestCurrent(scanRequestIdRef.current, requestId)) return
         if (authError || !user?.id) {
           setScanError(SIGN_IN_SHEET_EVIDENCE_SAVE_FAIL_MESSAGE)
           return
