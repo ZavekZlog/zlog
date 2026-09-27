@@ -7,6 +7,7 @@
  *    saved diary in the read-only viewer. Management actions live there.
  */
 
+import * as React from 'react'
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Eye } from 'lucide-react'
@@ -53,6 +54,7 @@ const SAVED_DIARY_PAGE_SIZE = 50
 const SAVED_DIARY_ID_PAGE_SIZE = 1000
 const SAVED_DIARY_LIST_COLUMNS =
   'id, project_id, report_date, shift, site_summary, projects(id, name)'
+const useHubLifecycleEffect = React.useLayoutEffect || useEffect
 
 /**
  * Peer cards in one group share a height — the tallest copy sets the row, so
@@ -356,8 +358,8 @@ function logSavedListReturn(event, detail) {
   console.info('[zlog:saved-list]', event, detail)
 }
 
-function buildSavedDiaryListQuery(supabase, { from, to, filterProjectId, mode }) {
-  return applySavedDiaryListFilter(
+function buildSavedDiaryListQuery(supabase, { from, to, filterProjectId, mode, signal }) {
+  const query = applySavedDiaryListFilter(
     supabase
       .from('daily_reports')
       .select(SAVED_DIARY_LIST_COLUMNS, { count: 'exact' })
@@ -366,10 +368,11 @@ function buildSavedDiaryListQuery(supabase, { from, to, filterProjectId, mode })
       .range(from, to),
     { filterProjectId, mode },
   )
+  return query.abortSignal(signal)
 }
 
-function buildSavedDiaryIdQuery(supabase, { from, to, filterProjectId, mode }) {
-  return applySavedDiaryListFilter(
+function buildSavedDiaryIdQuery(supabase, { from, to, filterProjectId, mode, signal }) {
+  const query = applySavedDiaryListFilter(
     supabase
       .from('daily_reports')
       .select('id', { count: 'exact' })
@@ -378,9 +381,10 @@ function buildSavedDiaryIdQuery(supabase, { from, to, filterProjectId, mode }) {
       .range(from, to),
     { filterProjectId, mode },
   )
+  return query.abortSignal(signal)
 }
 
-async function fetchAllSavedDiaryIds(supabase, { filterProjectId, mode }) {
+async function fetchAllSavedDiaryIds(supabase, { filterProjectId, mode, signal }) {
   const ids = []
   const seen = new Set()
   let from = 0
@@ -390,6 +394,7 @@ async function fetchAllSavedDiaryIds(supabase, { filterProjectId, mode }) {
       to: from + SAVED_DIARY_ID_PAGE_SIZE - 1,
       filterProjectId,
       mode,
+      signal,
     })
     if (error) throw error
     const page = (data || []).map((row) => String(row?.id || '').trim()).filter(Boolean)
@@ -406,6 +411,43 @@ async function fetchAllSavedDiaryIds(supabase, { filterProjectId, mode }) {
   return ids
 }
 
+function hubReadLifecycleKey(mode, filterProjectId) {
+  return `${mode || 'hub'}:${filterProjectId || ''}`
+}
+
+function disposeHubReadLifecycle(owner) {
+  if (!owner || owner.disposed) return
+  owner.disposed = true
+  for (const controller of owner.controllers) controller.abort()
+  owner.controllers.clear()
+}
+
+function ensureHubReadLifecycle(lifecycleRef, key) {
+  const current = lifecycleRef.current
+  if (current && current.key === key && !current.disposed) return current
+  disposeHubReadLifecycle(current)
+  const next = { key, controllers: new Set(), disposed: false }
+  lifecycleRef.current = next
+  return next
+}
+
+function beginHubRead(lifecycleRef, key) {
+  const owner = ensureHubReadLifecycle(lifecycleRef, key)
+  const controller = new AbortController()
+  owner.controllers.add(controller)
+  return {
+    signal: controller.signal,
+    isCurrent: () => (
+      lifecycleRef.current === owner
+      && !owner.disposed
+      && !controller.signal.aborted
+    ),
+    release: () => {
+      owner.controllers.delete(controller)
+    },
+  }
+}
+
 function SiteDiaryEntryPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -419,6 +461,11 @@ function SiteDiaryEntryPage() {
   const [openingReportId, setOpeningReportId] = useState(null)
 
   const mode = searchParams.get('view') === 'saved' ? 'saved' : null
+  const hubLifecycleKey = hubReadLifecycleKey(mode, filterProjectId)
+  const hubReadLifecycleRef = useRef(null)
+  const hubReadContextRef = useRef(null)
+  const selectAllOperationRef = useRef(null)
+  const loadMoreOperationRef = useRef(null)
   const [error, setError] = useState(() => (missingReport ? DIARY_MISSING_MESSAGE : ''))
   const [reports, setReports] = useState(() => {
     const initialMode = searchParams.get('view') === 'saved' ? 'saved' : null
@@ -455,6 +502,17 @@ function SiteDiaryEntryPage() {
     return 'Site Diary'
   }, [mode])
 
+  useHubLifecycleEffect(() => {
+    const lifecycleOwner = ensureHubReadLifecycle(hubReadLifecycleRef, hubLifecycleKey)
+    hubReadContextRef.current = { key: hubLifecycleKey, mode, filterProjectId }
+    return () => {
+      disposeHubReadLifecycle(lifecycleOwner)
+      if (hubReadLifecycleRef.current === lifecycleOwner) {
+        hubReadLifecycleRef.current = null
+      }
+    }
+  }, [mode, filterProjectId, hubLifecycleKey])
+
   useEffect(() => {
     if (mode === 'saved' && filterProjectId) {
       if (openingSavedDiaryRef.current) return
@@ -465,6 +523,8 @@ function SiteDiaryEntryPage() {
   useEffect(() => {
     if (mode !== 'previous' && mode !== 'saved') return
     let cancelled = false
+    const lifecycleKey = hubReadLifecycleKey(mode, filterProjectId)
+    const read = beginHubRead(hubReadLifecycleRef, lifecycleKey)
     const paint = savedDiaryListPaintState(
       readSavedDiaryListSnapshot({ mode, filterProjectId }),
     )
@@ -495,9 +555,11 @@ function SiteDiaryEntryPage() {
           to: range.to,
           filterProjectId,
           mode,
+          signal: read.signal,
         })
+        if (cancelled || !read.isCurrent()) return
         if (qErr) throw qErr
-        if (!cancelled) {
+        if (!cancelled && read.isCurrent()) {
           const nextReports = data || []
           const nextTotal = typeof count === 'number' ? count : nextReports.length
           setReports(nextReports)
@@ -513,7 +575,7 @@ function SiteDiaryEntryPage() {
           })
         }
       } catch {
-        if (!cancelled) {
+        if (!cancelled && read.isCurrent()) {
           setError('We couldn’t load your diaries. Check your connection and try again.')
           logSavedListReturn('background-refresh-failed', {
             mode,
@@ -521,7 +583,8 @@ function SiteDiaryEntryPage() {
           })
         }
       } finally {
-        if (!cancelled) setLoading(false)
+        read.release()
+        if (!cancelled && read.isCurrent()) setLoading(false)
       }
     }
     load()
@@ -612,36 +675,75 @@ function SiteDiaryEntryPage() {
       setSelectedIds(new Set())
       return
     }
+    const context = { key: hubLifecycleKey, mode, filterProjectId }
+    if (context?.mode !== 'previous' && context?.mode !== 'saved') return
+    const read = beginHubRead(hubReadLifecycleRef, context.key)
+    const operation = {}
+    selectAllOperationRef.current = operation
     setSelectingAll(true)
     setError((prev) => (prev === DIARY_MISSING_MESSAGE ? prev : ''))
     try {
-      const ids = await fetchAllSavedDiaryIds(supabase, { filterProjectId, mode })
+      const ids = await fetchAllSavedDiaryIds(supabase, {
+        filterProjectId: context.filterProjectId,
+        mode: context.mode,
+        signal: read.signal,
+      })
+      if (!read.isCurrent()) return
       setSelectedIds(new Set(ids))
     } catch {
+      if (read.signal.aborted || !read.isCurrent()) return
       setError('We couldn’t select all diaries. Check your connection and try again.')
     } finally {
-      setSelectingAll(false)
+      read.release()
+      if (selectAllOperationRef.current === operation) {
+        selectAllOperationRef.current = null
+        setSelectingAll(false)
+      }
     }
   }
 
-  const refreshSavedDiaryFirstPage = async () => {
-    const { data, error: qErr, count } = await buildSavedDiaryListQuery(supabase, {
-      from: 0,
-      to: SAVED_DIARY_PAGE_SIZE - 1,
-      filterProjectId,
-      mode,
-    })
-    if (qErr) throw qErr
-    const nextReports = data || []
-    const nextTotal = typeof count === 'number' ? count : nextReports.length
-    setReports(nextReports)
-    setTotalSavedDiaryCount(nextTotal)
-    rememberSavedDiaryList(mode, filterProjectId, nextReports, nextTotal)
+  const refreshSavedDiaryFirstPage = async (context = hubReadContextRef.current) => {
+    if (context?.mode !== 'previous' && context?.mode !== 'saved') {
+      return { aborted: true }
+    }
+    const read = beginHubRead(hubReadLifecycleRef, context.key)
+    try {
+      const { data, error: qErr, count } = await buildSavedDiaryListQuery(supabase, {
+        from: 0,
+        to: SAVED_DIARY_PAGE_SIZE - 1,
+        filterProjectId: context.filterProjectId,
+        mode: context.mode,
+        signal: read.signal,
+      })
+      if (!read.isCurrent()) return { aborted: true }
+      if (qErr) throw qErr
+      const nextReports = data || []
+      const nextTotal = typeof count === 'number' ? count : nextReports.length
+      setReports(nextReports)
+      setTotalSavedDiaryCount(nextTotal)
+      rememberSavedDiaryList(
+        context.mode,
+        context.filterProjectId,
+        nextReports,
+        nextTotal,
+      )
+      return { aborted: false }
+    } catch (refreshError) {
+      if (read.signal.aborted || !read.isCurrent()) return { aborted: true }
+      throw refreshError
+    } finally {
+      read.release()
+    }
   }
 
   const loadMoreSavedDiaries = async () => {
     if (loading || loadingMore || deleting) return
     if (reports.length >= totalSavedDiaryCount) return
+    const context = { key: hubLifecycleKey, mode, filterProjectId }
+    if (context?.mode !== 'previous' && context?.mode !== 'saved') return
+    const read = beginHubRead(hubReadLifecycleRef, context.key)
+    const operation = {}
+    loadMoreOperationRef.current = operation
     setLoadingMore(true)
     setError((prev) => (prev === DIARY_MISSING_MESSAGE ? prev : ''))
     try {
@@ -649,9 +751,11 @@ function SiteDiaryEntryPage() {
       const { data, error: qErr, count } = await buildSavedDiaryListQuery(supabase, {
         from,
         to: from + SAVED_DIARY_PAGE_SIZE - 1,
-        filterProjectId,
-        mode,
+        filterProjectId: context.filterProjectId,
+        mode: context.mode,
+        signal: read.signal,
       })
+      if (!read.isCurrent()) return
       if (qErr) throw qErr
       const page = data || []
       const nextTotal = typeof count === 'number' ? count : totalSavedDiaryCount
@@ -659,12 +763,17 @@ function SiteDiaryEntryPage() {
       const appended = page.filter((row) => row?.id && !existing.has(String(row.id)))
       const next = appended.length ? [...reports, ...appended] : reports
       setReports(next)
-      rememberSavedDiaryList(mode, filterProjectId, next, nextTotal)
+      rememberSavedDiaryList(context.mode, context.filterProjectId, next, nextTotal)
       if (typeof count === 'number') setTotalSavedDiaryCount(count)
     } catch {
+      if (read.signal.aborted || !read.isCurrent()) return
       setError('We couldn’t load more diaries. Check your connection and try again.')
     } finally {
-      setLoadingMore(false)
+      read.release()
+      if (loadMoreOperationRef.current === operation) {
+        loadMoreOperationRef.current = null
+        setLoadingMore(false)
+      }
     }
   }
 
@@ -682,14 +791,24 @@ function SiteDiaryEntryPage() {
       const result = await deleteSiteDiariesInSafeBatches(supabase, deleteIds)
       const deleted = new Set((result.deletedIds || []).map(String))
       if (deleted.size) {
+        const refillContext = hubReadContextRef.current
         try {
-          await refreshSavedDiaryFirstPage()
+          const refill = await refreshSavedDiaryFirstPage()
+          if (refill.aborted) {
+            // Lifecycle disposal is expected; the current lifecycle owns its own refresh.
+          }
         } catch {
+          if (hubReadContextRef.current?.key !== refillContext?.key) return
           const next = reports.filter((row) => !deleted.has(String(row.id)))
           const nextTotal = Math.max(0, totalSavedDiaryCount - deleted.size)
           setReports(next)
           setTotalSavedDiaryCount(nextTotal)
-          rememberSavedDiaryList(mode, filterProjectId, next, nextTotal)
+          rememberSavedDiaryList(
+            refillContext.mode,
+            refillContext.filterProjectId,
+            next,
+            nextTotal,
+          )
         }
       }
       if (result.ok) {
