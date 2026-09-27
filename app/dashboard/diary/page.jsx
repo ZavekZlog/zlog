@@ -418,9 +418,7 @@ function SiteDiaryEntryPage() {
   const savedDiaryOpenInFlightRef = useRef(null)
   const [openingReportId, setOpeningReportId] = useState(null)
 
-  const [mode, setMode] = useState(() => (
-    searchParams.get('view') === 'saved' ? 'saved' : null
-  )) // null | 'previous' | 'saved'
+  const mode = searchParams.get('view') === 'saved' ? 'saved' : null
   const [error, setError] = useState(() => (missingReport ? DIARY_MISSING_MESSAGE : ''))
   const [reports, setReports] = useState(() => {
     const initialMode = searchParams.get('view') === 'saved' ? 'saved' : null
@@ -572,7 +570,6 @@ function SiteDiaryEntryPage() {
     setReports(paint.reports)
     setTotalSavedDiaryCount(paint.totalCount)
     setLoading(paint.initialLoading)
-    setMode('saved')
     router.push(savedReportListHref())
   }
 
@@ -583,7 +580,6 @@ function SiteDiaryEntryPage() {
   }
 
   const leaveSavedList = () => {
-    setMode(null)
     setSelectionMode(false)
     setSelectedIds(new Set())
     setDeleteIds([])
