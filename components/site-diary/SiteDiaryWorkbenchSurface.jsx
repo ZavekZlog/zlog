@@ -901,9 +901,27 @@ export default function SiteDiaryWorkbenchSurface() {
     setBrandingSelection(sync.brandingSelection)
     if (sync.logoPreviewUrl) setSetupLogoPreview(sync.logoPreviewUrl)
     if (sync.coverPhoto !== undefined) {
-      coverPhotoRef.current = sync.coverPhoto
-      setCoverPhoto(sync.coverPhoto)
-      loadedCoverPathRef.current = sync.coverPhoto?.storagePath || loadedCoverPathRef.current
+      const previousCover = coverPhotoRef.current
+      const nextCover = sync.coverPhoto
+      const previousPreview = previousCover?.preview
+      const nextPreview = nextCover?.preview
+      try {
+        if (
+          typeof previousPreview === 'string'
+          && previousPreview.startsWith('blob:')
+          && previousPreview !== nextPreview
+        ) {
+          URL.revokeObjectURL(previousPreview)
+        }
+      } catch {
+        /* Accept the next cover even if the previous local blob cannot be revoked. */
+      }
+      coverPhotoRef.current = nextCover
+      setCoverPhoto(nextCover)
+      loadedCoverPathRef.current = nextCover?.storagePath || loadedCoverPathRef.current
+      if (typeof sync.relinquishEditorCover === 'function') {
+        sync.relinquishEditorCover()
+      }
     }
     if (project && sync.projectRowPatch) {
       setProject({
