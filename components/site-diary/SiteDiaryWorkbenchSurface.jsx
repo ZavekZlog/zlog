@@ -1208,8 +1208,7 @@ export default function SiteDiaryWorkbenchSurface() {
         setLocationWalk([])
         const outgoingCover = coverPhotoRef.current
         if (
-          outgoingCover?.file
-          && typeof outgoingCover.preview === 'string'
+          typeof outgoingCover?.preview === 'string'
           && outgoingCover.preview.startsWith('blob:')
         ) {
           try {
@@ -2713,7 +2712,10 @@ export default function SiteDiaryWorkbenchSurface() {
     photosRef.current.forEach((p) => {
       if (p.preview) URL.revokeObjectURL(p.preview)
     })
-    if (coverPhotoRef.current?.file && coverPhotoRef.current.preview) {
+    if (
+      typeof coverPhotoRef.current?.preview === 'string'
+      && coverPhotoRef.current.preview.startsWith('blob:')
+    ) {
       URL.revokeObjectURL(coverPhotoRef.current.preview)
     }
     if (signatureRef.current?.file && signatureRef.current.preview) {
