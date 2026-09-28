@@ -1173,6 +1173,19 @@ export default function SiteDiaryWorkbenchSurface() {
         setActionsRequired('')
         setPhotos([])
         setLocationWalk([])
+        const outgoingCover = coverPhotoRef.current
+        if (
+          outgoingCover?.file
+          && typeof outgoingCover.preview === 'string'
+          && outgoingCover.preview.startsWith('blob:')
+        ) {
+          try {
+            URL.revokeObjectURL(outgoingCover.preview)
+          } catch {
+            /* ignore */
+          }
+        }
+        coverPhotoRef.current = null
         setCoverPhoto(null)
         loadedCoverPathRef.current = null
         coverRemovedRef.current = false
