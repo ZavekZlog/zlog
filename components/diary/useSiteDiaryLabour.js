@@ -212,8 +212,10 @@ export function useSiteDiaryLabour({
   }, [clearScanPreview])
 
   const scanLifecycleReportIdRef = useRef(editingReportId)
+  const scanLifecycleRevisionRef = useRef(0)
   useLayoutEffect(() => {
     if (scanLifecycleReportIdRef.current === editingReportId) return
+    scanLifecycleRevisionRef.current += 1
     scanLifecycleReportIdRef.current = editingReportId
     clearSignInSheetWorkingState()
     setSignInSheetStoragePath(null)
@@ -431,9 +433,23 @@ export function useSiteDiaryLabour({
       return
     }
 
+    const applyReportId = editingReportId
+    const applyLifecycleRevision = scanLifecycleRevisionRef.current
+    const applyScanRequestId = scanRequestIdRef.current
+    const reportLifecycleCurrent = () => (
+      scanLifecycleReportIdRef.current === applyReportId
+      && scanLifecycleRevisionRef.current === applyLifecycleRevision
+    )
+    const scanCompletionCurrent = () => (
+      reportLifecycleCurrent()
+      && scanRequestIdRef.current === applyScanRequestId
+    )
+
     void persistAppliedLabourRows(supabase, editingReportId, projectId, result.rows)
       .then((labourPayload) => {
+        if (!reportLifecycleCurrent()) return
         lastPersistedLabourRef.current = labourPayload
+        if (!scanCompletionCurrent()) return
         setScanApplySaved(true)
         setScanApplyNotice(
           result.totals.hours > 0
@@ -442,6 +458,7 @@ export function useSiteDiaryLabour({
         )
       })
       .catch(() => {
+        if (!scanCompletionCurrent()) return
         setScanApplySaved(false)
         setScanApplyError(LABOUR_APPLY_SAVE_FAIL_MESSAGE)
       })
