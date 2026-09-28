@@ -1171,6 +1171,21 @@ export default function SiteDiaryWorkbenchSurface() {
         setReportDate(today)
         setSiteSummary('')
         setActionsRequired('')
+        const outgoingCommittedPreviews = new Set()
+        for (const photo of photosRef.current || []) {
+          const preview = photo?.preview
+          if (typeof preview === 'string' && preview.startsWith('blob:')) {
+            outgoingCommittedPreviews.add(preview)
+          }
+        }
+        for (const preview of outgoingCommittedPreviews) {
+          try {
+            URL.revokeObjectURL(preview)
+          } catch {
+            /* ignore */
+          }
+        }
+        photosRef.current = []
         setPhotos([])
         setLocationWalk([])
         const outgoingCover = coverPhotoRef.current
@@ -1189,6 +1204,26 @@ export default function SiteDiaryWorkbenchSurface() {
         setCoverPhoto(null)
         loadedCoverPathRef.current = null
         coverRemovedRef.current = false
+        const outgoingSignaturePreviews = new Set()
+        for (const owned of [signatureRef.current, signatureReplaceBackupRef.current]) {
+          if (
+            owned?.file
+            && typeof owned.preview === 'string'
+            && owned.preview.startsWith('blob:')
+          ) {
+            outgoingSignaturePreviews.add(owned.preview)
+          }
+        }
+        for (const preview of outgoingSignaturePreviews) {
+          try {
+            URL.revokeObjectURL(preview)
+          } catch {
+            /* ignore */
+          }
+        }
+        signatureRef.current = null
+        signatureReplaceBackupRef.current = null
+        setSignatureReplacing(false)
         setSignature(null)
         setSignatureMode('draw')
         setBrandingSelection(null)

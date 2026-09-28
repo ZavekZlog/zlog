@@ -215,6 +215,69 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   // eslint-disable-next-line react-hooks/refs -- ESLINT-E6
   draftPhotosRef.current = draftPhotos
 
+  const transferredDraftBlobPreviews = useCallback(() => {
+    const transferred = new Set()
+    const groups = Array.isArray(walkRef.current) ? walkRef.current : []
+    for (const group of groups) {
+      const photos = Array.isArray(group?.photos) ? group.photos : []
+      for (const photo of photos) {
+        const preview = photo?.preview
+        if (typeof preview === 'string' && preview.startsWith('blob:')) {
+          transferred.add(preview)
+        }
+      }
+    }
+    return transferred
+  }, [])
+
+  const revokeUntransferredDraftBlobs = useCallback((drafts) => {
+    const transferred = transferredDraftBlobPreviews()
+    const seen = new Set()
+    const owned = Array.isArray(drafts) ? drafts : []
+    for (const photo of owned) {
+      const preview = photo?.preview
+      if (typeof preview !== 'string' || !preview.startsWith('blob:')) continue
+      if (transferred.has(preview) || seen.has(preview)) continue
+      seen.add(preview)
+      try {
+        URL.revokeObjectURL(preview)
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [transferredDraftBlobPreviews])
+
+  const relinquishDraftOwnership = useCallback(() => {
+    const captured = draftPhotosRef.current
+    draftPhotosRef.current = []
+    revokeUntransferredDraftBlobs(captured)
+  }, [revokeUntransferredDraftBlobs])
+
+  const revokeRemovedCommittedBlobs = (removedPhotos, survivingWalk) => {
+    const surviving = new Set()
+    const groups = Array.isArray(survivingWalk) ? survivingWalk : []
+    for (const group of groups) {
+      const photos = Array.isArray(group?.photos) ? group.photos : []
+      for (const photo of photos) {
+        const preview = photo?.preview
+        if (typeof preview === 'string' && preview.startsWith('blob:')) surviving.add(preview)
+      }
+    }
+    const seen = new Set()
+    const removed = Array.isArray(removedPhotos) ? removedPhotos : []
+    for (const photo of removed) {
+      const preview = photo?.preview
+      if (typeof preview !== 'string' || !preview.startsWith('blob:')) continue
+      if (surviving.has(preview) || seen.has(preview)) continue
+      seen.add(preview)
+      try {
+        URL.revokeObjectURL(preview)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
   // Suggestions come from this diary's own saved areas only. A previous diary must
   // never seed the Work Area Name field or its shortcuts.
   const recentAreas = useMemo(
@@ -307,10 +370,11 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     setDescriptionDraft('')
     // Retain most recent photos-per-page setting
     setEditingGroupId(null)
+    relinquishDraftOwnership()
     setDraftPhotos([])
     clearFieldErrors()
     setPhase('create')
-  }, [])
+  }, [relinquishDraftOwnership])
 
   const validateSave = () => {
     let ok = true
@@ -380,7 +444,10 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
 
   const applyCommittedArea = useCallback((result) => {
     if (!result?.ok || !result.committed || !result.saved) return false
-    if (result.clearedDraft) setDraftPhotos([])
+    if (result.clearedDraft) {
+      draftPhotosRef.current = []
+      setDraftPhotos([])
+    }
     setLastSaved({
       name: result.saved.areaName,
       count: (result.saved.photos || []).length,
@@ -430,6 +497,9 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     }
     walkRef.current = walkToCommit
     onChange(walkToCommit)
+    if (result.clearedDraft) {
+      draftPhotosRef.current = []
+    }
     const saved = walkToCommit.find((g) => g.id === result.saved.id) || result.saved
     return { ok: true, locationWalk: walkToCommit, saved, clearedDraft: result.clearedDraft }
   }, [onAreaSaved, onChange])
@@ -523,6 +593,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     setNameDraft(opened.nameDraft)
     setDescriptionDraft(opened.descriptionDraft)
     setPerPageDraft(opened.perPageDraft)
+    relinquishDraftOwnership()
     setDraftPhotos([])
     clearFieldErrors()
     setPhase('create')
@@ -552,6 +623,10 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [photoWorkspaceDraftDirty])
+
+  useEffect(() => () => {
+    revokeUntransferredDraftBlobs(draftPhotosRef.current)
+  }, [revokeUntransferredDraftBlobs])
 
   const openViewer = (groupId, index) => {
     setWalkError('')
@@ -643,12 +718,20 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
       })
       return
     }
-    updateWalk((prev) => prev.map((g) => {
-      if (g.id !== groupId) return g
-      const target = g.photos.find((p) => p.id === photoId)
-      revoke(target)
-      return { ...g, photos: g.photos.filter((p) => p.id !== photoId) }
-    }))
+    const currentWalk = Array.isArray(walkRef.current) ? walkRef.current : []
+    const removed = []
+    for (const g of currentWalk) {
+      if (!g || g.id !== groupId) continue
+      const target = (g.photos || []).find((p) => p.id === photoId)
+      if (target) removed.push(target)
+    }
+    const survivingWalk = currentWalk.map((g) => (
+      g.id !== groupId
+        ? g
+        : { ...g, photos: g.photos.filter((p) => p.id !== photoId) }
+    ))
+    revokeRemovedCommittedBlobs(removed, survivingWalk)
+    updateWalk(survivingWalk)
     if (viewer?.groupId === groupId) {
       const g = walkRef.current.find((x) => x.id === groupId)
       if (!g?.photos?.length) closeViewer()
@@ -846,7 +929,11 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
             <SecondaryButton
               type="button"
               onClick={() => {
-                updateWalk((prev) => prev.filter((g) => g.id !== editingGroupId))
+                const currentWalk = Array.isArray(walkRef.current) ? walkRef.current : []
+                const removedGroup = currentWalk.find((group) => group?.id === editingGroupId)
+                const survivingWalk = currentWalk.filter((group) => group?.id !== editingGroupId)
+                revokeRemovedCommittedBlobs(removedGroup?.photos, survivingWalk)
+                updateWalk(survivingWalk)
                 setEditingGroupId(null)
                 setNameDraft('')
                 setDescriptionDraft('')
@@ -877,6 +964,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
               type="button"
               onClick={() => {
                 setEditingGroupId(null)
+                relinquishDraftOwnership()
                 setDraftPhotos([])
                 setDescriptionDraft('')
                 clearFieldErrors()
@@ -1011,6 +1099,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
                 type="button"
                 onClick={() => {
                   setEditingGroupId(null)
+                  relinquishDraftOwnership()
                   setDraftPhotos([])
                   setDescriptionDraft('')
                   clearFieldErrors()
