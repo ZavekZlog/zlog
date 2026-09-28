@@ -588,14 +588,22 @@ export function useSiteDiaryLabour({
       manualLabourSnapshotRef.current = null
       return
     }
+    const manualSaveReportId = editingReportId
+    const manualSaveLifecycleRevision = scanLifecycleRevisionRef.current
+    const manualSaveLifecycleCurrent = () => (
+      scanLifecycleReportIdRef.current === manualSaveReportId
+      && scanLifecycleRevisionRef.current === manualSaveLifecycleRevision
+    )
     setManualLabourSaving(true)
     void persistAppliedLabourRows(supabase, editingReportId, projectId, _labourRows)
       .then((labourPayload) => {
+        if (!manualSaveLifecycleCurrent()) return
         lastPersistedLabourRef.current = labourPayload
         setManualLabourEditing(false)
         manualLabourSnapshotRef.current = null
       })
       .catch(() => {
+        if (!manualSaveLifecycleCurrent()) return
         setManualLabourSaveError(LABOUR_APPLY_SAVE_FAIL_MESSAGE)
       })
       .finally(() => {
