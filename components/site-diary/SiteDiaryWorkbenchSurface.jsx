@@ -73,6 +73,7 @@ import {
   classifyAutosaveFailure,
   createDiaryAutosaveOperationQueue,
   diaryAutosaveOperationOwner,
+  diaryAutosaveOwnersEqual,
   nextDiaryAutosaveLifecycleGeneration,
   runDiaryAutosave,
   shouldRunDiaryAutosave,
@@ -663,6 +664,8 @@ export default function SiteDiaryWorkbenchSurface() {
     }
   }, [invalidatePreparedSharePdf])
   const finalSaveInProgressRef = useRef(false)
+  const reportWriteAutosaveOwnerRef = useRef(null)
+  const deferredReportWriteAutosaveRef = useRef(null)
   const ackedSnapshotRef = useRef(null)
   const lastPersistedReportRef = useRef(null)
   const lastPersistedLabourRef = useRef(null)
@@ -2355,14 +2358,60 @@ export default function SiteDiaryWorkbenchSurface() {
     sessionExpired,
   ])
 
+  const releaseDeferredReportWriteAutosave = (writeOwner) => {
+    if (!writeOwner) return Promise.resolve()
+    const pending = deferredReportWriteAutosaveRef.current
+    const pendingIsThisWrite = Boolean(
+      pending && diaryAutosaveOwnersEqual(pending, writeOwner),
+    )
+    if (pendingIsThisWrite) deferredReportWriteAutosaveRef.current = null
+    if (
+      reportWriteAutosaveOwnerRef.current
+      && diaryAutosaveOwnersEqual(reportWriteAutosaveOwnerRef.current, writeOwner)
+    ) {
+      reportWriteAutosaveOwnerRef.current = null
+    }
+    if (!pendingIsThisWrite) return Promise.resolve()
+    const current = autosaveLifecycleOwnerRef.current
+    if (!current || !diaryAutosaveOwnersEqual(writeOwner, current)) return Promise.resolve()
+    return flushPendingAutosave()
+  }
+  // end releaseDeferredReportWriteAutosave
+
   useEffect(() => {
+    const reportWriteOwnsCurrentAutosave = () => {
+      const writeOwner = reportWriteAutosaveOwnerRef.current
+      const current = autosaveLifecycleOwnerRef.current
+      return Boolean(
+        writeOwner
+        && current
+        && diaryAutosaveOwnersEqual(writeOwner, current),
+      )
+    }
+    const noteDeferredReportWriteAutosave = () => {
+      if (!reportWriteOwnsCurrentAutosave()) return
+      const current = autosaveLifecycleOwnerRef.current
+      deferredReportWriteAutosaveRef.current = {
+        reportId: current.reportId,
+        projectId: current.projectId,
+        generation: current.generation,
+      }
+    }
     const flush = () => {
+      if (reportWriteOwnsCurrentAutosave()) {
+        noteDeferredReportWriteAutosave()
+        return
+      }
       void flushPendingAutosave()
     }
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') flush()
     }
     const onOnline = () => {
+      if (reportWriteOwnsCurrentAutosave()) {
+        noteDeferredReportWriteAutosave()
+        return
+      }
       if (!autosavePayloadsEqual(latestPayloadRef.current, ackedSnapshotRef.current)) {
         void performAutosave()
       }
@@ -3436,7 +3485,9 @@ export default function SiteDiaryWorkbenchSurface() {
       return
     }
 
+    let reportWriteOwner = null
     const failSave = (message) => {
+      releaseDeferredReportWriteAutosave(reportWriteOwner)
       diarySaveLog('fail', { message })
       saveLockRef.current = false
       completingRef.current = false
@@ -3623,6 +3674,8 @@ export default function SiteDiaryWorkbenchSurface() {
       return
     }
     finalSaveInProgressRef.current = true
+    reportWriteOwner = autosaveLifecycleOwnerRef.current ? { ...autosaveLifecycleOwnerRef.current } : null
+    reportWriteAutosaveOwnerRef.current = reportWriteOwner
     const tapUserActivation = snapshotUserActivation()
     const tapStartedAt = Date.now()
     const diaryCleanForRetain = isDiaryCleanForSaveRetainCheck({
@@ -3768,7 +3821,10 @@ export default function SiteDiaryWorkbenchSurface() {
         userId: authVerification.user?.id || null,
         authError: authVerification.error?.message || null,
       })
-      if (authVerification.status !== 'authenticated') return
+      if (authVerification.status !== 'authenticated') {
+        releaseDeferredReportWriteAutosave(reportWriteOwner)
+        return
+      }
       const user = authVerification.user
 
       const pendingId = makeUuid()
@@ -4054,8 +4110,6 @@ export default function SiteDiaryWorkbenchSurface() {
         projectId,
       })
 
-      // Persist first, then prepare the PDF on this tap. Native share waits for
-      // a fresh second tap so Android user activation stays live.
       if (requiredCoverPath) {
         const keepPreview = coverPhotoRef.current?.preview || null
         const keepPrepared = coverPhotoRef.current?.preparedBlob || localPreparedCoverBlob || null
@@ -4077,28 +4131,28 @@ export default function SiteDiaryWorkbenchSurface() {
       setReportIsDraft(false)
       diaryPersistSucceeded = true
       diarySaveLog('success', { reportId: saved.id })
-
       const startedPrepareGeneration = pdfPrepareGenerationRef.current
-      const startedPrepareReportId = String(saved.id)
+      const startedMutationRevision = localAutosaveMutationRevisionRef.current
+      const startedReportId = String(saved.id)
       const prepareAbort = new AbortController()
       pdfPrepareAbortRef.current = prepareAbort
-
+      const clearPrepareOwnership = () => {
+        saveLockRef.current = completingRef.current = finalSaveInProgressRef.current = false
+        flushSync(() => { setSaving(false); setPdfPreparing(false) })
+      }
       const dismissStaleWorkerPrepare = () => {
         if (
           pdfPrepareGenerationRef.current !== startedPrepareGeneration
-          || String(editingReportId || '') !== startedPrepareReportId
+          || localAutosaveMutationRevisionRef.current !== startedMutationRevision
+          || String(editingReportId || '') !== startedReportId
         ) {
-          saveLockRef.current = false
-          completingRef.current = false
-          finalSaveInProgressRef.current = false
-          flushSync(() => {
-            setSaving(false)
-            setPdfPreparing(false)
-          })
+          clearPrepareOwnership()
           return true
         }
         return false
       }
+      await releaseDeferredReportWriteAutosave(reportWriteOwner)
+      if (dismissStaleWorkerPrepare()) return
 
       const adoptRetainedPreparedFileIfCurrent = async () => {
         const fingerprint = await fetchAuthoritativeSiteDiaryPdfExportFingerprint(saved.id, {
@@ -4167,7 +4221,7 @@ export default function SiteDiaryWorkbenchSurface() {
       let joinedExportIdentity = null
       if (
         saveReconcileOp
-        && String(saveReconcileOp.reportId) === startedPrepareReportId
+        && String(saveReconcileOp.reportId) === startedReportId
         && saveReconcileOp.generation === startedPrepareGeneration
       ) {
         try {
@@ -4185,7 +4239,7 @@ export default function SiteDiaryWorkbenchSurface() {
           joinedExportIdentity?.ok
           && postHydrateReconcileArtifactJoinMatches(
             saveReconcileOp,
-            startedPrepareReportId,
+            startedReportId,
             startedPrepareGeneration,
             joinedExportIdentity,
           )
@@ -4222,10 +4276,10 @@ export default function SiteDiaryWorkbenchSurface() {
               if (
                 joinedPrepared?.ok
                 && pdfPrepareGenerationRef.current === startedPrepareGeneration
-                && String(editingReportId || '') === startedPrepareReportId
+                && String(editingReportId || '') === startedReportId
                 && postHydrateReconcileArtifactJoinMatches(
                   saveReconcileOp,
-                  startedPrepareReportId,
+                  startedReportId,
                   startedPrepareGeneration,
                   joinedExportIdentity,
                 )
@@ -4311,9 +4365,17 @@ export default function SiteDiaryWorkbenchSurface() {
       const fingerprintAfterPrepare = await fetchAuthoritativeSiteDiaryPdfExportFingerprint(saved.id, {
         signal: prepareAbort.signal,
       })
-      const preparedFingerprint = fingerprintAfterPrepare.ok
+      if (dismissStaleWorkerPrepare()) {
+        return
+      }
+      const authoritativeAfterPrepare = fingerprintAfterPrepare.ok
         ? fingerprintAfterPrepare.contentFingerprint
         : null
+      if (!preparedFileMatchesFingerprint(prepared, authoritativeAfterPrepare)) {
+        clearPrepareOwnership()
+        return
+      }
+      const preparedFingerprint = authoritativeAfterPrepare
       if (useNativeFileShareOnPrepare) {
         const pdfFile = prepared.file instanceof File
           ? prepared.file
