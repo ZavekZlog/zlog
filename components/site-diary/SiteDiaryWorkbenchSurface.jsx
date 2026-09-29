@@ -3189,6 +3189,7 @@ export default function SiteDiaryWorkbenchSurface() {
 
   const updatePlant = (key, field, value) => {
     dismissAutosaveSuccessClaim()
+    invalidatePreparedSharePdf('committed-diary-change')
     setPlantRows((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)))
   }
 
@@ -5023,6 +5024,7 @@ export default function SiteDiaryWorkbenchSurface() {
               value={visitors}
               onChange={(e) => {
                 markLocalAutosaveMutation()
+                invalidatePreparedSharePdf('committed-diary-change')
                 setVisitors(e.target.value)
                 setCarriedVisitors(false)
               }}
@@ -5039,14 +5041,17 @@ export default function SiteDiaryWorkbenchSurface() {
           variations={variations}
           onHsChange={(rows) => {
             markLocalAutosaveMutation()
+            invalidatePreparedSharePdf('committed-diary-change')
             setHsIncidents(rows)
           }}
           onRfisChange={(rows) => {
             markLocalAutosaveMutation()
+            invalidatePreparedSharePdf('committed-diary-change')
             setRfis(rows)
           }}
           onVariationsChange={(rows) => {
             markLocalAutosaveMutation()
+            invalidatePreparedSharePdf('committed-diary-change')
             setVariations(rows)
           }}
         />
@@ -5059,6 +5064,7 @@ export default function SiteDiaryWorkbenchSurface() {
               {plantRows.length > 1 && (
                 <button type="button" style={removeRowStyle} onClick={() => {
                   dismissAutosaveSuccessClaim()
+                  invalidatePreparedSharePdf('committed-diary-change')
                   setPlantRows((rows) => rows.filter((r) => r.key !== row.key))
                 }}>
                   Remove row
@@ -5084,6 +5090,7 @@ export default function SiteDiaryWorkbenchSurface() {
           ))}
           <button type="button" style={addRowButtonStyle} onClick={() => {
             dismissAutosaveSuccessClaim()
+            invalidatePreparedSharePdf('committed-diary-change')
             setPlantRows((rows) => [...rows, emptyPlant()])
           }}>
             + Add plant row
@@ -5194,6 +5201,7 @@ export default function SiteDiaryWorkbenchSurface() {
               value={delaysIssues}
               onChange={(e) => {
                 markLocalAutosaveMutation()
+                invalidatePreparedSharePdf('committed-diary-change')
                 setDelaysIssues(e.target.value)
                 setCarriedDelaysIssues(false)
               }}
@@ -5207,6 +5215,7 @@ export default function SiteDiaryWorkbenchSurface() {
             value={actionsRequired}
             onChange={(e) => {
               markLocalAutosaveMutation()
+              invalidatePreparedSharePdf('committed-diary-change')
               setActionsRequired(e.target.value)
             }}
             placeholder="Follow-ups, RFIs, instructions needed…"

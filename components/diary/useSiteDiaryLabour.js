@@ -303,6 +303,7 @@ export function useSiteDiaryLabour({
         setSignInSheetStoragePath(persistResult.storagePath)
         persistedStoragePathForGeneration = persistResult.storagePath
         signInSheetRemovedRef.current = false
+        invalidatePreparedSharePdf('committed-diary-change')
         if (preparedBlob) {
           rememberSignInSheetSessionEvidence(persistResult.storagePath, preparedBlob)
         }
@@ -370,7 +371,15 @@ export function useSiteDiaryLabour({
         setScanLoading(false)
       }
     }
-  }, [reportDate, editingReportId, projectId, signInSheetStoragePath, supabase, updateDiarySetupFields])
+  }, [
+    editingReportId,
+    invalidatePreparedSharePdf,
+    projectId,
+    reportDate,
+    signInSheetStoragePath,
+    supabase,
+    updateDiarySetupFields,
+  ])
 
   const hasSignInSheetEvidenceOnForm = hasSignInSheetEvidence({
     signInSheetStoragePath,
@@ -496,6 +505,7 @@ export function useSiteDiaryLabour({
     if (path) {
       evictSignInSheetSessionEvidence(path)
     }
+    let persistedAttendanceCleared = false
     if (editingReportId && projectId && path) {
       setScanLoading(true)
       setScanError('')
@@ -509,6 +519,7 @@ export function useSiteDiaryLabour({
           setScanError(SIGN_IN_SHEET_EVIDENCE_REMOVE_FAIL_MESSAGE)
           return
         }
+        persistedAttendanceCleared = true
       } finally {
         setScanLoading(false)
       }
@@ -518,9 +529,13 @@ export function useSiteDiaryLabour({
     setSignInSheetStoragePath(null)
     setScanSignInPreviewLoadError('')
     signInSheetRemovedRef.current = true
+    if (persistedAttendanceCleared) {
+      invalidatePreparedSharePdf('committed-diary-change')
+    }
   }, [
     clearSignInSheetWorkingState,
     editingReportId,
+    invalidatePreparedSharePdf,
     projectId,
     signInSheetStoragePath,
     supabase,
