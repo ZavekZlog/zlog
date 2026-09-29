@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
+import { diaryAutosaveOperationOwner, diaryAutosaveOwnersEqual } from '@/lib/diary-autosave'
 import {
   isSignInOcrApplyEnabled,
   parseSignInSheet,
@@ -47,6 +48,8 @@ import { scanReviewEvidencePathForCommittedGeneration } from '@/lib/scan-review-
 
 const labourGroupBy = 'trade'
 
+const unlockedReportWriteRef = { current: false }
+
 export function useSiteDiaryLabour({
   reportDate,
   editingReportId,
@@ -63,6 +66,8 @@ export function useSiteDiaryLabour({
   visitors = '',
   visitorsRegisterProvenance = [],
   onVisitorsChange,
+  reportWriteLockedRef = unlockedReportWriteRef,
+  reportLifecycleOwnerRef = null,
 }) {
   const [labourMode, setLabourModeState] = useState('manual')
   const [manualLabourEditing, setManualLabourEditing] = useState(false)
@@ -76,6 +81,10 @@ export function useSiteDiaryLabour({
   const [scanApplySaving, setScanApplySaving] = useState(false)
   const [scanApplySaved, setScanApplySaved] = useState(false)
   const labourApplyInFlightRef = useRef(false)
+  const labourApplyInFlightTokenRef = useRef(null)
+  const labourApplyPromiseRef = useRef(null)
+  const manualLabourPromiseRef = useRef(null)
+  const publishedLabourPayloadRef = useRef(null)
   const [scanMeta, setScanMeta] = useState({ matched: 0, ignored: 0, extracted: 0 })
   const [scanWarnings, setScanWarnings] = useState([])
   const [scanOperatives, setScanOperatives] = useState([])
@@ -217,6 +226,9 @@ export function useSiteDiaryLabour({
     if (scanLifecycleReportIdRef.current === editingReportId) return
     scanLifecycleRevisionRef.current += 1
     scanLifecycleReportIdRef.current = editingReportId
+    labourApplyInFlightRef.current = false
+    labourApplyInFlightTokenRef.current = null
+    setScanApplySaving(false)
     clearSignInSheetWorkingState()
     setSignInSheetStoragePath(null)
     loadedSignInSheetPathRef.current = null
@@ -397,6 +409,7 @@ export function useSiteDiaryLabour({
     if (typeof event?.nativeEvent?.stopImmediatePropagation === 'function') {
       event.nativeEvent.stopImmediatePropagation()
     }
+    if (typeof reportWriteLockedRef !== 'undefined' && reportWriteLockedRef?.current) return
     // Apply writes the Site Manager's reviewed Trade + Workers + Hours draft.
     if (!isSignInOcrApplyEnabled(scanOcrProvider, scanApplyEnabled)) {
       setScanApplySaved(false)
@@ -416,6 +429,10 @@ export function useSiteDiaryLabour({
       setScanApplyError(result.message)
       return
     }
+    const applyInFlightToken = {}
+    if (typeof labourApplyInFlightTokenRef !== 'undefined' && labourApplyInFlightTokenRef) {
+      labourApplyInFlightTokenRef.current = applyInFlightToken
+    }
     labourApplyInFlightRef.current = true
     flushSync(() => {
       setScanApplySaving(true)
@@ -428,7 +445,15 @@ export function useSiteDiaryLabour({
     invalidatePreparedSharePdf('committed-diary-change')
 
     const finishApply = () => {
+      if (
+        typeof labourApplyInFlightTokenRef !== 'undefined'
+        && labourApplyInFlightTokenRef
+        && labourApplyInFlightTokenRef.current !== applyInFlightToken
+      ) return
       labourApplyInFlightRef.current = false
+      if (typeof labourApplyInFlightTokenRef !== 'undefined' && labourApplyInFlightTokenRef) {
+        labourApplyInFlightTokenRef.current = null
+      }
       setScanApplySaving(false)
     }
 
@@ -454,11 +479,35 @@ export function useSiteDiaryLabour({
       && scanRequestIdRef.current === applyScanRequestId
     )
 
-    void persistAppliedLabourRows(supabase, editingReportId, projectId, result.rows)
+    const writerOwner = (
+      typeof reportLifecycleOwnerRef !== 'undefined'
+      && reportLifecycleOwnerRef?.current
+    ) ? diaryAutosaveOperationOwner(reportLifecycleOwnerRef.current) : null
+    const publicationOwnerCurrent = () => {
+      if (typeof diaryAutosaveOwnersEqual !== 'function' || !writerOwner) return true
+      if (typeof reportLifecycleOwnerRef === 'undefined' || !reportLifecycleOwnerRef?.current) return false
+      return diaryAutosaveOwnersEqual(writerOwner, reportLifecycleOwnerRef.current)
+    }
+    const persistPromise = persistAppliedLabourRows(supabase, editingReportId, projectId, result.rows)
       .then((labourPayload) => {
-        if (!reportLifecycleCurrent()) return
+        if (typeof publishedLabourPayloadRef !== 'undefined' && publishedLabourPayloadRef) {
+          publishedLabourPayloadRef.current = {
+            owner: writerOwner,
+            reportId: writerOwner?.reportId || editingReportId,
+            payload: labourPayload,
+          }
+        }
+        return labourPayload
+      })
+    const labourWriter = { owner: writerOwner, promise: persistPromise }
+    if (typeof labourApplyPromiseRef !== 'undefined' && labourApplyPromiseRef) {
+      labourApplyPromiseRef.current = labourWriter
+    }
+    void persistPromise
+      .then((labourPayload) => {
+        if (!reportLifecycleCurrent() || !publicationOwnerCurrent()) return
         lastPersistedLabourRef.current = labourPayload
-        if (!scanCompletionCurrent()) return
+        if (!scanCompletionCurrent() || !publicationOwnerCurrent()) return
         setScanApplySaved(true)
         setScanApplyNotice(
           result.totals.hours > 0
@@ -467,11 +516,18 @@ export function useSiteDiaryLabour({
         )
       })
       .catch(() => {
-        if (!scanCompletionCurrent()) return
+        if (!scanCompletionCurrent() || !publicationOwnerCurrent()) return
         setScanApplySaved(false)
         setScanApplyError(LABOUR_APPLY_SAVE_FAIL_MESSAGE)
       })
       .finally(() => {
+        if (
+          typeof labourApplyPromiseRef !== 'undefined'
+          && labourApplyPromiseRef
+          && labourApplyPromiseRef.current === labourWriter
+        ) {
+          labourApplyPromiseRef.current = null
+        }
         finishApply()
       })
   }, [
@@ -480,6 +536,8 @@ export function useSiteDiaryLabour({
     invalidatePreparedSharePdf,
     makeUuid,
     projectId,
+    reportLifecycleOwnerRef,
+    reportWriteLockedRef,
     scanApplyEnabled,
     scanOcrProvider,
     setLabourRows,
@@ -595,6 +653,7 @@ export function useSiteDiaryLabour({
   }, [setLabourRows])
 
   const saveManualLabourChanges = useCallback(() => {
+    if (typeof reportWriteLockedRef !== 'undefined' && reportWriteLockedRef?.current) return
     setManualLabourSaveError('')
     dismissAutosaveSuccessClaim()
     invalidatePreparedSharePdf('committed-diary-change')
@@ -609,20 +668,51 @@ export function useSiteDiaryLabour({
       scanLifecycleReportIdRef.current === manualSaveReportId
       && scanLifecycleRevisionRef.current === manualSaveLifecycleRevision
     )
+    const writerOwner = (
+      typeof reportLifecycleOwnerRef !== 'undefined'
+      && reportLifecycleOwnerRef?.current
+    ) ? diaryAutosaveOperationOwner(reportLifecycleOwnerRef.current) : null
+    const publicationOwnerCurrent = () => {
+      if (typeof diaryAutosaveOwnersEqual !== 'function' || !writerOwner) return true
+      if (typeof reportLifecycleOwnerRef === 'undefined' || !reportLifecycleOwnerRef?.current) return false
+      return diaryAutosaveOwnersEqual(writerOwner, reportLifecycleOwnerRef.current)
+    }
     setManualLabourSaving(true)
-    void persistAppliedLabourRows(supabase, editingReportId, projectId, _labourRows)
+    const persistPromise = persistAppliedLabourRows(supabase, editingReportId, projectId, _labourRows)
       .then((labourPayload) => {
-        if (!manualSaveLifecycleCurrent()) return
+        if (typeof publishedLabourPayloadRef !== 'undefined' && publishedLabourPayloadRef) {
+          publishedLabourPayloadRef.current = {
+            owner: writerOwner,
+            reportId: writerOwner?.reportId || editingReportId,
+            payload: labourPayload,
+          }
+        }
+        return labourPayload
+      })
+    const labourWriter = { owner: writerOwner, promise: persistPromise }
+    if (typeof manualLabourPromiseRef !== 'undefined' && manualLabourPromiseRef) {
+      manualLabourPromiseRef.current = labourWriter
+    }
+    void persistPromise
+      .then((labourPayload) => {
+        if (!manualSaveLifecycleCurrent() || !publicationOwnerCurrent()) return
         lastPersistedLabourRef.current = labourPayload
         setManualLabourEditing(false)
         manualLabourSnapshotRef.current = null
       })
       .catch(() => {
-        if (!manualSaveLifecycleCurrent()) return
+        if (!manualSaveLifecycleCurrent() || !publicationOwnerCurrent()) return
         setManualLabourSaveError(LABOUR_APPLY_SAVE_FAIL_MESSAGE)
       })
       .finally(() => {
-        setManualLabourSaving(false)
+        if (
+          typeof manualLabourPromiseRef !== 'undefined'
+          && manualLabourPromiseRef
+          && manualLabourPromiseRef.current === labourWriter
+        ) {
+          manualLabourPromiseRef.current = null
+          setManualLabourSaving(false)
+        }
       })
   }, [
     _labourRows,
@@ -631,6 +721,8 @@ export function useSiteDiaryLabour({
     invalidatePreparedSharePdf,
     lastPersistedLabourRef,
     projectId,
+    reportLifecycleOwnerRef,
+    reportWriteLockedRef,
     supabase,
   ])
 
@@ -766,6 +858,9 @@ export function useSiteDiaryLabour({
     cancelManualLabourEdit,
     manualLabourSaveError,
     manualLabourSaving,
+    labourApplyPromiseRef,
+    manualLabourPromiseRef,
+    publishedLabourPayloadRef,
     hasSignInSheetEvidenceOnForm,
     hydrateSignInFromReport,
     handleScanTradeHoursReviewChange,

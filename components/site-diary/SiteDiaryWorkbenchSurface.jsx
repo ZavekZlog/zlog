@@ -36,6 +36,7 @@ import { DiaryDailyRecordSections } from '@/components/diary/DiaryDailyRecordSec
 import { DiaryTemporaryWorksSection } from '@/components/diary/DiaryTemporaryWorksSection'
 import { DiaryNarrativeTextarea } from '@/components/diary/DiaryNarrativeTextarea'
 import { PhotoWorkspace } from '@/components/photo-workspace'
+import { diaryReportLifecycleOwnerBridge, diaryReportWriteLockBridge } from '@/components/ai-annotation/AiLocationWalk'
 import {
   flattenAreaGroups,
   groupPhotosByArea,
@@ -560,11 +561,98 @@ async function uploadOverlayPng(supabase, { userId, reportId, sequence, dataUrl 
   return storagePath
 }
 
+async function awaitSaveTimeWriterBarrier({
+  labourWriters,
+  detailsPromise,
+  detailsBefore,
+  areaPromise,
+  editingReportIdRef,
+  saveReportId,
+  projectDetailsAuthorityRef,
+  saveOwner = null,
+  lifecycleOwnerRef = null,
+}) {
+  let authoritativeLabourPayload = null
+  let authoritativeLabourFailed = false
+  let authoritativeDetailsFailed = false
+  let authoritativePhotoWalk = null
+  const lifecycleMatches = () => (
+    !saveOwner
+    || !lifecycleOwnerRef
+    || diaryAutosaveOwnersEqual(lifecycleOwnerRef.current, saveOwner)
+  )
+  if (labourWriters.length) {
+    try {
+      for (const labourWriter of labourWriters) {
+        const labourResult = await labourWriter
+        if (!labourResult) {
+          authoritativeLabourFailed = true
+          break
+        }
+        authoritativeLabourPayload = labourResult
+      }
+    } catch {
+      authoritativeLabourFailed = true
+    }
+    if (
+      !lifecycleMatches()
+      || String(editingReportIdRef.current || '') !== String(saveReportId || '')
+    ) {
+      authoritativeLabourFailed = true
+    }
+  }
+  if (detailsPromise) {
+    try {
+      await detailsPromise
+    } catch {
+      authoritativeDetailsFailed = true
+    }
+    const publishedDetails = projectDetailsAuthorityRef.current
+    if (
+      !lifecycleMatches()
+      || String(editingReportIdRef.current || '') !== String(saveReportId || '')
+      || !publishedDetails
+      || publishedDetails === detailsBefore
+      || !diaryAutosaveOwnersEqual(publishedDetails.owner, saveOwner)
+    ) {
+      authoritativeDetailsFailed = true
+    }
+  }
+  let areaFailed = false
+  if (areaPromise) {
+    try {
+      const areaResult = await areaPromise
+      if (
+        !lifecycleMatches()
+        || String(editingReportIdRef.current || '') !== String(saveReportId || '')
+        || !areaResult
+        || areaResult.ok === false
+        || !areaResult.locationWalk
+      ) {
+        areaFailed = true
+      } else {
+        authoritativePhotoWalk = areaResult.locationWalk
+      }
+    } catch {
+      areaFailed = true
+    }
+  }
+  return {
+    authoritativeLabourPayload,
+    authoritativeLabourFailed,
+    authoritativeDetailsFailed,
+    authoritativePhotoWalk,
+    areaFailed,
+  }
+}
+
 export default function SiteDiaryWorkbenchSurface() {
   const { id: projectId } = useParams()
   const searchParams = useSearchParams()
   const prefillLast = searchParams.get('prefill') === 'last'
   const editingReportId = searchParams.get('report') || searchParams.get('diaryId') || null
+  const editingReportIdRef = useRef(editingReportId)
+  editingReportIdRef.current = editingReportId
   const editQuery = searchParams.get('edit')
   const composeQuery = searchParams.get('compose')
   const duplicateReportId = (!editingReportId && searchParams.get('duplicate')) || null
@@ -608,6 +696,11 @@ export default function SiteDiaryWorkbenchSurface() {
   const [loading, setLoading] = useState(true)
   const saveCtaRef = useRef(null)
   const [saving, setSaving] = useState(false)
+  const [reportWriteLocked, setReportWriteLocked] = useState(false)
+  const reportWriteLockedRef = useRef(false)
+  diaryReportWriteLockBridge.current = reportWriteLockedRef
+  const projectDetailsAuthorityRef = useRef(null)
+  const projectDetailsPersistRef = useRef(null)
   const [pdfPreparing, setPdfPreparing] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
   const [showSaveBanner, setShowSaveBanner] = useState(false)
@@ -676,6 +769,7 @@ export default function SiteDiaryWorkbenchSurface() {
   const autosaveInFlightRef = useRef(null)
   const autosaveOperationQueueRef = useRef(null)
   const autosaveLifecycleOwnerRef = useRef(null)
+  diaryReportLifecycleOwnerBridge.current = autosaveLifecycleOwnerRef
   const backNavigationInFlightRef = useRef(false)
   if (!autosaveOperationQueueRef.current) {
     autosaveOperationQueueRef.current = createDiaryAutosaveOperationQueue()
@@ -696,6 +790,12 @@ export default function SiteDiaryWorkbenchSurface() {
       projectId,
       generation,
     })
+    if (
+      projectDetailsAuthorityRef.current
+      && !diaryAutosaveOwnersEqual(projectDetailsAuthorityRef.current.owner, owner)
+    ) {
+      projectDetailsAuthorityRef.current = null
+    }
     autosaveLifecycleOwnerRef.current = owner
     autosaveOperationQueueRef.current.setActive(owner)
 
@@ -724,6 +824,10 @@ export default function SiteDiaryWorkbenchSurface() {
     setError('')
     photoWorkspaceDraftDirtyRef.current = false
     finalSaveInProgressRef.current = false
+    reportWriteLockedRef.current = false
+    setReportWriteLocked(false)
+    projectDetailsAuthorityRef.current = null
+    projectDetailsPersistRef.current = null
     setAutosaveStatus(null)
     setLoadDiagnostic('')
     ackedSnapshotRef.current = null
@@ -821,6 +925,8 @@ export default function SiteDiaryWorkbenchSurface() {
     handlePdfVisibleTextInput(invalidatePreparedSharePdf, setSiteSummary, event)
   }
   const [labourRows, setLabourRows] = useState([emptyLabour()])
+  const labourRowsRef = useRef(labourRows)
+  labourRowsRef.current = labourRows
   const [visitors, setVisitors] = useState('')
   const [visitorsRegisterProvenance, setVisitorsRegisterProvenance] = useState([])
   const handleVisitorsFromLabourScan = useCallback((text, provenance) => {
@@ -848,14 +954,22 @@ export default function SiteDiaryWorkbenchSurface() {
     visitors,
     visitorsRegisterProvenance,
     onVisitorsChange: handleVisitorsFromLabourScan,
+    reportWriteLockedRef,
+    reportLifecycleOwnerRef: autosaveLifecycleOwnerRef,
   })
   const [plantRows, setPlantRows] = useState([emptyPlant()])
+  const plantRowsRef = useRef(plantRows)
+  plantRowsRef.current = plantRows
   const [equipmentHireRows, setEquipmentHireRows] = useState([emptyEquipmentHire()])
+  const equipmentHireRowsRef = useRef(equipmentHireRows)
+  equipmentHireRowsRef.current = equipmentHireRows
   const [hsIncidents, setHsIncidents] = useState([])
   const [rfis, setRfis] = useState([])
   const [variations, setVariations] = useState([])
   const [temporaryWorksApplicable, setTemporaryWorksApplicable] = useState(null)
   const [temporaryWorks, setTemporaryWorks] = useState([])
+  const temporaryWorksRef = useRef(temporaryWorks)
+  temporaryWorksRef.current = temporaryWorks
   const [delaysIssues, setDelaysIssues] = useState('')
   const [actionsRequired, setActionsRequired] = useState('')
   const [photos, setPhotos] = useState([])
@@ -893,7 +1007,37 @@ export default function SiteDiaryWorkbenchSurface() {
 
   const getPersistedReportRow = useCallback(() => lastPersistedReportRef.current, [])
 
-  const handleWorkbenchProjectDetailsSync = useCallback((sync) => {
+  const handleWorkbenchProjectDetailsSync = useCallback((sync, writerOwner) => {
+    const owner = writerOwner ? diaryAutosaveOperationOwner(writerOwner) : null
+    if (owner && typeof projectDetailsAuthorityRef !== 'undefined' && projectDetailsAuthorityRef) {
+      projectDetailsAuthorityRef.current = {
+        owner,
+        sync: {
+          reportId: owner.reportId,
+          reportDate: sync.reportDate,
+          shiftType: sync.shiftType,
+          creatorName: sync.creatorName,
+          creatorRole: sync.creatorRole,
+          companyReportingFor: sync.companyReportingFor,
+          currentPhase: sync.currentPhase,
+          brandingSelection: sync.brandingSelection,
+          coverPhoto: sync.coverPhoto,
+          projectReference: sync.projectReference,
+          logoPreviewUrl: sync.logoPreviewUrl,
+        },
+      }
+    }
+    const stalePublication = Boolean(
+      owner
+      && typeof autosaveLifecycleOwnerRef !== 'undefined'
+      && autosaveLifecycleOwnerRef?.current
+      && typeof diaryAutosaveOwnersEqual === 'function'
+      && !diaryAutosaveOwnersEqual(
+        owner,
+        diaryAutosaveOperationOwner(autosaveLifecycleOwnerRef.current),
+      )
+    )
+    if (stalePublication) return
     if (sync.coverPhoto !== undefined) markLocalAutosaveMutation()
     setCreatorName(sync.creatorName)
     setCreatorRole(sync.creatorRole)
@@ -2293,8 +2437,7 @@ export default function SiteDiaryWorkbenchSurface() {
     if (!hydrateComplete || !editingReportId || !isDiaryEditMode || sessionExpired) return
     const payload = latestPayloadRef.current
     if (payload && !autosavePayloadsEqual(payload, ackedSnapshotRef.current)) {
-      await performAutosave()
-      return
+      return performAutosave()
     }
     const operationOwner = autosaveLifecycleOwnerRef.current
     if (operationOwner) {
@@ -2676,6 +2819,7 @@ export default function SiteDiaryWorkbenchSurface() {
     }
 
     const onEndStroke = () => {
+      if (reportWriteLockedRef.current) return
       dismissAutosaveSuccessClaim()
       invalidatePreparedSharePdf('committed-diary-change')
       if (pad.isEmpty()) {
@@ -3434,6 +3578,20 @@ export default function SiteDiaryWorkbenchSurface() {
           message: SAVE_AREA_PERSIST_FAIL_MESSAGE,
         }
       }
+      const publicationOwner = meta.areaPublicationOwner || null
+      const liveOwner = (
+        typeof autosaveLifecycleOwnerRef !== 'undefined'
+        && autosaveLifecycleOwnerRef?.current
+        && typeof diaryAutosaveOperationOwner === 'function'
+      ) ? diaryAutosaveOperationOwner(autosaveLifecycleOwnerRef.current) : null
+      if (
+        publicationOwner
+        && liveOwner
+        && typeof diaryAutosaveOwnersEqual === 'function'
+        && !diaryAutosaveOwnersEqual(publicationOwner, liveOwner)
+      ) {
+        return { ok: false, reason: 'stale-lifecycle' }
+      }
       if (result.locationWalk) {
         lastPersistedPhotosRef.current = durablePhotosToBaseline(
           flattenAreaGroups(result.locationWalk),
@@ -3487,13 +3645,19 @@ export default function SiteDiaryWorkbenchSurface() {
     }
 
     let reportWriteOwner = null
+    const releaseReportWriteLock = () => {
+      reportWriteLockedRef.current = false
+      setReportWriteLocked(false)
+    }
     const failSave = (message) => {
       releaseDeferredReportWriteAutosave(reportWriteOwner)
       diarySaveLog('fail', { message })
       saveLockRef.current = false
       completingRef.current = false
       finalSaveInProgressRef.current = false
+      releaseReportWriteLock()
       flushSync(() => {
+        setReportWriteLocked(false)
         setSaving(false)
         setPdfPreparing(false)
         setJustSaved(false)
@@ -3509,8 +3673,10 @@ export default function SiteDiaryWorkbenchSurface() {
       saveLockRef.current = false
       completingRef.current = false
       finalSaveInProgressRef.current = false
+      releaseReportWriteLock()
       const userMessage = diarySavedPdfPrepareFailureMessage(message)
       flushSync(() => {
+        setReportWriteLocked(false)
         setSaving(false)
         setPdfPreparing(false)
         setJustSaved(true)
@@ -3675,6 +3841,23 @@ export default function SiteDiaryWorkbenchSurface() {
       return
     }
     finalSaveInProgressRef.current = true
+    reportWriteLockedRef.current = true
+    const saveReportId = editingReportId
+    const saveOwner = autosaveLifecycleOwnerRef.current
+      ? diaryAutosaveOperationOwner(autosaveLifecycleOwnerRef.current)
+      : null
+    const promiseForSaveOwner = (record) => {
+      if (!record || !saveOwner || typeof record.then === 'function') return null
+      if (!diaryAutosaveOwnersEqual(record.owner, saveOwner)) return null
+      return typeof record.promise?.then === 'function' ? record.promise : null
+    }
+    const capturedLabourApplyPromise = promiseForSaveOwner(labourScan.labourApplyPromiseRef?.current)
+    const capturedManualLabourPromise = promiseForSaveOwner(labourScan.manualLabourPromiseRef?.current)
+    const capturedDetailsPromise = promiseForSaveOwner(projectDetailsPersistRef.current)
+    const detailsAuthorityBeforeWriters = projectDetailsAuthorityRef.current
+    const areaOperation = locationWalkRef.current?.getAreaPersistOperation?.() || null
+    const capturedAreaPromise = promiseForSaveOwner(areaOperation)
+    const childWalk = locationWalkRef.current?.getAuthoritativeWalk?.(saveOwner) ?? null
     reportWriteOwner = autosaveLifecycleOwnerRef.current ? { ...autosaveLifecycleOwnerRef.current } : null
     reportWriteAutosaveOwnerRef.current = reportWriteOwner
     const tapUserActivation = snapshotUserActivation()
@@ -3691,6 +3874,7 @@ export default function SiteDiaryWorkbenchSurface() {
       reportId: editingReportId,
     })
     flushSync(() => {
+      setReportWriteLocked(true)
       setSaving(true)
       setPdfPreparing(false)
       setJustSaved(false)
@@ -3787,6 +3971,27 @@ export default function SiteDiaryWorkbenchSurface() {
 
       await flushPendingAutosave()
 
+      const writerBarrier = await awaitSaveTimeWriterBarrier({
+        labourWriters: [capturedLabourApplyPromise, capturedManualLabourPromise].filter(Boolean),
+        detailsPromise: capturedDetailsPromise,
+        detailsBefore: detailsAuthorityBeforeWriters,
+        areaPromise: capturedAreaPromise,
+        editingReportIdRef,
+        saveReportId,
+        projectDetailsAuthorityRef,
+        saveOwner,
+        lifecycleOwnerRef: autosaveLifecycleOwnerRef,
+      })
+      const authoritativeLabourPayload = writerBarrier.authoritativeLabourPayload
+      const authoritativeLabourFailed = writerBarrier.authoritativeLabourFailed
+      const authoritativeDetailsFailed = writerBarrier.authoritativeDetailsFailed
+      const authoritativePhotoWalk = writerBarrier.authoritativePhotoWalk
+      if (writerBarrier.areaFailed) {
+        releaseReportWriteLock()
+        failSave('We couldn’t save your Site Diary. Check your connection and try again.')
+        return
+      }
+
       // Commit the active unsaved work area (same as Save Area) before persist.
       // Draft photos outside locationWalk must never be silently omitted from Share.
       let walkForPersist = locationWalk
@@ -3802,9 +4007,11 @@ export default function SiteDiaryWorkbenchSurface() {
         })
         return
       }
-      if (areaFlush?.locationWalk) {
-        walkForPersist = areaFlush.locationWalk
-        if (areaFlush.committed) {
+      // begin authoritative-photo-walk
+      walkForPersist = (areaFlush && areaFlush.locationWalk) || authoritativePhotoWalk || childWalk || walkForPersist
+      // end authoritative-photo-walk
+      if (areaFlush?.locationWalk || authoritativePhotoWalk || childWalk) {
+        if (areaFlush?.committed || authoritativePhotoWalk || childWalk) {
           flushSync(() => {
             setLocationWalk(walkForPersist)
             setPhotos(flattenAreaGroups(walkForPersist))
@@ -3824,6 +4031,8 @@ export default function SiteDiaryWorkbenchSurface() {
       })
       if (authVerification.status !== 'authenticated') {
         releaseDeferredReportWriteAutosave(reportWriteOwner)
+        releaseReportWriteLock()
+        flushSync(() => { setReportWriteLocked(false) })
         return
       }
       const user = authVerification.user
@@ -3898,11 +4107,12 @@ export default function SiteDiaryWorkbenchSurface() {
         requiredCoverPath = coverPlan.patch.cover_photo_url
       }
 
-      if (signature?.file) {
+      const signatureForSave = signatureRef.current
+      if (signatureForSave?.file) {
         const signaturePath = `${user.id}/pending/${pendingId}/signature.png`
         const { error: signatureUploadError } = await supabase.storage
           .from('site-photos')
-          .upload(signaturePath, signature.file, { contentType: signature.file.type, upsert: false })
+          .upload(signaturePath, signatureForSave.file, { contentType: signatureForSave.file.type, upsert: false })
         if (signatureUploadError) {
           failSave('We couldn’t upload the signature. Check your connection and try Share again.')
           return
@@ -3910,36 +4120,60 @@ export default function SiteDiaryWorkbenchSurface() {
         signatureUrl = signaturePath
       }
 
+      if (authoritativeLabourFailed) { releaseReportWriteLock(); failSave('We couldn’t save your Site Diary. Check your connection and try again.'); return }
+      if (authoritativeDetailsFailed) { releaseReportWriteLock(); failSave('We couldn’t save your Site Diary. Check your connection and try again.'); return }
+      if (String(editingReportIdRef.current || '') !== String(saveReportId || '')) { releaseReportWriteLock(); return }
+      if (saveOwner && !diaryAutosaveOwnersEqual(autosaveLifecycleOwnerRef.current, saveOwner)) { releaseReportWriteLock(); return }
+
       const reportPayload = applyCoverPhotoPatch(
-        {
-          project_id: projectId,
-          report_date: reportDate,
-          weather: weather.trim() || null,
-          shift: shiftType || null,
-          site_summary: siteSummary.trim(),
-          visitors: visitors.trim() || null,
-          visitors_register_provenance: normalizeVisitorsRegisterProvenance(visitorsRegisterProvenance),
-          delays_issues: delaysIssues.trim() || null,
-          actions: actionsRequired.trim() || null,
-          company_reporting_for: companyReportingFor.trim() || null,
-          creator_name: creatorName.trim() || null,
-          creator_role: creatorRole.trim() || null,
-          signature_url: signatureUrl,
-          equipment_hire: equipmentHirePayload(equipmentHireRows),
-          hs_incidents: hsIncidentsPayload(hsIncidents),
-          rfis: rfisPayload(rfis),
-          variations: variationsPayload(variations),
-          temporary_works_applicable: temporaryWorksApplicable,
-          temporary_works:
-            temporaryWorksApplicable === true ? temporaryWorksPayload(temporaryWorks) : [],
-          ...brandingPayload(brandingSelection),
-        },
+        (() => {
+          const detailsRecord = projectDetailsAuthorityRef.current
+          const detailsAuthority = (
+            detailsRecord
+            && diaryAutosaveOwnersEqual(detailsRecord.owner, saveOwner)
+          ) ? (detailsRecord.sync || detailsRecord) : null
+          const autosaveSource = latestPayloadRef.current
+          const lockedEquipmentHireRows = equipmentHireRowsRef?.current ?? equipmentHireRows
+          const lockedTemporaryWorks = temporaryWorksRef?.current ?? temporaryWorks
+          const payload = {
+            project_id: projectId,
+            report_date: reportDate,
+            weather: autosaveSource ? autosaveSource.weather : (weather.trim() || null),
+            shift: shiftType || null,
+            site_summary: autosaveSource ? (autosaveSource.site_summary || '') : siteSummary.trim(),
+            visitors: autosaveSource ? autosaveSource.visitors : (visitors.trim() || null),
+            visitors_register_provenance: normalizeVisitorsRegisterProvenance(
+              autosaveSource ? autosaveSource.visitors_register_provenance : visitorsRegisterProvenance,
+            ),
+            delays_issues: autosaveSource ? autosaveSource.delays_issues : (delaysIssues.trim() || null),
+            actions: autosaveSource ? autosaveSource.actions : (actionsRequired.trim() || null),
+            company_reporting_for: companyReportingFor.trim() || null,
+            creator_name: creatorName.trim() || null,
+            creator_role: creatorRole.trim() || null,
+            signature_url: signatureUrl,
+            equipment_hire: equipmentHirePayload(lockedEquipmentHireRows),
+            hs_incidents: hsIncidentsPayload(hsIncidents),
+            rfis: rfisPayload(rfis),
+            variations: variationsPayload(variations),
+            temporary_works_applicable: temporaryWorksApplicable,
+            temporary_works:
+              temporaryWorksApplicable === true ? temporaryWorksPayload(lockedTemporaryWorks) : [],
+            ...brandingPayload(detailsAuthority?.brandingSelection || brandingSelection),
+          }
+          if (detailsAuthority) {
+            payload.report_date = detailsAuthority.reportDate || payload.report_date
+            payload.shift = detailsAuthority.shiftType || null
+            payload.company_reporting_for = String(detailsAuthority.companyReportingFor || '').trim() || null
+            payload.creator_name = String(detailsAuthority.creatorName || '').trim() || null
+            payload.creator_role = String(detailsAuthority.creatorRole || '').trim() || null
+          }
+          return payload
+        })(),
         coverPlan,
       )
-
-      const labourPayload = labourFormToPersistRows(labourRows, editingReportId)
-      const plantPayload = plantFormToPersistRows(plantRows, editingReportId)
-
+      const labourPayload = authoritativeLabourPayload
+        || labourFormToPersistRows(labourRowsRef?.current ?? labourRows, editingReportId)
+      const plantPayload = plantFormToPersistRows(plantRowsRef?.current ?? plantRows, editingReportId)
       const sequenced = flattenAreaGroups(walkForPersist)
       const keptStoragePaths = sequenced
         .filter((p) => !p.file && p.storagePath)
@@ -4132,6 +4366,9 @@ export default function SiteDiaryWorkbenchSurface() {
       setReportIsDraft(false)
       diaryPersistSucceeded = true
       diarySaveLog('success', { reportId: saved.id })
+      const runPreparedShareExport = (...args) => (
+        runSiteDiaryPdfExportToShareReadyArtifact(...args)
+      )
       const startedPrepareGeneration = pdfPrepareGenerationRef.current
       const startedMutationRevision = localAutosaveMutationRevisionRef.current
       const startedReportId = String(saved.id)
@@ -4139,7 +4376,14 @@ export default function SiteDiaryWorkbenchSurface() {
       pdfPrepareAbortRef.current = prepareAbort
       const clearPrepareOwnership = () => {
         saveLockRef.current = completingRef.current = finalSaveInProgressRef.current = false
-        flushSync(() => { setSaving(false); setPdfPreparing(false) })
+        if (typeof reportWriteLockedRef !== 'undefined' && reportWriteLockedRef) {
+          reportWriteLockedRef.current = false
+        }
+        flushSync(() => {
+          setSaving(false)
+          setPdfPreparing(false)
+          if (typeof setReportWriteLocked === 'function') setReportWriteLocked(false)
+        })
       }
       const dismissStaleWorkerPrepare = () => {
         if (
@@ -4152,8 +4396,25 @@ export default function SiteDiaryWorkbenchSurface() {
         }
         return false
       }
-      await releaseDeferredReportWriteAutosave(reportWriteOwner)
+      const deferredPersist = await releaseDeferredReportWriteAutosave(reportWriteOwner)
       if (dismissStaleWorkerPrepare()) return
+      if (
+        typeof latestPayloadRef !== 'undefined'
+        && typeof ackedSnapshotRef !== 'undefined'
+        && typeof autosavePayloadsEqual === 'function'
+        && latestPayloadRef?.current
+        && !autosavePayloadsEqual(latestPayloadRef.current, ackedSnapshotRef.current)
+        && !(deferredPersist && deferredPersist.ok === true)
+      ) {
+        if (typeof reportWriteLockedRef !== 'undefined' && reportWriteLockedRef) reportWriteLockedRef.current = false
+        if (typeof setReportWriteLocked === 'function') flushSync(() => setReportWriteLocked(false))
+        failSave('We couldn’t save your Site Diary. Check your connection and try again.')
+        return
+      }
+      if (typeof reportWriteLockedRef !== 'undefined' && reportWriteLockedRef) {
+        reportWriteLockedRef.current = false
+        if (typeof setReportWriteLocked === 'function') flushSync(() => setReportWriteLocked(false))
+      }
 
       const adoptRetainedPreparedFileIfCurrent = async () => {
         const fingerprint = await fetchAuthoritativeSiteDiaryPdfExportFingerprint(saved.id, {
@@ -4312,7 +4573,7 @@ export default function SiteDiaryWorkbenchSurface() {
         }
 
         if (useNativeFileShareOnPrepare) {
-          return runSiteDiaryPdfExportToShareReadyArtifact(supabase, saved.id, {
+          return runPreparedShareExport(supabase, saved.id, {
             signal: prepareAbort.signal,
             tapStartedAt,
           })
@@ -4863,6 +5124,10 @@ export default function SiteDiaryWorkbenchSurface() {
           isDiaryEditMode={isDiaryEditMode}
           onWorkbenchPersistSync={handleWorkbenchProjectDetailsSync}
           onCollapse={collapseInlineProjectDetails}
+          reportWriteLocked={reportWriteLocked}
+          reportWriteLockedRef={reportWriteLockedRef}
+          projectDetailsPersistRef={projectDetailsPersistRef}
+          reportLifecycleOwnerRef={autosaveLifecycleOwnerRef}
         />
       ) : null}
       {!showInlineProjectDetails && (project?.name || reportDate) ? (
@@ -4930,7 +5195,7 @@ export default function SiteDiaryWorkbenchSurface() {
         }}
       >
         <fieldset
-          disabled={isDiaryViewMode}
+          disabled={isDiaryViewMode || reportWriteLocked}
           style={{ border: 0, margin: 0, padding: 0, minInlineSize: 0 }}
         >
         {showBrandingSelector ? (
@@ -5035,7 +5300,7 @@ export default function SiteDiaryWorkbenchSurface() {
 
         <DiaryDailyRecordSections
           accent={DIARY_ACCENT}
-          disabled={isDiaryViewMode}
+          disabled={isDiaryViewMode || reportWriteLocked}
           hsIncidents={hsIncidents}
           rfis={rfis}
           variations={variations}
@@ -5173,7 +5438,7 @@ export default function SiteDiaryWorkbenchSurface() {
 
         <DiaryTemporaryWorksSection
           accent={DIARY_ACCENT}
-          disabled={isDiaryViewMode}
+          disabled={isDiaryViewMode || reportWriteLocked}
           applicable={temporaryWorksApplicable}
           rows={temporaryWorks}
           onApplicableChange={(value) => {

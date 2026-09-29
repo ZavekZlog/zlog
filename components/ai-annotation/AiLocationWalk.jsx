@@ -38,6 +38,10 @@ import {
   perPageToLayout,
 } from '@/lib/ai-annotation/area-groups'
 import { commitUnsavedPhotoAreaToWalk } from '@/lib/photo-workspace/commit-unsaved-area'
+import {
+  diaryAutosaveOperationOwner,
+  diaryAutosaveOwnersEqual,
+} from '@/lib/diary-autosave'
 import { hasUnsavedPhotoWorkspaceDraft } from '@/lib/photo-workspace'
 import {
   applyShadowPrepareToPhotos,
@@ -148,6 +152,12 @@ function SavedAreaCard({
   )
 }
 
+/** Workbench report-write lock. Save Area reads this without a Photo Workspace prop change. */
+export const diaryReportWriteLockBridge = { current: null }
+
+/** Current autosave lifecycle owner ref. Save Area copies it when a writer starts. */
+export const diaryReportLifecycleOwnerBridge = { current: null }
+
 export const AiLocationWalk = forwardRef(function AiLocationWalk({
   accent,
   value = [],
@@ -208,6 +218,8 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   const areaNameErrorId = useId()
   /** Synchronous Save Area lock — blocks double-tap before React re-renders. */
   const persistingAreaRef = useRef(false)
+  const areaPersistPromiseRef = useRef(null)
+  const authoritativeWalkRef = useRef(null)
   /** Phase B: photo ids already handed to shadow prepare (dedupe Strict Mode / re-select). */
   const shadowStartedIdsRef = useRef(new Set())
   /** Latest draft list for late shadow results after Save Area may have cleared state. */
@@ -476,14 +488,36 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   }
 
   const persistCommittedArea = useCallback(async (result) => {
+    const startOwner = result?.areaPublicationOwner || null
+    const areaPublicationCurrent = () => {
+      if (!startOwner) return true
+      if (typeof diaryAutosaveOwnersEqual !== 'function') return true
+      if (
+        typeof diaryReportLifecycleOwnerBridge === 'undefined'
+        || !diaryReportLifecycleOwnerBridge?.current?.current
+      ) {
+        return false
+      }
+      return diaryAutosaveOwnersEqual(
+        startOwner,
+        diaryAutosaveOperationOwner(diaryReportLifecycleOwnerBridge.current.current),
+      )
+    }
     if (!result?.ok || !result.committed || !result.saved) {
       return { ok: false, reason: 'not-committed' }
     }
     let walkToCommit = result.locationWalk
     if (onAreaSaved) {
+      if (!areaPublicationCurrent()) {
+        return { ok: false, reason: 'stale-lifecycle' }
+      }
       const persistResult = await onAreaSaved(result.saved, {
         locationWalk: result.locationWalk,
+        areaPublicationOwner: startOwner,
       })
+      if (!areaPublicationCurrent()) {
+        return { ok: false, reason: 'stale-lifecycle' }
+      }
       if (persistResult && persistResult.ok === false) {
         setPhotoError(
           persistResult.message
@@ -495,8 +529,21 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
         walkToCommit = persistResult.locationWalk
       }
     }
+    if (!areaPublicationCurrent()) {
+      return { ok: false, reason: 'stale-lifecycle' }
+    }
     walkRef.current = walkToCommit
     onChange(walkToCommit)
+    if (
+      startOwner
+      && typeof authoritativeWalkRef !== 'undefined'
+      && authoritativeWalkRef
+    ) {
+      authoritativeWalkRef.current = {
+        owner: startOwner,
+        locationWalk: walkToCommit,
+      }
+    }
     if (result.clearedDraft) {
       draftPhotosRef.current = []
     }
@@ -530,6 +577,7 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
   ])
 
   const saveArea = async () => {
+    if (diaryReportWriteLockBridge.current?.current) return
     if (persistingAreaRef.current) return
     if (!validateSave()) {
       if (!nameDraft.trim()) {
@@ -538,22 +586,50 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
       return
     }
 
+    const writerOwner = diaryReportLifecycleOwnerBridge.current?.current
+      ? diaryAutosaveOperationOwner(diaryReportLifecycleOwnerBridge.current.current)
+      : null
+    const areaOwnerStillCurrent = () => {
+      if (!writerOwner) return true
+      const live = diaryReportLifecycleOwnerBridge.current?.current
+      if (!live) return false
+      return diaryAutosaveOwnersEqual(writerOwner, diaryAutosaveOperationOwner(live))
+    }
     persistingAreaRef.current = true
     setPersistingArea(true)
+    const persistPromise = (async () => {
+      try {
+        await yieldForSaveAreaPaint()
+        const result = commitUnsavedPhotoAreaToWalk(buildCommitInput())
+        if (!result.ok) {
+          if (result.reason === 'missing-name') setNameError(copy.enterNameError)
+          if (result.reason === 'missing-layout') setLayoutError('Choose a photo layout')
+          if (result.reason === 'missing-photos') setPhotoError('Add at least one photo')
+          return { ok: false, locationWalk: walkRef.current }
+        }
+        if (!result.committed) {
+          if (!areaOwnerStillCurrent()) return { ok: false, locationWalk: walkRef.current }
+          authoritativeWalkRef.current = { owner: writerOwner, locationWalk: walkRef.current }
+          return { ok: true, locationWalk: walkRef.current }
+        }
+        if (result && typeof result === 'object') {
+          result.areaPublicationOwner = writerOwner
+        }
+        const finalized = await finalizeAreaSave(result)
+        if (!finalized) return { ok: false, locationWalk: walkRef.current }
+        if (!areaOwnerStillCurrent()) return { ok: false, locationWalk: walkRef.current }
+        authoritativeWalkRef.current = { owner: writerOwner, locationWalk: walkRef.current }
+        return { ok: true, locationWalk: walkRef.current }
+      } finally {
+        releasePersistingBusy()
+      }
+    })()
+    const operation = { owner: writerOwner, promise: persistPromise }
+    areaPersistPromiseRef.current = operation
     try {
-      await yieldForSaveAreaPaint()
-      const result = commitUnsavedPhotoAreaToWalk(buildCommitInput())
-      if (!result.ok) {
-        if (result.reason === 'missing-name') setNameError(copy.enterNameError)
-        if (result.reason === 'missing-layout') setLayoutError('Choose a photo layout')
-        if (result.reason === 'missing-photos') setPhotoError('Add at least one photo')
-        return
-      }
-      if (result.committed) {
-        await finalizeAreaSave(result)
-      }
+      await persistPromise
     } finally {
-      releasePersistingBusy()
+      if (areaPersistPromiseRef.current === operation) areaPersistPromiseRef.current = null
     }
   }
 
@@ -651,6 +727,19 @@ export const AiLocationWalk = forwardRef(function AiLocationWalk({
     openFirstIncompletePhoto,
     commitUnsavedAreaForShare,
     hasUnsavedAreaForShare: () => photoWorkspaceDraftDirty,
+    getAuthoritativeWalk: (requestOwner) => {
+      const published = authoritativeWalkRef.current
+      if (!published || !requestOwner) return null
+      if (!diaryAutosaveOwnersEqual(published.owner, requestOwner)) return null
+      return published.locationWalk || null
+    },
+    getAreaPersistPromise: () => areaPersistPromiseRef.current?.promise || null,
+    getAreaPersistOperation: () => {
+      const record = areaPersistPromiseRef.current
+      if (!record || typeof record.then === 'function') return null
+      if (typeof record.promise?.then !== 'function') return null
+      return record
+    },
   }), [openFirstIncompletePhoto, commitUnsavedAreaForShare, photoWorkspaceDraftDirty])
 
   const closeViewer = () => {
