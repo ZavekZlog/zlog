@@ -1,10 +1,10 @@
 # Site Diary PDF & Share Checkpoint Contract
 
-**Version:** 1.1.0  
-**Date Updated:** 2026-09-06  
-**Reason Updated:** Site Diary audit — page-1 information architecture / completeness superseded; repeated header, footer, PHOTO-001, and Save/Share remain  
-**User Decision:** APPROVED — Phase 0 contracts; PDF implementation is a later authorised phase  
-**Previous Version:** 1.0.0  
+**Version:** 1.2.0
+**Date Updated:** 2026-09-30
+**Reason Updated:** Record S10 Auto Prepare acceptance at d795dad. The ab65437 header and Share checkpoint is unchanged.
+**User Decision:** Documentation checkpoint only — repeat-open Auto Prepare accepted on S10
+**Previous Version:** 1.1.0
 
 **Known-good baseline (protected restore point):** `ab65437`  
 **Commit message:** `checkpoint: lock verified PDF header and share recovery`  
@@ -123,6 +123,31 @@ See `docs/PROTECTED_SCOPE_MANIFEST.json`:
 | `lib/diary-saved-view.test.js` | Saved view Share Report + same-gesture fallthrough |
 
 Registry ids: **PDF-034**, **PDF-035**, **DIARY-034** in `docs/contracts/APPROVED_BEHAVIOUR_REGISTRY.json`.
+
+---
+
+## S10 Auto Prepare acceptance
+
+**Date:** 30 September 2026
+**Baseline commit:** `d795dad866a9a0df5b00b828a5e67eb32f27469c`
+**Commit subject:** Persist and reuse Site Diary ready PDF artifacts
+
+This entry does not replace the `ab65437` PDF header and Share checkpoint above.
+
+Canonical release gate for this baseline: 202 suites, 1102 tests, 1102 pass, 0 fail. ESLint PASS. Playwright behavioural PASS. Playwright visual PASS. `test:release` automated portion PASS.
+
+Samsung Galaxy S10 PWA is authoritative.
+
+| Observation | Result |
+|-------------|--------|
+| First uncached Report Ready, from tapping Edit | ~24 sec. Not considered optimised. Remaining target is the initial ready-PDF artifact transfer. |
+| Repeat unchanged diary Report Ready, after tapping Edit | ~7 sec. Observed S10 measurement, not a guaranteed timing target. |
+
+**Repeat-open Auto Prepare: ACCEPTED ON S10**
+
+The repeat path shown was: fresh authoritative identity → exact persistent worker artifact reuse → resident File → Report Ready.
+
+During that repeat test, saved Workbench photos took up to ~10 seconds to become visible. That is separate photo-hydration follow-on work. It does not invalidate or reopen this Auto Prepare acceptance.
 
 ---
 
