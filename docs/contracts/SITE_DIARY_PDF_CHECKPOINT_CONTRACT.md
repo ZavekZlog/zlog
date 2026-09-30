@@ -1,10 +1,10 @@
 # Site Diary PDF & Share Checkpoint Contract
 
-**Version:** 1.2.0
+**Version:** 1.3.0
 **Date Updated:** 2026-09-30
-**Reason Updated:** Record S10 Auto Prepare acceptance at d795dad. The ab65437 header and Share checkpoint is unchanged.
-**User Decision:** Documentation checkpoint only — repeat-open Auto Prepare accepted on S10
-**Previous Version:** 1.1.0
+**Reason Updated:** Record S10 Workbench photo priority acceptance at be18d10. Prior checkpoints are unchanged.
+**User Decision:** Documentation checkpoint only — qualitative thumbnail-priority improvement observed on S10
+**Previous Version:** 1.2.0
 
 **Known-good baseline (protected restore point):** `ab65437`  
 **Commit message:** `checkpoint: lock verified PDF header and share recovery`  
@@ -148,6 +148,67 @@ Samsung Galaxy S10 PWA is authoritative.
 The repeat path shown was: fresh authoritative identity → exact persistent worker artifact reuse → resident File → Report Ready.
 
 During that repeat test, saved Workbench photos took up to ~10 seconds to become visible. That is separate photo-hydration follow-on work. It does not invalidate or reopen this Auto Prepare acceptance.
+
+---
+
+## S10 Workbench photo priority acceptance
+
+**Date:** 30 September 2026
+**Tested commit:** `be18d10e9d50744bfaa6094b377fa33d451d8936`
+**Commit subject:** Prioritize saved Workbench thumbnail loading
+**Accepted Auto Prepare baseline:** `d795dad866a9a0df5b00b828a5e67eb32f27469c`
+**Existing Auto Prepare acceptance checkpoint:** `be778c579902c7d6fcd9ed843a776f31ed0c7fe7`
+
+This entry does not replace the `ab65437` PDF header and Share checkpoint, and it does not replace the S10 Auto Prepare acceptance above.
+
+Canonical release gate for this commit: 212 suites, 1153 tests, 1153 pass, 0 fail. ESLint PASS. Playwright behavioural PASS. Playwright visual PASS.
+
+Samsung Galaxy S10 PWA is authoritative.
+
+### Observation 1 — Saved diary open
+
+Thailand saved diary: approximately 5 seconds from tap until the diary opened. A discernible screen blink occurred before the diary opened. The open was repeated twice, and the blink was observed both times.
+
+This is a separate navigation/display observation. Its cause is not classified in this checkpoint.
+
+### Observation 2 — Edit transition
+
+After tapping Edit, the screen went black for approximately 4 seconds before the Edit Workbench appeared.
+
+This is a separate Edit-transition UX/performance issue requiring later diagnosis. It is not attributed to photo loading or Auto Prepare.
+
+### Observation 3 — Saved Workbench photos
+
+Before this optimisation, saved Workbench photos could take up to approximately 10 seconds to become visible.
+
+On this `be18d10` acceptance run, by the time the user scrolled down through the Edit Workbench, all saved pictures were already loaded. No comparable ~10-second blank-photo wait was observed.
+
+This is qualitative acceptance evidence that thumbnail-priority behaviour improved the visible Workbench experience. First-thumbnail timing was not measured and is not recorded as a number.
+
+**WORKBENCH PHOTO PRIORITY — S10 QUALITATIVE IMPROVEMENT OBSERVED**
+
+A future measured trace may quantify first/all thumbnail timing if needed.
+
+### Observation 4 — Report Ready
+
+After tapping Edit, Report Ready appeared in approximately 8 seconds.
+
+The previously locked repeat-open Auto Prepare observation remains approximately 7 seconds. Approximately 8 seconds is an observed run, not a guaranteed timing.
+
+**NO MATERIAL REPEAT-OPEN AUTO PREPARE REGRESSION OBSERVED**
+
+The previously accepted persistent ready-PDF reuse remains accepted. The `d795dad` Auto Prepare architecture is not reopened on the 7 sec versus 8 sec variation.
+
+### Separation
+
+These remain distinct concerns:
+
+1. Workbench photo priority: qualitative improvement observed.
+2. Auto Prepare repeat Report Ready: ~8 sec; accepted architecture remains intact.
+3. Saved diary opening: ~5 sec plus a repeatable screen blink.
+4. Edit transition: ~4 sec black screen before the Workbench appears.
+
+The next technical investigation should concern the saved-diary/Edit navigation rendering behaviour, not Auto Prepare or persistent PDF caching.
 
 ---
 
