@@ -7,15 +7,36 @@
 
 import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
+import { DIARY_ACCENT, PremiumShell } from '@/lib/premium-ui'
 
 const SavedDiaryViewerSurface = dynamic(
   () => import('@/components/site-diary/SavedDiaryViewerSurface'),
   { ssr: false },
 )
 
+function WorkbenchOpeningShell() {
+  const editing = typeof window !== 'undefined'
+    && /(?:^|[?&])edit=(?:1|true|edit)(?:&|$)/i.test(window.location.search)
+  return (
+    <PremiumShell
+      title="Site Diary"
+      backHref="/dashboard"
+      accent={DIARY_ACCENT}
+      maxWidth={720}
+    >
+      <p style={{ color: 'var(--text-2)' }}>
+        {editing ? 'Opening diary for editing…' : 'Loading…'}
+      </p>
+    </PremiumShell>
+  )
+}
+
 const SiteDiaryWorkbenchSurface = dynamic(
   () => import('@/components/site-diary/SiteDiaryWorkbenchSurface'),
-  { ssr: false },
+  {
+    ssr: false,
+    loading: WorkbenchOpeningShell,
+  },
 )
 
 /** @param {string | null | undefined} pathname */

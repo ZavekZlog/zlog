@@ -44,6 +44,7 @@ const NODE_TESTS = [
   'lib/diary-edit-hydrate.test.js',
   'lib/diary-edit-navigation-timing.test.js',
   'lib/diary-hydration-timing-diag.test.js',
+  'lib/site-diary-report-shell-s3a.test.js',
   'lib/diary-new-sticky-defaults.test.js',
   'lib/diary-report-date.test.js',
   'lib/diary-fetch-resilience.test.js',
