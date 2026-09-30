@@ -150,6 +150,7 @@ import {
   fetchSiteDiaryPdfExportAuthorization,
   isSiteDiaryPdfExportUserAbortResult,
   hydrateShareReadyArtifactFromExportIdentity,
+  requestFingerprintAndEnqueueSiteDiaryPdfExport,
   resolveAuthoritativeSiteDiaryPdfExportIdentity,
   runSiteDiaryPdfExportToExportReady,
   runSiteDiaryPdfExportToShareReadyArtifact,
@@ -190,6 +191,8 @@ import {
   DIARY_PDF_BACKGROUND_PREPARE_IDLE_MS,
   hasAdoptableWorkbenchShareFile,
   isDiaryPersistedCleanForBackgroundPdf,
+  joinInFlightReadyArtifactHydration,
+  joinPendingReadyArtifactHydration,
   shouldAdoptBackgroundPreparedPdf,
   shouldRunBackgroundPdfPrepare,
 } from '@/lib/diary-pdf-background-prepare'
@@ -720,6 +723,7 @@ export default function SiteDiaryWorkbenchSurface() {
   const postHydratePdfReconcileRef = useRef(null)
   const postHydratePdfReconcileAbortRef = useRef(null)
   const postHydratePdfReconcileStartedRef = useRef(false)
+  const readyArtifactHydrationRef = useRef(null)
   const backgroundPrepareLiveRef = useRef({})
   const [shareReady, setShareReady] = useState(false)
   const invalidatePreparedSharePdf = useCallback((reason) => {
@@ -2944,6 +2948,19 @@ export default function SiteDiaryWorkbenchSurface() {
     diaryPersistedClean,
   }
 
+  const hydrateReadyArtifactSingleFlight = useCallback((reportId, identity, options) => (
+    joinInFlightReadyArtifactHydration(readyArtifactHydrationRef, {
+      reportId,
+      exportId: identity?.exportId,
+      start: () => hydrateShareReadyArtifactFromExportIdentity(
+        supabase,
+        reportId,
+        identity,
+        options,
+      ),
+    })
+  ), [supabase])
+
   const runPostHydratePdfReconcile = useCallback(async () => {
     const live = backgroundPrepareLiveRef.current
     if (!live.hydrateComplete || !live.writable || !live.reportId || live.sessionExpired) {
@@ -3082,8 +3099,7 @@ export default function SiteDiaryWorkbenchSurface() {
 
       let prepared
       try {
-        prepared = await hydrateShareReadyArtifactFromExportIdentity(
-          supabase,
+        prepared = await hydrateReadyArtifactSingleFlight(
           startedReportId,
           identity,
           {
@@ -3134,7 +3150,7 @@ export default function SiteDiaryWorkbenchSurface() {
       op.settled = true
     })
     postHydratePdfReconcileRef.current = op
-  }, [editingReportId, supabase])
+  }, [editingReportId, hydrateReadyArtifactSingleFlight, supabase])
 
   const runBackgroundPdfPrepare = useCallback(async () => {
     const live = backgroundPrepareLiveRef.current
@@ -3214,8 +3230,7 @@ export default function SiteDiaryWorkbenchSurface() {
     }
     try {
       if (backgroundIdentity) {
-        prepared = await hydrateShareReadyArtifactFromExportIdentity(
-          supabase,
+        prepared = await hydrateReadyArtifactSingleFlight(
           startedReportId,
           backgroundIdentity,
           { signal: prepareAbort.signal },
@@ -3271,7 +3286,7 @@ export default function SiteDiaryWorkbenchSurface() {
       exportId: shareReadyEntry.exportId || null,
       handoff: shareReadyEntry.handoff,
     })
-  }, [editingReportId, supabase])
+  }, [editingReportId, hydrateReadyArtifactSingleFlight, supabase])
 
   pdfBackgroundPrepareRunRef.current = runBackgroundPdfPrepare
 
@@ -4573,6 +4588,37 @@ export default function SiteDiaryWorkbenchSurface() {
         }
 
         if (useNativeFileShareOnPrepare) {
+          const enqueued = await requestFingerprintAndEnqueueSiteDiaryPdfExport(
+            supabase,
+            saved.id,
+            {
+              signal: prepareAbort.signal,
+              tapStartedAt,
+            },
+          )
+          if (!enqueued?.ok) {
+            return enqueued
+          }
+          const pendingArtifact = joinPendingReadyArtifactHydration(readyArtifactHydrationRef, {
+            reportId: saved.id,
+            exportId: enqueued.exportId,
+          })
+          if (pendingArtifact) {
+            try {
+              const joinedPrepared = await pendingArtifact
+              const joinedExportId = trimPdfExportId(joinedPrepared?.exportId)
+              const currentExportId = trimPdfExportId(enqueued.exportId)
+              if (
+                joinedPrepared?.ok
+                && joinedExportId
+                && joinedExportId === currentExportId
+              ) {
+                return joinedPrepared
+              }
+            } catch {
+              /* The in-flight download failed. Use the existing preparation path. */
+            }
+          }
           return runPreparedShareExport(supabase, saved.id, {
             signal: prepareAbort.signal,
             tapStartedAt,
