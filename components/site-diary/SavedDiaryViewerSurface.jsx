@@ -56,6 +56,7 @@ import {
   snapshotUserActivation,
 } from '@/lib/diary-share'
 import { emitShareDiag } from '@/lib/share-diag-beacon'
+import { beginViewerMediaRequest } from '@/lib/diary-edit-hydrate-trace'
 
 const SITE_DIARY_EDIT_NAV_TIMING_KEY = 'zlog.siteDiary.editNavTiming.v1'
 import { runShareCapabilityProbe } from '@/lib/share-capability-probe'
@@ -829,6 +830,7 @@ function SavedDiaryViewer() {
         reportId: view.reportId,
         projectId: view.projectId,
       })
+      const releaseViewerPdf = beginViewerMediaRequest()
       try {
         const prepared = await prepareSiteDiaryPdf({
           projectId: view.projectId,
@@ -867,6 +869,8 @@ function SavedDiaryViewer() {
         if (gen !== pdfCacheGenRef.current) return
         setPdfCacheState('error')
         setPdfStatus(err?.message || 'We couldn’t prepare the report.')
+      } finally {
+        releaseViewerPdf()
       }
       return
     }

@@ -179,6 +179,10 @@ import {
   getActiveDiaryHydrationTimingSession,
   markDiaryHydrationTiming,
 } from '@/lib/diary-hydration-timing-diag'
+import {
+  beginWorkbenchHydrateRequest,
+  readEditHydrateInFlight,
+} from '@/lib/diary-edit-hydrate-trace'
 import { mapWithConcurrency } from '@/lib/diary-pdf-photos'
 import { batchSignedUrlsForStoragePaths } from '@/lib/diary-share-pdf-assets'
 import { prewarmDiaryPdfSessionAssets } from '@/lib/diary-pdf-asset-prewarm'
@@ -1326,11 +1330,21 @@ export default function SiteDiaryWorkbenchSurface() {
           hydrationSessionId: editNavTiming?.hydrationSessionId || null,
         })
 
+        if (progressiveEdit) {
+          markDiaryHydrationTiming('edit-hydrate-start', readEditHydrateInFlight())
+        }
+
         markDiaryHydrationTiming('project-hydrate-start', {
           progressiveEdit,
           progressiveCompose,
         })
-        const proj = await fetchProjectRowForEditHydrate(supabase, projectId)
+        const releaseProjectTrack = progressiveEdit ? beginWorkbenchHydrateRequest() : null
+        let proj
+        try {
+          proj = await fetchProjectRowForEditHydrate(supabase, projectId)
+        } finally {
+          releaseProjectTrack?.()
+        }
         markDiaryHydrationTiming('project-hydrate-end', {
           progressiveEdit,
           progressiveCompose,
@@ -1580,16 +1594,25 @@ export default function SiteDiaryWorkbenchSurface() {
           progressiveEdit,
           progressiveCompose,
         })
-        const { data: existing, error: existingError } = await withTimeout(
-          supabase
-            .from('daily_reports')
-            .select('*')
-            .eq('id', editingReportId)
-            .eq('project_id', projectId)
-            .maybeSingle(),
-          DIARY_WORKBENCH_LOAD_TIMEOUT_MS,
-          'daily_reports-timeout',
-        )
+        const releaseReportTrack = progressiveEdit ? beginWorkbenchHydrateRequest() : null
+        let existing
+        let existingError
+        try {
+          const reportRow = await withTimeout(
+            supabase
+              .from('daily_reports')
+              .select('*')
+              .eq('id', editingReportId)
+              .eq('project_id', projectId)
+              .maybeSingle(),
+            DIARY_WORKBENCH_LOAD_TIMEOUT_MS,
+            'daily_reports-timeout',
+          )
+          existing = reportRow.data
+          existingError = reportRow.error
+        } finally {
+          releaseReportTrack?.()
+        }
         markDiaryHydrationTiming('report-row-fetch-end', {
           progressiveEdit,
           progressiveCompose,
@@ -1641,6 +1664,8 @@ export default function SiteDiaryWorkbenchSurface() {
         // F2B: local durable pending cover (IndexedDB) overrides empty server path for preview.
         // Network upload must NOT block first usable UI.
         let pendingCoverGeneration = null
+        if (progressiveEdit) markDiaryHydrationTiming('edit-hydrate-pending-cover-start')
+        const releasePendingCoverTrack = progressiveEdit ? beginWorkbenchHydrateRequest() : null
         try {
           const pending = await getPendingCover(editingReportId)
           if (commit() && pending && !pending.removed && pending.blob) {
@@ -1661,16 +1686,42 @@ export default function SiteDiaryWorkbenchSurface() {
           }
         } catch {
           /* pending handoff optional — diary still opens */
+        } finally {
+          releasePendingCoverTrack?.()
+          if (progressiveEdit) markDiaryHydrationTiming('edit-hydrate-pending-cover-end')
         }
 
         let labour
         let plant
         let reportPhotos
         {
+          if (progressiveEdit) {
+            markDiaryHydrationTiming('edit-hydrate-labour-start')
+            markDiaryHydrationTiming('edit-hydrate-plant-start')
+            markDiaryHydrationTiming('edit-hydrate-photos-start')
+          }
+          const trackChildQuery = async (run, endStage) => {
+            const release = progressiveEdit ? beginWorkbenchHydrateRequest() : null
+            try {
+              return await run()
+            } finally {
+              release?.()
+              if (progressiveEdit && endStage) markDiaryHydrationTiming(endStage)
+            }
+          }
           const results = await Promise.all([
-            supabase.from('report_labour').select('trade, company, count, hours, notes').eq('report_id', existing.id).order('sequence'),
-            supabase.from('report_plant').select('item, ref, status, notes').eq('report_id', existing.id).order('sequence'),
-            supabase.from('report_photos').select('id, url, caption, sequence, layout, location, category, annotations, overlay_path, rotation_degrees, assigned_to, thumbnail_path, report_width, report_height, thumbnail_width, thumbnail_height, report_byte_size, thumbnail_byte_size, processing_version').eq('report_id', existing.id).order('sequence'),
+            trackChildQuery(
+              () => supabase.from('report_labour').select('trade, company, count, hours, notes').eq('report_id', existing.id).order('sequence'),
+              'edit-hydrate-labour-end',
+            ),
+            trackChildQuery(
+              () => supabase.from('report_plant').select('item, ref, status, notes').eq('report_id', existing.id).order('sequence'),
+              'edit-hydrate-plant-end',
+            ),
+            trackChildQuery(
+              () => supabase.from('report_photos').select('id, url, caption, sequence, layout, location, category, annotations, overlay_path, rotation_degrees, assigned_to, thumbnail_path, report_width, report_height, thumbnail_width, thumbnail_height, report_byte_size, thumbnail_byte_size, processing_version').eq('report_id', existing.id).order('sequence'),
+              'edit-hydrate-photos-end',
+            ),
           ])
           labour = results[0].data
           plant = results[1].error ? [] : results[1].data
@@ -1722,6 +1773,7 @@ export default function SiteDiaryWorkbenchSurface() {
               reportPhotos = basic.data
             }
           }
+          if (progressiveEdit) markDiaryHydrationTiming('edit-hydrate-photos-settled')
         }
 
         if (cancelled) return
@@ -1793,7 +1845,14 @@ export default function SiteDiaryWorkbenchSurface() {
         if (progressiveCompose) {
           applySignaturePathOnly(existing.signature_url)
         } else {
-          await applySignature(existing.signature_url)
+          if (progressiveEdit) markDiaryHydrationTiming('edit-hydrate-signature-start')
+          const releaseSignatureTrack = progressiveEdit ? beginWorkbenchHydrateRequest() : null
+          try {
+            await applySignature(existing.signature_url)
+          } finally {
+            releaseSignatureTrack?.()
+          }
+          if (progressiveEdit) markDiaryHydrationTiming('edit-hydrate-signature-end')
           if (cancelled) return
         }
 
@@ -1847,7 +1906,7 @@ export default function SiteDiaryWorkbenchSurface() {
         const kickPdfAssetPrewarm = () => {
           if (cancelled) return
           const gen = ++pdfPrewarmGenRef.current
-          void prewarmDiaryPdfSessionAssets({
+          const prewarmTask = prewarmDiaryPdfSessionAssets({
             photos: reportPhotos || [],
             coverPath: editHydration.coverStoragePath || existing.cover_photo_url || null,
             coverProcessingVersion: existing.cover_processing_version || null,
@@ -1855,6 +1914,12 @@ export default function SiteDiaryWorkbenchSurface() {
             isCurrent: () => !cancelled && pdfPrewarmGenRef.current === gen,
             batchSignStoragePaths: (paths) => batchSignedUrlsForStoragePaths(supabase, paths),
           }).catch(() => {})
+          if (progressiveEdit) {
+            const releasePrewarm = beginWorkbenchHydrateRequest()
+            void prewarmTask.finally(releasePrewarm)
+          } else {
+            void prewarmTask
+          }
         }
 
         // SDSC Phase 1 shadow — merge only fields workbench already has (no new fetches).
@@ -1998,6 +2063,7 @@ export default function SiteDiaryWorkbenchSurface() {
           // First usable paint — unused selector/recent and non-critical signed
           // cover/logo/photo previews continue below. Signature preview is already applied.
           if (commitCriticalHydrateSuccess()) {
+            markDiaryHydrationTiming('edit-hydrate-usable', readEditHydrateInFlight())
             setLoading(false)
           }
           hydrateSignInEvidenceInBackground()
@@ -2044,6 +2110,8 @@ export default function SiteDiaryWorkbenchSurface() {
           )
           const logoPath = existing.brand_logo_url || null
           let signedThumbnailRows = null
+          const releasePreviewTrack = beginWorkbenchHydrateRequest()
+          try {
           await runSavedWorkbenchPreviewPriority({
             isCurrent: () => !cancelled && commit(),
             signThumbnails: async () => {
@@ -2101,6 +2169,9 @@ export default function SiteDiaryWorkbenchSurface() {
               setSetupLogoPreview(preview)
             },
           })
+          } finally {
+            releasePreviewTrack()
+          }
 
           if (!cancelled && commit()) {
             const visibleThumbCount = Array.isArray(signedThumbnailRows)
