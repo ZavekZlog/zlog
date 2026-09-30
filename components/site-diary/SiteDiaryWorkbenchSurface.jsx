@@ -149,11 +149,10 @@ import {
   fetchAuthoritativeSiteDiaryPdfExportFingerprint,
   fetchSiteDiaryPdfExportAuthorization,
   isSiteDiaryPdfExportUserAbortResult,
-  hydrateShareReadyArtifactFromExportIdentity,
+  hydrateShareReadyArtifactFromExportIdentity as downloadShareReadyArtifactFromExportIdentity,
   requestFingerprintAndEnqueueSiteDiaryPdfExport,
   resolveAuthoritativeSiteDiaryPdfExportIdentity,
   runSiteDiaryPdfExportToExportReady,
-  runSiteDiaryPdfExportToShareReadyArtifact,
   SITE_DIARY_PDF_EXPORT_CLIENT_CODE,
   SITE_DIARY_PDF_EXPORT_HANDOFF,
   userMessageForSiteDiaryPdfExportFailure,
@@ -190,12 +189,17 @@ import {
   createDiaryPdfBackgroundPrepareScheduler,
   DIARY_PDF_BACKGROUND_PREPARE_IDLE_MS,
   hasAdoptableWorkbenchShareFile,
+  hydrateReadyArtifactFromPersistentCacheOrNetwork,
   isDiaryPersistedCleanForBackgroundPdf,
   joinInFlightReadyArtifactHydration,
   joinPendingReadyArtifactHydration,
   shouldAdoptBackgroundPreparedPdf,
   shouldRunBackgroundPdfPrepare,
 } from '@/lib/diary-pdf-background-prepare'
+import {
+  loadWorkerReadyPdfArtifact,
+  storeWorkerReadyPdfArtifact,
+} from '@/lib/diary-pdf-cache'
 import { readReportSetupExtras, reportDateInputValue, todayIsoDate } from '@/lib/report-setup'
 import {
   createDiaryWorkbenchLoadWatchdog,
@@ -781,6 +785,18 @@ export default function SiteDiaryWorkbenchSurface() {
   const suppressAutosaveRef = useRef(false)
   /** Reuses identity from the existing auth effect — no extra auth query for SDSC shadow. */
   const authUserIdRef = useRef(null)
+  const authOwnershipRef = useRef({ resolved: false, userId: null })
+  const [authOwnershipResolved, setAuthOwnershipResolved] = useState(false)
+  if (pdfPrepareGenerationRef.authResolved === undefined) {
+    pdfPrepareGenerationRef.authResolved = false
+    pdfPrepareGenerationRef.authUserId = null
+  }
+  const workerPdfAuthorityAllowsPublication = useCallback((startedAuthUserId) => (
+    authOwnershipRef.current.resolved === true
+    && Boolean(startedAuthUserId)
+    && authOwnershipRef.current.userId === startedAuthUserId
+    && authUserIdRef.current === startedAuthUserId
+  ), [])
 
   useLayoutEffect(() => {
     const generation = nextDiaryAutosaveLifecycleGeneration()
@@ -854,8 +870,27 @@ export default function SiteDiaryWorkbenchSurface() {
 
     const applyAuthUser = (user) => {
       if (cancelled) return
+      const nextUserId = user?.id || null
+      const previous = authOwnershipRef.current
+      const sameResolvedOwner = previous.resolved === true && previous.userId === nextUserId
+      if (!sameResolvedOwner) {
+        pdfPrepareAbortRef.current?.abort()
+        pdfPrepareAbortRef.current = null
+        pdfBackgroundPrepareAbortRef.current?.abort()
+        pdfBackgroundPrepareAbortRef.current = null
+        postHydratePdfReconcileAbortRef.current?.abort()
+        postHydratePdfReconcileAbortRef.current = null
+        shareReadyPdfRef.current = null
+        pdfPrepareGenerationRef.current = bumpPdfPrepareGeneration(pdfPrepareGenerationRef.current)
+        setShareReady((prev) => (prev ? false : prev))
+        pdfBackgroundPrepareSchedulerRef.current?.cancel()
+      }
+      authOwnershipRef.current = { resolved: true, userId: nextUserId }
+      pdfPrepareGenerationRef.authResolved = true
+      pdfPrepareGenerationRef.authUserId = nextUserId
+      if (!previous.resolved) setAuthOwnershipResolved(true)
       if (user) {
-        authUserIdRef.current = user.id || null
+        authUserIdRef.current = nextUserId
         setSessionExpired(false)
         setError((prev) => {
           if (prev !== SESSION_EXPIRED_SAVE_MESSAGE) return prev
@@ -2952,14 +2987,54 @@ export default function SiteDiaryWorkbenchSurface() {
     joinInFlightReadyArtifactHydration(readyArtifactHydrationRef, {
       reportId,
       exportId: identity?.exportId,
-      start: () => hydrateShareReadyArtifactFromExportIdentity(
-        supabase,
+      start: () => hydrateReadyArtifactFromPersistentCacheOrNetwork({
+        userId: authUserIdRef.current,
         reportId,
         identity,
-        options,
-      ),
+        isStillCurrent: options?.isStillCurrent,
+        loadCached: (query) => loadWorkerReadyPdfArtifact(query),
+        download: () => downloadShareReadyArtifactFromExportIdentity(
+          supabase,
+          reportId,
+          identity,
+          options,
+        ),
+        persist: (entry) => storeWorkerReadyPdfArtifact({
+          reportId: entry.reportId,
+          userId: entry.userId,
+          exportId: entry.exportId,
+          contentFingerprint: entry.contentFingerprint,
+          blob: entry.blob,
+          fileName: entry.fileName,
+        }, {
+          attemptStartedAt: entry.attemptStartedAt,
+          isStillCurrent: entry.isStillCurrent,
+        }),
+      }),
     })
   ), [supabase])
+
+  const hydrateShareReadyArtifactFromExportIdentity = (client, reportId, identity, options) => {
+    void client
+    return hydrateReadyArtifactSingleFlight(reportId, identity, options)
+  }
+
+  const runSiteDiaryPdfExportToShareReadyArtifact = useCallback(async (client, reportId, options = {}) => {
+    const supplied = options.authoritativeIdentity
+    const suppliedFingerprint = String(
+      supplied?.contentFingerprint || supplied?.job?.contentFingerprint || ''
+    ).trim()
+    const identity = supplied?.ok && supplied.exportId && suppliedFingerprint
+      ? { ...supplied, ok: true, contentFingerprint: suppliedFingerprint }
+      : await resolveAuthoritativeSiteDiaryPdfExportIdentity(client, reportId, {
+        signal: options.signal,
+        isStillValid: options.isStillCurrent,
+        tapStartedAt: options.tapStartedAt,
+        onShareTiming: options.onShareTiming,
+      })
+    if (!identity?.ok) return identity
+    return hydrateReadyArtifactSingleFlight(reportId, identity, options)
+  }, [hydrateReadyArtifactSingleFlight])
 
   const runPostHydratePdfReconcile = useCallback(async () => {
     const live = backgroundPrepareLiveRef.current
@@ -2984,6 +3059,13 @@ export default function SiteDiaryWorkbenchSurface() {
       return
     }
 
+    const startedAuthUserId = authOwnershipRef.current.resolved === true
+      ? (authOwnershipRef.current.userId || null)
+      : null
+    if (!workerPdfAuthorityAllowsPublication(startedAuthUserId)) {
+      return
+    }
+
     const startedGeneration = pdfPrepareGenerationRef.current
     const startedReportId = String(live.reportId || '')
     postHydratePdfReconcileAbortRef.current?.abort()
@@ -2991,7 +3073,8 @@ export default function SiteDiaryWorkbenchSurface() {
     postHydratePdfReconcileAbortRef.current = reconcileAbort
 
     const isStillValidForReconcile = () => (
-      pdfPrepareGenerationRef.current === startedGeneration
+      workerPdfAuthorityAllowsPublication(startedAuthUserId)
+      && pdfPrepareGenerationRef.current === startedGeneration
       && String(editingReportId || '') === startedReportId
       && isDiaryPersistedCleanForBackgroundPdf({
         latestPayload: latestPayloadRef.current,
@@ -3052,6 +3135,9 @@ export default function SiteDiaryWorkbenchSurface() {
       })) {
         return
       }
+      if (!workerPdfAuthorityAllowsPublication(startedAuthUserId)) {
+        return
+      }
 
       const shareReadyEntry = buildWorkbenchShareReadyFromWorkerArtifact(prepared, {
         fileReadyHandoff: SITE_DIARY_PDF_EXPORT_HANDOFF.fileReady,
@@ -3106,6 +3192,7 @@ export default function SiteDiaryWorkbenchSurface() {
             signal: reconcileAbort.signal,
             reconcileStartedAt,
             onReconcileDiag,
+            isStillCurrent: isStillValidForReconcile,
           },
         )
       } catch {
@@ -3150,7 +3237,7 @@ export default function SiteDiaryWorkbenchSurface() {
       op.settled = true
     })
     postHydratePdfReconcileRef.current = op
-  }, [editingReportId, hydrateReadyArtifactSingleFlight, supabase])
+  }, [editingReportId, hydrateReadyArtifactSingleFlight, supabase, workerPdfAuthorityAllowsPublication])
 
   const runBackgroundPdfPrepare = useCallback(async () => {
     const live = backgroundPrepareLiveRef.current
@@ -3178,6 +3265,13 @@ export default function SiteDiaryWorkbenchSurface() {
       autosaveInFlight: Boolean(autosaveInFlightRef.current),
     }
     if (!shouldRunBackgroundPdfPrepare(prepareInput)) {
+      return
+    }
+
+    const startedAuthUserId = authOwnershipRef.current.resolved === true
+      ? (authOwnershipRef.current.userId || null)
+      : null
+    if (!workerPdfAuthorityAllowsPublication(startedAuthUserId)) {
       return
     }
 
@@ -3233,11 +3327,23 @@ export default function SiteDiaryWorkbenchSurface() {
         prepared = await hydrateReadyArtifactSingleFlight(
           startedReportId,
           backgroundIdentity,
-          { signal: prepareAbort.signal },
+          {
+            signal: prepareAbort.signal,
+            isStillCurrent: () => (
+              workerPdfAuthorityAllowsPublication(startedAuthUserId)
+              && pdfPrepareGenerationRef.current === startedGeneration
+              && String(editingReportId || '') === startedReportId
+            ),
+          },
         )
       } else {
         prepared = await runSiteDiaryPdfExportToShareReadyArtifact(supabase, startedReportId, {
           signal: prepareAbort.signal,
+          isStillCurrent: () => (
+            workerPdfAuthorityAllowsPublication(startedAuthUserId)
+            && pdfPrepareGenerationRef.current === startedGeneration
+            && String(editingReportId || '') === startedReportId
+          ),
         })
       }
     } catch {
@@ -3264,6 +3370,9 @@ export default function SiteDiaryWorkbenchSurface() {
     })) {
       return
     }
+    if (!workerPdfAuthorityAllowsPublication(startedAuthUserId)) {
+      return
+    }
 
     const shareReadyEntry = buildWorkbenchShareReadyFromWorkerArtifact(prepared, {
       fileReadyHandoff: SITE_DIARY_PDF_EXPORT_HANDOFF.fileReady,
@@ -3286,7 +3395,7 @@ export default function SiteDiaryWorkbenchSurface() {
       exportId: shareReadyEntry.exportId || null,
       handoff: shareReadyEntry.handoff,
     })
-  }, [editingReportId, hydrateReadyArtifactSingleFlight, supabase])
+  }, [editingReportId, hydrateReadyArtifactSingleFlight, runSiteDiaryPdfExportToShareReadyArtifact, supabase, workerPdfAuthorityAllowsPublication])
 
   pdfBackgroundPrepareRunRef.current = runBackgroundPdfPrepare
 
@@ -3303,6 +3412,7 @@ export default function SiteDiaryWorkbenchSurface() {
   }, [])
 
   useEffect(() => {
+    if (!authOwnershipResolved || !authUserIdRef.current) return undefined
     if (!hydrateComplete || !isDiaryEditMode || !editingReportId || sessionExpired) return undefined
     if (!diaryPersistedClean) return undefined
     if (saving || finalSaveInProgressRef.current) return undefined
@@ -3313,6 +3423,7 @@ export default function SiteDiaryWorkbenchSurface() {
     void runPostHydratePdfReconcile()
     return undefined
   }, [
+    authOwnershipResolved,
     hydrateComplete,
     isDiaryEditMode,
     editingReportId,
@@ -3324,12 +3435,14 @@ export default function SiteDiaryWorkbenchSurface() {
   ])
 
   useEffect(() => {
+    if (!authOwnershipResolved || !authUserIdRef.current) return undefined
     if (!hydrateComplete || !isDiaryEditMode || !editingReportId || sessionExpired) return undefined
     if (!diaryPersistedClean) return undefined
     if (saving || finalSaveInProgressRef.current) return undefined
     pdfBackgroundPrepareSchedulerRef.current?.schedule()
     return undefined
   }, [
+    authOwnershipResolved,
     hydrateComplete,
     isDiaryEditMode,
     editingReportId,
@@ -3844,8 +3957,13 @@ export default function SiteDiaryWorkbenchSurface() {
     if (locationWalkRef.current?.hasUnsavedAreaForShare?.() === true) {
       invalidatePreparedSharePdf('draft-dirty')
     } else if (isWorkbenchSharePrepared(shareReadyPdfRef.current) && !saving) {
-      await sharePreparedFile(shareReadyPdfRef.current)
-      return
+      if (!workerPdfAuthorityAllowsPublication(authOwnershipRef.current.userId)) {
+        shareReadyPdfRef.current = null
+        setShareReady(false)
+      } else {
+        await sharePreparedFile(shareReadyPdfRef.current)
+        return
+      }
     }
 
     if (!tryAcquireSaveOperationLock(saveLockRef)) {
@@ -4381,10 +4499,8 @@ export default function SiteDiaryWorkbenchSurface() {
       setReportIsDraft(false)
       diaryPersistSucceeded = true
       diarySaveLog('success', { reportId: saved.id })
-      const runPreparedShareExport = (...args) => (
-        runSiteDiaryPdfExportToShareReadyArtifact(...args)
-      )
       const startedPrepareGeneration = pdfPrepareGenerationRef.current
+      const startedPrepareAuthUserId = pdfPrepareGenerationRef.authUserId ?? null
       const startedMutationRevision = localAutosaveMutationRevisionRef.current
       const startedReportId = String(saved.id)
       const prepareAbort = new AbortController()
@@ -4401,8 +4517,13 @@ export default function SiteDiaryWorkbenchSurface() {
         })
       }
       const dismissStaleWorkerPrepare = () => {
+        const authGate = pdfPrepareGenerationRef.authResolved
+        const authChanged = authGate === true
+          && pdfPrepareGenerationRef.authUserId !== startedPrepareAuthUserId
         if (
-          pdfPrepareGenerationRef.current !== startedPrepareGeneration
+          authGate === false
+          || authChanged
+          || pdfPrepareGenerationRef.current !== startedPrepareGeneration
           || localAutosaveMutationRevisionRef.current !== startedMutationRevision
           || String(editingReportId || '') !== startedReportId
         ) {
@@ -4432,6 +4553,13 @@ export default function SiteDiaryWorkbenchSurface() {
       }
 
       const adoptRetainedPreparedFileIfCurrent = async () => {
+        const authGate = pdfPrepareGenerationRef.authResolved
+        if (
+          authGate === false
+          || (authGate === true && pdfPrepareGenerationRef.authUserId !== startedPrepareAuthUserId)
+        ) {
+          return { ok: true, adopted: false }
+        }
         const fingerprint = await fetchAuthoritativeSiteDiaryPdfExportFingerprint(saved.id, {
           signal: prepareAbort.signal,
         })
@@ -4444,6 +4572,13 @@ export default function SiteDiaryWorkbenchSurface() {
           && isWorkbenchSharePrepared(retained)
           && preparedFileMatchesFingerprint(retained, fingerprint.contentFingerprint)
         ) {
+          const authGateNow = pdfPrepareGenerationRef.authResolved
+          if (
+            authGateNow === false
+            || (authGateNow === true && pdfPrepareGenerationRef.authUserId !== startedPrepareAuthUserId)
+          ) {
+            return { ok: true, adopted: false }
+          }
           emitShareDiag('prepared-file-retained', {
             reportId: saved.id,
             projectId,
@@ -4583,6 +4718,10 @@ export default function SiteDiaryWorkbenchSurface() {
             {
               signal: prepareAbort.signal,
               tapStartedAt,
+              isStillCurrent: () => (
+                pdfPrepareGenerationRef.current === startedPrepareGeneration
+                && String(editingReportId || '') === startedReportId
+              ),
             },
           )
         }
@@ -4619,9 +4758,21 @@ export default function SiteDiaryWorkbenchSurface() {
               /* The in-flight download failed. Use the existing preparation path. */
             }
           }
-          return runPreparedShareExport(supabase, saved.id, {
+          return runSiteDiaryPdfExportToShareReadyArtifact(supabase, saved.id, {
             signal: prepareAbort.signal,
             tapStartedAt,
+            authoritativeIdentity: {
+              ok: true,
+              reportId: saved.id,
+              exportId: enqueued.exportId,
+              contentFingerprint: enqueued.job?.contentFingerprint || null,
+              enqueueReturnedStatus: enqueued.job?.status,
+              job: enqueued.job,
+            },
+            isStillCurrent: () => (
+              pdfPrepareGenerationRef.current === startedPrepareGeneration
+              && String(editingReportId || '') === startedReportId
+            ),
           })
         }
 
@@ -4741,10 +4892,14 @@ export default function SiteDiaryWorkbenchSurface() {
 
   useEffect(() => {
     return () => {
+      pdfBackgroundPrepareAbortRef.current?.abort()
+      pdfBackgroundPrepareAbortRef.current = null
       // Do not cancel an in-flight handoff to Report Complete (Strict Mode / remount).
       if (completingRef.current) return
       pdfPrepareAbortRef.current?.abort()
       pdfPrepareAbortRef.current = null
+      postHydratePdfReconcileAbortRef.current?.abort()
+      postHydratePdfReconcileAbortRef.current = null
       if (saveNavTimerRef.current) clearTimeout(saveNavTimerRef.current)
     }
   }, [])
