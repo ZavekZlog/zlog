@@ -209,7 +209,10 @@ import {
   DIARY_WORKBENCH_LOAD_TIMEOUT_MS,
   fetchProjectRowForEditHydrate,
   hydrateEditModeCoverAndReference,
+  runSavedWorkbenchPreviewPriority,
+  schedulePdfAssetPrewarmAfterThumbnailPriority,
   shouldCommitDiaryLoadState,
+  WORKBENCH_THUMBNAIL_PREWARM_FALLBACK_MS,
   withTimeout,
 } from '@/lib/diary-edit-hydrate'
 import {
@@ -1230,6 +1233,7 @@ export default function SiteDiaryWorkbenchSurface() {
   useEffect(() => {
     if (!editingReportId) return
     let cancelled = false
+    let cancelThumbnailPriorityPrewarm = () => {}
     const generation = ++loadGenerationRef.current
     const commit = () => shouldCommitDiaryLoadState({
       cancelled,
@@ -2035,54 +2039,90 @@ export default function SiteDiaryWorkbenchSurface() {
             })()
           }
 
-          if (editHydration.coverStoragePath && !pendingCoverGeneration) {
-            markDiaryHydrationTiming('cover-refresh-start', { progressive: 'edit' })
-            const preview = await resolveCoverPhotoPreviewUrl(
-              supabase,
-              editHydration.coverStoragePath,
-            )
-            markDiaryHydrationTiming('cover-refresh-end', {
-              progressive: 'edit',
-              hasPreview: Boolean(preview),
-            })
-            if (!cancelled && commit()) {
+          const coverNeedsSignedPreview = Boolean(
+            editHydration.coverStoragePath && !pendingCoverGeneration,
+          )
+          const logoPath = existing.brand_logo_url || null
+          let signedThumbnailRows = null
+          await runSavedWorkbenchPreviewPriority({
+            isCurrent: () => !cancelled && commit(),
+            signThumbnails: async () => {
+              if (!reportPhotos?.length) return null
+              const photoRows = reportPhotos
+              const photoRowsWithGridSrc = photoRows.filter((row) => Boolean(gridImageSrc(row))).length
+              markDiaryHydrationTiming('photo-sign-start', {
+                progressive: 'edit',
+                totalPhotoRows: photoRows.length,
+                photoRowsWithGridSrc,
+                photoRowsNeedingSign: photoRows.length - photoRowsWithGridSrc,
+              })
+              const withPreview = await signReportPhotoRows(reportPhotos)
+              markDiaryHydrationTiming('photo-sign-end', { progressive: 'edit' })
+              return withPreview
+            },
+            publishThumbnails: (withPreview) => {
+              if (!withPreview) return
+              signedThumbnailRows = withPreview
+              commitPhotoSourcesToUi('signed-progressive-edit', withPreview)
+              setPhotos(withPreview)
+              setLocationWalk(groupPhotosByArea(withPreview))
+            },
+            signCover: async () => {
+              if (!coverNeedsSignedPreview) return null
+              markDiaryHydrationTiming('cover-refresh-start', { progressive: 'edit' })
+              const preview = await resolveCoverPhotoPreviewUrl(
+                supabase,
+                editHydration.coverStoragePath,
+              )
+              markDiaryHydrationTiming('cover-refresh-end', {
+                progressive: 'edit',
+                hasPreview: Boolean(preview),
+              })
+              return preview
+            },
+            publishCover: (preview) => {
+              if (!coverNeedsSignedPreview) return
               setCoverPhoto(coverPhotoStateFromSaved(editHydration.coverStoragePath, preview))
               markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H8, {
                 hasPreview: Boolean(preview),
                 pathOnly: false,
                 progressive: 'edit',
               })
-            }
-          }
-
-          {
-            const logoPath = existing.brand_logo_url || null
-            if (logoPath) {
+            },
+            signLogo: async () => {
+              if (!logoPath) return null
               markDiaryHydrationTiming('logo-sign-start', { progressive: 'edit' })
               const preview = await signedUrlForPath(supabase, logoPath)
               markDiaryHydrationTiming('logo-sign-end', { progressive: 'edit' })
-              if (!cancelled && commit()) setSetupLogoPreview(preview)
-            }
-          }
+              return preview
+            },
+            publishLogo: (preview) => {
+              if (!logoPath) return
+              setSetupLogoPreview(preview)
+            },
+          })
 
-          if (reportPhotos?.length) {
-            const photoRows = reportPhotos
-            const photoRowsWithGridSrc = photoRows.filter((row) => Boolean(gridImageSrc(row))).length
-            markDiaryHydrationTiming('photo-sign-start', {
-              progressive: 'edit',
-              totalPhotoRows: photoRows.length,
-              photoRowsWithGridSrc,
-              photoRowsNeedingSign: photoRows.length - photoRowsWithGridSrc,
+          if (!cancelled && commit()) {
+            const visibleThumbCount = Array.isArray(signedThumbnailRows)
+              ? signedThumbnailRows.filter((row) => Boolean(gridImageSrc(row))).length
+              : 0
+            const timingSession = getActiveDiaryHydrationTimingSession()
+            cancelThumbnailPriorityPrewarm = schedulePdfAssetPrewarmAfterThumbnailPriority({
+              isCurrent: () => !cancelled && commit(),
+              fallbackMs: visibleThumbCount > 0 ? WORKBENCH_THUMBNAIL_PREWARM_FALLBACK_MS : 0,
+              whenThumbnailPriorityMilestone: () => {
+                if (visibleThumbCount <= 0) return Promise.resolve()
+                if (typeof timingSession?.whenFirstWorkPhotoImageLoaded !== 'function') {
+                  return Promise.resolve()
+                }
+                return timingSession.whenFirstWorkPhotoImageLoaded().then((reason) => {
+                  if (reason === 'visible') return
+                  return new Promise(() => {})
+                })
+              },
+              kickPrewarm: kickPdfAssetPrewarm,
             })
-            const withPreview = await signReportPhotoRows(reportPhotos)
-            markDiaryHydrationTiming('photo-sign-end', { progressive: 'edit' })
-            if (!cancelled && commit()) {
-              commitPhotoSourcesToUi('signed-progressive-edit', withPreview)
-              setPhotos(withPreview)
-              setLocationWalk(groupPhotosByArea(withPreview))
-            }
           }
-          kickPdfAssetPrewarm()
 
           if (commitCriticalHydrateSuccess()) {
             markDiaryHydrationTiming(DIARY_HYDRATION_STAGE.H12, {
@@ -2162,6 +2202,7 @@ export default function SiteDiaryWorkbenchSurface() {
     load()
     return () => {
       cancelled = true
+      cancelThumbnailPriorityPrewarm()
       endDiaryHydrationTiming('cancelled')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- ESLINT-DIARY-WORKBENCH-HYDRATE-DEPS
