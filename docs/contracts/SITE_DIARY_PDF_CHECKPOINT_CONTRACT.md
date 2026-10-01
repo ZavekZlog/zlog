@@ -1,10 +1,10 @@
 # Site Diary PDF & Share Checkpoint Contract
 
-**Version:** 1.7.0
+**Version:** 1.8.0
 **Date Updated:** 2026-10-01
-**Reason Updated:** Record S10 Saved Viewer blink acceptance. Prior checkpoints are unchanged.
-**User Decision:** Documentation checkpoint only — Saved Viewer blink fix accepted on Galaxy S10
-**Previous Version:** 1.6.0
+**Reason Updated:** Record S10 final-Save report-state acceptance. Prior checkpoints are unchanged.
+**User Decision:** Documentation checkpoint only — final-Save report state accepted on Galaxy S10
+**Previous Version:** 1.7.0
 
 **Known-good baseline (protected restore point):** `ab65437`  
 **Commit message:** `checkpoint: lock verified PDF header and share recovery`  
@@ -426,6 +426,56 @@ The remaining approximately 4–6 second Viewer loading duration is a separate p
 ### Protected work
 
 Unit 1A, Unit 2, the H7 photo-tail fix, and Report Ready / PDF reuse are unchanged and are not reopened. The locked unchanged-report PDF UX backlog remains separate.
+
+---
+
+## S10 final-Save report-state acceptance
+
+**Date:** 1 October 2026
+**Accepted commit:** `e63ae2f4f8155a44d08d972d1f4290636385b979`
+**Commit subject:** Use one owner for post-Save PDF completion
+**Authoritative device:** Samsung Galaxy S10 PWA
+**Edit session:** `1790853228272-11zef1y`
+**Diary:** report `6846b690-b3f8-4a28-b0c1-a9a825a850f0`, the same saved Thailand diary used for the Unit 1A, Unit 2, photo-tail H7, and Saved Viewer blink acceptance runs
+
+This entry does not replace the `ab65437` PDF header and Share checkpoint, the S10 Auto Prepare acceptance, the S10 Workbench photo priority acceptance, the S10 Unit 1A Edit handoff acceptance, the S10 Unit 2 shared Workbench preload acceptance, the S10 photo-tail H7 prewarm acceptance, or the S10 Saved Viewer blink acceptance above.
+
+Canonical release gate for this commit: 226 suites, 1216 tests, 1216 pass, 0 fail. ESLint 0 errors, 65 approved warnings, 0 new. Playwright behavioural 6 passed. Playwright visual 4 passed, 10 skipped.
+
+### Locked report state
+
+Unchanged Edit keeps Save as Save. It does not show Report Ready and it does not prepare a replacement PDF.
+
+Autosave marks the previous PDF stale. It does not prepare a replacement PDF and it does not show Report Ready.
+
+Final Save is the sole completion signal. The button shows Saving… until durable enqueue, then returns to Save. One later transition shows Report Ready — Share Now.
+
+The accepted sequence does not show Preparing report…, does not oscillate Report Ready → Save → Report Ready, and does not run a second completion owner, a second Workbench download, or a second worker build for that export.
+
+### S10 final Save
+
+| Point | UTC time | From tap |
+|-----|----------|----------|
+| Save tap | 11:15:20.450Z | 0 |
+| Diary persisted | 11:15:23.225Z | 2801 ms |
+| Authoritative fingerprint `ff9ea41f` | 11:15:29.042Z | 8618 ms |
+| Durable enqueue | 11:15:29.355Z | 8931 ms |
+| Save release | 11:15:29.386Z | 8.936 sec |
+| Report Ready | 11:15:29.400Z | one transition |
+
+Export `5fdc2530-1d62-40b1-8da8-762b68639e1f`, fingerprint `ff9ea41f`. One `setShareReady(true)`. No `background-pdf-prepare-start`. No post-Save `pdf-invalidate`. No duplicate Workbench download.
+
+**FINAL SAVE REPORT STATE — ACCEPTED ON GALAXY S10**
+
+### Protected work
+
+Unit 1A, Unit 2, the H7 photo-tail fix, the Saved Viewer blink fix, the worker/cache architecture, and autosave remain intact and are not reopened.
+
+### Separate future issue
+
+Saved Viewer open duration remains a separate performance item. It is not part of this accepted report-state unit and is not fixed in this checkpoint.
+
+On this same S10 run the Thailand Viewer opened in two attempts. Attempt 1 was H0→H1 6664 ms, then cancelled and restarted. Attempt 2 was H0→H1 692 ms and H12 3740 ms. Wall time from the first H0 to the second H12 was about 10.4 seconds. Viewer blink remained absent. This double-load may be a future performance item only if it is later prioritised.
 
 ---
 
