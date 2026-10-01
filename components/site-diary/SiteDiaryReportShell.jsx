@@ -5,6 +5,7 @@
  * Mounts exactly one heavy surface (Viewer OR Workbench) from URL; passes through other diary child routes.
  */
 
+import { useCallback, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { usePathname, useRouter } from 'next/navigation'
 import { emitShareDiag } from '@/lib/share-diag-beacon'
@@ -70,7 +71,7 @@ function handoffResourceReason(before, tap) {
   return `rsc=${text(rsc, 'none', 'multiple')};chunk=${before ? text(chunks, 'no-new-script', 'multiple-new-scripts') : 'unavailable'}`
 }
 
-function ViewerOpeningShell() {
+function ViewerOpeningShell({ children }) {
   const router = useRouter()
   return (
     <PremiumShell
@@ -85,17 +86,33 @@ function ViewerOpeningShell() {
       stickyBack
     >
       <p style={{ color: 'var(--text-2)', fontSize: 16 }}>Opening saved diary…</p>
+      {children}
     </PremiumShell>
   )
+}
+
+function ViewerChunkPlaceholder() {
+  return null
 }
 
 const SavedDiaryViewerSurface = dynamic(
   () => import('@/components/site-diary/SavedDiaryViewerSurface'),
   {
     ssr: false,
-    loading: ViewerOpeningShell,
+    loading: ViewerChunkPlaceholder,
   },
 )
+
+function ViewerOpeningHost() {
+  const [holdFrame, setHoldFrame] = useState(true)
+  const onOpeningFrame = useCallback((held) => setHoldFrame(held), [])
+  return (
+    <>
+      {holdFrame ? <ViewerOpeningShell /> : null}
+      <SavedDiaryViewerSurface openingFrameHeld={holdFrame} onOpeningFrame={onOpeningFrame} />
+    </>
+  )
+}
 
 function WorkbenchOpeningShell() {
   const editing = typeof window !== 'undefined'
@@ -166,7 +183,7 @@ export default function SiteDiaryReportShell({ children }) {
   }
 
   if (isSavedDiaryViewerDiaryPath(pathname)) {
-    return <SavedDiaryViewerSurface />
+    return <ViewerOpeningHost />
   }
 
   if (isSiteDiaryWorkbenchDiaryPath(pathname)) {

@@ -391,7 +391,7 @@ function SavedPhotoGrid({ photos, perPage, numberOffset, totalPhotoCount = 0 }) 
   )
 }
 
-function SavedDiaryViewer() {
+function SavedDiaryViewer({ openingFrameHeld = false, onOpeningFrame = null }) {
   const { id: routeProjectId } = useParams()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -773,20 +773,16 @@ function SavedDiaryViewer() {
     }
   }, [view?.projectId, view?.reportId, sharePdfFingerprint])
 
-  if (loading) {
-    return (
-      <PremiumShell
-        backHref={savedReportListHref()}
-        onBack={backToSavedDiaries}
-        accent={DIARY_ACCENT}
-        maxWidth={640}
-        stickyBack
-      >
-        <style>{hideRedundantShellTitleCss}</style>
-        <p style={{ color: 'var(--text-2)', fontSize: 16 }}>Loading your saved diary…</p>
-      </PremiumShell>
-    )
-  }
+  useEffect(() => {
+    if (typeof onOpeningFrame !== 'function') return
+    if (loading) {
+      if (!openingFrameHeld) onOpeningFrame(true)
+      return
+    }
+    if (openingFrameHeld) onOpeningFrame(false)
+  }, [loading, openingFrameHeld, onOpeningFrame])
+
+  if (loading || openingFrameHeld) return null
 
   if (error || !view) {
     return (
@@ -1631,28 +1627,10 @@ function SavedDiaryViewer() {
   )
 }
 
-export default function SavedDiaryViewerSurface() {
-  const router = useRouter()
-  const backToSavedDiaries = (event) => {
-    event?.preventDefault()
-    router.replace(savedReportListHref())
-  }
+export default function SavedDiaryViewerSurface({ openingFrameHeld = false, onOpeningFrame = null }) {
   return (
-    <Suspense
-      fallback={
-        <PremiumShell
-          backHref={savedReportListHref()}
-          onBack={backToSavedDiaries}
-          accent={DIARY_ACCENT}
-          maxWidth={640}
-          stickyBack
-        >
-          <style>{hideRedundantShellTitleCss}</style>
-          <p style={{ color: 'var(--text-2)' }}>Loading…</p>
-        </PremiumShell>
-      }
-    >
-      <SavedDiaryViewer />
+    <Suspense fallback={null}>
+      <SavedDiaryViewer openingFrameHeld={openingFrameHeld} onOpeningFrame={onOpeningFrame} />
     </Suspense>
   )
 }
