@@ -58,6 +58,11 @@ import {
   snapshotUserActivation,
 } from '@/lib/diary-share'
 import { emitShareDiag } from '@/lib/share-diag-beacon'
+import {
+  fetchSiteDiaryPdfExportArtifact,
+  lookupCurrentSiteDiaryPdfExport,
+  pollSiteDiaryPdfExportJobUntilTerminal,
+} from '@/lib/site-diary-pdf-export-client'
 import { beginViewerMediaRequest } from '@/lib/diary-edit-hydrate-trace'
 
 const SITE_DIARY_EDIT_NAV_TIMING_KEY = 'zlog.siteDiary.editNavTiming.v1'
@@ -74,6 +79,50 @@ import {
 } from '@/lib/diary-hydration-timing-diag'
 
 const DIARY_ACCENT = REPORT_THEMES.diary.accent
+
+async function recoverExistingWorkerExportForViewerShare(reportId) {
+  const supabase = createClient()
+  const lookedUp = await lookupCurrentSiteDiaryPdfExport(supabase, reportId)
+  if (!lookedUp?.ok) {
+    return {
+      action: 'error',
+      message: lookedUp?.message || 'We couldn’t prepare the report.',
+    }
+  }
+  if (lookedUp.disposition === 'absent') {
+    return { action: 'fallback' }
+  }
+  if (lookedUp.disposition === 'failed') {
+    return {
+      action: 'error',
+      message: 'We couldn’t prepare the report.',
+    }
+  }
+  let exportId = lookedUp.exportId
+  if (lookedUp.disposition === 'queued' || lookedUp.disposition === 'processing') {
+    const polled = await pollSiteDiaryPdfExportJobUntilTerminal(supabase, exportId)
+    if (!polled?.ok || polled.job?.status !== 'ready') {
+      return {
+        action: 'error',
+        message: polled?.message || 'We couldn’t prepare the report.',
+      }
+    }
+    exportId = polled.job?.id || exportId
+  } else if (lookedUp.disposition !== 'ready') {
+    return {
+      action: 'error',
+      message: 'We couldn’t prepare the report.',
+    }
+  }
+  const artifact = await fetchSiteDiaryPdfExportArtifact(reportId, exportId)
+  if (!artifact?.ok) {
+    return {
+      action: 'error',
+      message: artifact?.message || 'We couldn’t prepare the report.',
+    }
+  }
+  return { action: 'ready', artifact, exportId }
+}
 
 function logSavedDiaryOpen(event, detail) {
   if (process.env.NODE_ENV === 'production') return
@@ -834,6 +883,40 @@ function SavedDiaryViewer({ openingFrameHeld = false, onOpeningFrame = null }) {
       })
       const releaseViewerPdf = beginViewerMediaRequest()
       try {
+        const recovery = await recoverExistingWorkerExportForViewerShare(view.reportId)
+        if (gen !== pdfCacheGenRef.current) return
+        if (recovery.action === 'ready') {
+          const pdfFile = recovery.artifact.file instanceof File
+            ? recovery.artifact.file
+            : new File(
+              [recovery.artifact.blob],
+              recovery.artifact.fileName || 'Zlog-Site-Diary.pdf',
+              { type: 'application/pdf' },
+            )
+          pdfReadyRef.current = {
+            ok: true,
+            ...recovery.artifact,
+            file: pdfFile,
+            projectId: view.projectId,
+            reportId: view.reportId,
+          }
+          setPdfCacheState('ready')
+          setPdfStatus('Report ready — tap Report Ready — Share Now to open the share sheet.')
+          emitShareDiag('pdf-worker-export-recovered', {
+            surface: 'saved-diary-view',
+            reportId: view.reportId,
+            projectId: view.projectId,
+            exportId: recovery.exportId || null,
+            elapsedMs: Date.now() - startedAt,
+          })
+          return
+        }
+        if (recovery.action === 'error') {
+          pdfReadyRef.current = null
+          setPdfCacheState('error')
+          setPdfStatus(recovery.message || 'We couldn’t prepare the report.')
+          return
+        }
         const prepared = await prepareSiteDiaryPdf({
           projectId: view.projectId,
           reportId: view.reportId,

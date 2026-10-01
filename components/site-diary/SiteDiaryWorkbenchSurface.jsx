@@ -753,6 +753,7 @@ export default function SiteDiaryWorkbenchSurface() {
   const postHydratePdfReconcileAbortRef = useRef(null)
   const postHydratePdfReconcileStartedRef = useRef(false)
   const readyArtifactHydrationRef = useRef(null)
+  const acceptedDurableExportIdRef = useRef(null)
   const backgroundPrepareLiveRef = useRef({})
   const [shareReady, setShareReady] = useState(false)
   const invalidatePreparedSharePdf = useCallback((reason) => {
@@ -859,6 +860,7 @@ export default function SiteDiaryWorkbenchSurface() {
     saveLockRef.current = false
     completingRef.current = false
     replacementPdfAuthorisationRef.current = null
+    acceptedDurableExportIdRef.current = null
     invalidatePreparedSharePdf('report-edit-reset')
     setSaving(false)
     setPdfPreparing(false)
@@ -4890,6 +4892,23 @@ export default function SiteDiaryWorkbenchSurface() {
         reportId: startedReportId,
         generation: startedPrepareGeneration,
       }
+      const releaseSaveAfterDurableEnqueue = (enqueued) => {
+        acceptedDurableExportIdRef.current = enqueued?.exportId || null
+        saveLockRef.current = false
+        completingRef.current = false
+        finalSaveInProgressRef.current = false
+        flushSync(() => {
+          setSaving(false)
+          setPdfPreparing(false)
+        })
+        emitShareDiag('save-released-after-durable-enqueue', {
+          reportId: saved.id,
+          projectId,
+          exportId: enqueued?.exportId || null,
+          enqueueReturnedStatus: enqueued?.job?.status || null,
+          fingerprintPrefix: String(enqueued?.job?.contentFingerprint || '').slice(0, 8) || null,
+        })
+      }
       const obtainPreparedPdfForSave = async () => {
         if (
           joinedExportIdentity?.ok
@@ -4982,6 +5001,9 @@ export default function SiteDiaryWorkbenchSurface() {
           if (!enqueued?.ok) {
             return enqueued
           }
+          if (typeof releaseSaveAfterDurableEnqueue === 'function') {
+            releaseSaveAfterDurableEnqueue(enqueued)
+          }
           const pendingArtifact = joinPendingReadyArtifactHydration(readyArtifactHydrationRef, {
             reportId: saved.id,
             exportId: enqueued.exportId,
@@ -5023,6 +5045,7 @@ export default function SiteDiaryWorkbenchSurface() {
         return runSiteDiaryPdfExportToExportReady(supabase, saved.id, {
           signal: prepareAbort.signal,
           tapStartedAt,
+          onDurableEnqueue: releaseSaveAfterDurableEnqueue,
         })
       }
 
@@ -5076,6 +5099,13 @@ export default function SiteDiaryWorkbenchSurface() {
         : null
       if (!preparedFileMatchesFingerprint(prepared, authoritativeAfterPrepare)) {
         clearPrepareOwnership()
+        return
+      }
+      if (
+        acceptedDurableExportIdRef.current
+        && prepared?.exportId
+        && String(acceptedDurableExportIdRef.current) !== String(prepared.exportId)
+      ) {
         return
       }
       const preparedFingerprint = authoritativeAfterPrepare
