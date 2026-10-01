@@ -139,6 +139,7 @@ describe('change-scope gate', () => {
           'lib/diary-setup-continue.js',
           'lib/diary-routing.js',
           'lib/diary-view-mode.js',
+          'components/site-diary/SiteDiaryWorkbenchSurface.jsx',
         ].join(','),
       },
     )

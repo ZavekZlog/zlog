@@ -495,6 +495,10 @@ function SavedDiaryViewer({ openingFrameHeld = false, onOpeningFrame = null }) {
     },
     [publishReadSnapshot],
   )
+  const publishVerifiedViewerSnapshotRef = useRef(publishVerifiedViewerSnapshot)
+  useEffect(() => {
+    publishVerifiedViewerSnapshotRef.current = publishVerifiedViewerSnapshot
+  }, [publishVerifiedViewerSnapshot])
 
   useEffect(() => {
     let cancelled = false
@@ -526,7 +530,7 @@ function SavedDiaryViewer({ openingFrameHeld = false, onOpeningFrame = null }) {
         })
         setView(result.view)
         if (!cancelled) {
-          publishVerifiedViewerSnapshot(result.view, loadGeneration)
+          publishVerifiedViewerSnapshotRef.current(result.view, loadGeneration)
         }
         painted = true
         if (!cancelled) setLoading(false)
@@ -614,7 +618,7 @@ function SavedDiaryViewer({ openingFrameHeld = false, onOpeningFrame = null }) {
         attendancePreviewUrlRef.current = null
       }
     }
-  }, [projectId, reportId, publishVerifiedViewerSnapshot])
+  }, [projectId, reportId])
 
   useEffect(() => {
     if (!view?.secondaryReady || !view?.reportId || !view?.projectId) return
