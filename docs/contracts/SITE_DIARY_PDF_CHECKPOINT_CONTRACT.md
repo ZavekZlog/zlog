@@ -1,10 +1,10 @@
 # Site Diary PDF & Share Checkpoint Contract
 
-**Version:** 1.4.0
+**Version:** 1.5.0
 **Date Updated:** 2026-10-01
-**Reason Updated:** Record S10 Unit 1A Viewer to Edit core-row handoff acceptance. Prior checkpoints are unchanged.
-**User Decision:** Documentation checkpoint only — Unit 1A accepted on Galaxy S10
-**Previous Version:** 1.3.0
+**Reason Updated:** Record S10 Unit 2 shared Workbench preload acceptance. Prior checkpoints are unchanged.
+**User Decision:** Documentation checkpoint only — Unit 2 accepted on Galaxy S10
+**Previous Version:** 1.4.0
 
 **Known-good baseline (protected restore point):** `ab65437`  
 **Commit message:** `checkpoint: lock verified PDF header and share recovery`  
@@ -274,6 +274,60 @@ These are not part of Unit 1A:
 1. The Thailand saved Viewer still has the known open blink. Viewer open was approximately 5.5 seconds in this test.
 2. Workbench module/import latency can vary and previously reached several seconds. That remains a later unit.
 3. Locked UX backlog, not implemented here: opening an unchanged saved diary in Edit must not visually imply that a new report is being prepared. An existing valid PDF should remain silently available. A genuinely changed diary should invalidate the old PDF only when appropriate, and a replacement should be prepared after successful Save.
+
+---
+
+## S10 Unit 2 shared Workbench preload acceptance
+
+**Date:** 1 October 2026
+**Accepted commit:** `aea941ea08d2457b58d1b998893020877a62eb6d`
+**Commit subject:** Share Workbench module preload across Viewer and Edit
+**Authoritative device:** Samsung Galaxy S10 PWA
+**Diary:** the same saved Thailand diary used for the Unit 1A acceptance run
+
+This entry does not replace the `ab65437` PDF header and Share checkpoint, the S10 Auto Prepare acceptance, the S10 Workbench photo priority acceptance, or the S10 Unit 1A Edit handoff acceptance above.
+
+Canonical release gate for this commit: 220 suites, 1189 tests, 1189 pass, 0 fail. ESLint 0 errors. Playwright behavioural 6 pass. Playwright visual 4 pass, 10 skipped.
+
+### Shared Workbench module promise
+
+Unit 2 coordinates the saved Viewer background preload and the Site Diary shell `next/dynamic` loader through one memoised Workbench module import promise. A rejected import clears that cached promise so a later Edit can retry. A resolved promise stays cached for the lifetime of the current document.
+
+### S10 Edit sessions
+
+| Session | Workbench import | Tap → usable | Warm core-row handoff |
+|---------|-----------------:|-------------:|------------------------|
+| `1790823948968-v5ayxn2` | 3 ms | 1270 ms | USED |
+| `1790823981342-kwo4236` | 1 ms | 1575 ms | USED |
+| `1790824092802-n8r2civ` | 2 ms | 2395 ms | USED |
+| `1790824162666-vb6b2bn` | 3 ms | 1114 ms | USED |
+
+Controlled warm-Viewer samples:
+
+| Viewer dwell before Edit | Workbench import |
+|--------------------------|-----------------:|
+| 29.7 sec | 3 ms |
+| 18.7 sec | 3 ms |
+
+The acceptance target was a Workbench import of 600 ms or less on two controlled warm-Viewer runs. Both samples passed. The previously measured slow import band of approximately 4900 ms and 7227 ms did not recur. Tap → usable across the four Edits was 1114–2395 ms.
+
+**UNIT 2 — ACCEPTED ON GALAXY S10**
+
+### Unit 1A protection
+
+Unit 1A remained intact on all four runs. The duplicate project fetch was skipped. The duplicate `daily_reports` fetch was skipped. Each in-memory handoff was approximately 4–6 ms. Unit 1A is not reopened.
+
+### Report Ready
+
+The existing PDF reuse architecture remained intact. On all four Edits, export enqueue returned ready and reconcile completed ready. No fresh background PDF prepare or build occurred. Auto Prepare is not reopened.
+
+### Separate future units
+
+These are not part of Unit 2:
+
+1. Saved Viewer open/blink remains separate.
+2. Post-usable photo completion remains separate. On two runs the Workbench was usable at about 1.6–2.4 seconds, while all visible work photos did not finish displaying until roughly 14–15 seconds later. Signed photo URLs were already ready within roughly 30 ms of usable, so this is not a Unit 2 module-load failure.
+3. Locked UX backlog, not implemented here: opening an unchanged saved diary in Edit must not visually imply that a new report is being prepared when the existing PDF artifact is merely being reused.
 
 ---
 
