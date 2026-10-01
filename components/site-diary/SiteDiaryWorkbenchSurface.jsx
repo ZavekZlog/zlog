@@ -2228,10 +2228,10 @@ export default function SiteDiaryWorkbenchSurface() {
               fallbackMs: visibleThumbCount > 0 ? WORKBENCH_THUMBNAIL_PREWARM_FALLBACK_MS : 0,
               whenThumbnailPriorityMilestone: () => {
                 if (visibleThumbCount <= 0) return Promise.resolve()
-                if (typeof timingSession?.whenFirstWorkPhotoImageLoaded !== 'function') {
+                if (typeof timingSession?.whenAllWorkPhotoImagesLoaded !== 'function') {
                   return Promise.resolve()
                 }
-                return timingSession.whenFirstWorkPhotoImageLoaded().then((reason) => {
+                return timingSession.whenAllWorkPhotoImagesLoaded().then((reason) => {
                   if (reason === 'visible') return
                   return new Promise(() => {})
                 })
