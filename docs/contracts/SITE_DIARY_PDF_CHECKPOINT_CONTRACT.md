@@ -1,10 +1,10 @@
 # Site Diary PDF & Share Checkpoint Contract
 
-**Version:** 1.6.0
+**Version:** 1.7.0
 **Date Updated:** 2026-10-01
-**Reason Updated:** Record S10 photo-tail H7 prewarm acceptance. Prior checkpoints are unchanged.
-**User Decision:** Documentation checkpoint only — photo-tail H7 fix accepted on Galaxy S10
-**Previous Version:** 1.5.0
+**Reason Updated:** Record S10 Saved Viewer blink acceptance. Prior checkpoints are unchanged.
+**User Decision:** Documentation checkpoint only — Saved Viewer blink fix accepted on Galaxy S10
+**Previous Version:** 1.6.0
 
 **Known-good baseline (protected restore point):** `ab65437`  
 **Commit message:** `checkpoint: lock verified PDF header and share recovery`  
@@ -387,6 +387,45 @@ These are not part of this acceptance:
 
 1. Saved Diary list → Viewer dark/blink/full-document transition remains separate.
 2. Locked UX backlog, not implemented here: opening an unchanged saved diary in Edit must not visually imply that a new report is being prepared when an existing valid PDF is merely being reused.
+
+---
+
+## S10 Saved Viewer blink acceptance
+
+**Date:** 1 October 2026
+**Accepted commit:** `c119251b1d555e7d9d49ae3a9948acb00d874bcd`
+**Commit subject:** Keep one loading shell while opening saved diary
+**Authoritative device:** Samsung Galaxy S10 PWA
+**Diary:** the same saved Thailand diary used for the Unit 1A, Unit 2, and photo-tail H7 acceptance runs
+
+This entry does not replace the `ab65437` PDF header and Share checkpoint, the S10 Auto Prepare acceptance, the S10 Workbench photo priority acceptance, the S10 Unit 1A Edit handoff acceptance, the S10 Unit 2 shared Workbench preload acceptance, or the S10 photo-tail H7 prewarm acceptance above.
+
+Canonical release gate for this commit: 221 suites, 1196 tests, 1196 pass, 0 fail. ESLint 0 errors, 65 approved warnings, 0 new. Playwright behavioural 6 passed. Playwright visual 4 passed, 10 skipped.
+
+### Accepted open path
+
+Saved diary open uses `router.push` of the unchanged `savedDiaryViewerHref`. The Viewer remains `ssr: false`. One stable Viewer opening shell stays mounted from the first destination commit until the saved diary finishes loading. The dynamic placeholder, the Viewer loading return, and the Suspense fallback do not mount another full-screen shell. Saved Viewer Back returns to `/dashboard/diary?view=saved`.
+
+### S10 opens
+
+Surrounding navigation on the same device: Login → 5 cards was effectively instant. 5 cards → Site Diary panel was about 2 seconds. Saved Diaries list was about 2.5 seconds.
+
+| Run | Open time | Blink |
+|-----|----------:|-------|
+| 1 | ~6 sec | none |
+| 2 | ~4 sec | none |
+
+Two consecutive S10 visual passes. The previously visible Saved Diaries → Viewer dark/blink transition did not reproduce on either open. The current visual sequence is accepted.
+
+**SAVED VIEWER BLINK FIX — ACCEPTED ON GALAXY S10**
+
+### Separate future issue
+
+The remaining approximately 4–6 second Viewer loading duration is a separate performance characteristic. It is not part of this accepted visual-blink unit and is not optimised in this checkpoint. Viewer duration may be a future optimisation only if it is later prioritised.
+
+### Protected work
+
+Unit 1A, Unit 2, the H7 photo-tail fix, and Report Ready / PDF reuse are unchanged and are not reopened. The locked unchanged-report PDF UX backlog remains separate.
 
 ---
 
