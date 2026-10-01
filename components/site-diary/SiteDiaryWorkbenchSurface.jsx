@@ -411,6 +411,16 @@ function trimPdfFingerprint(value) {
   return trimPdfExportId(value).toLowerCase()
 }
 
+function isAlreadyReadyPersistedExport(identity) {
+  return String(identity?.enqueueReturnedStatus || '').trim().toLowerCase() === 'ready'
+}
+
+function replacementPdfPreparationAuthorised(authorisation, reportId, generation) {
+  if (!authorisation || authorisation.authorised !== true) return false
+  if (String(authorisation.reportId || '') !== String(reportId || '')) return false
+  return authorisation.generation === generation
+}
+
 /**
  * @param {{ reportId?: string, generation?: number, identity?: { exportId?: string, contentFingerprint?: string } } | null} reconcileOp
  * @param {string} reportId
@@ -734,6 +744,7 @@ export default function SiteDiaryWorkbenchSurface() {
   const completingRef = useRef(false)
   const shareReadyPdfRef = useRef(null)
   const pdfPrepareGenerationRef = useRef(0)
+  const replacementPdfAuthorisationRef = useRef(null)
   const pdfPrepareAbortRef = useRef(null)
   const pdfBackgroundPrepareSchedulerRef = useRef(null)
   const pdfBackgroundPrepareRunRef = useRef(null)
@@ -847,6 +858,7 @@ export default function SiteDiaryWorkbenchSurface() {
   useEffect(() => {
     saveLockRef.current = false
     completingRef.current = false
+    replacementPdfAuthorisationRef.current = null
     invalidatePreparedSharePdf('report-edit-reset')
     setSaving(false)
     setPdfPreparing(false)
@@ -3302,6 +3314,9 @@ export default function SiteDiaryWorkbenchSurface() {
       if (!shareReadyEntry) {
         return
       }
+      if (isAlreadyReadyPersistedExport(prepared)) {
+        return
+      }
 
       if (prepared.contentFingerprint) {
         shareReadyEntry.contentFingerprint = prepared.contentFingerprint
@@ -3337,6 +3352,22 @@ export default function SiteDiaryWorkbenchSurface() {
           ok: false,
           code: SITE_DIARY_PDF_EXPORT_CLIENT_CODE.reconcileDiscarded,
           exportId: identity.exportId,
+        }
+      }
+
+      if (isAlreadyReadyPersistedExport(identity)) {
+        onReconcileDiag('post-hydrate-reconcile-r9-complete', {
+          reportId: startedReportId,
+          exportId: identity.exportId,
+          enqueueReturnedStatus: identity.enqueueReturnedStatus,
+          tapStartedAt: reconcileStartedAt,
+          elapsedMsSinceTap: Date.now() - reconcileStartedAt,
+        })
+        return {
+          ok: false,
+          reusedExistingReadyExport: true,
+          exportId: identity.exportId,
+          enqueueReturnedStatus: identity.enqueueReturnedStatus,
         }
       }
 
@@ -3434,19 +3465,30 @@ export default function SiteDiaryWorkbenchSurface() {
 
     const startedGeneration = pdfPrepareGenerationRef.current
     const startedReportId = String(live.reportId || '')
+    if (!replacementPdfPreparationAuthorised(
+      replacementPdfAuthorisationRef.current,
+      startedReportId,
+      startedGeneration,
+    )) {
+      return
+    }
     const reconcileOp = postHydratePdfReconcileRef.current
     if (
       reconcileOp
       && String(reconcileOp.reportId) === startedReportId
       && reconcileOp.generation === startedGeneration
-      && !reconcileOp.identitySettled
     ) {
-      try {
-        await reconcileOp.identityPromise
-      } catch {
-        /* non-fatal */
+      if (!reconcileOp.identitySettled) {
+        try {
+          await reconcileOp.identityPromise
+        } catch {
+          /* non-fatal */
+        }
       }
       if (hasAdoptableWorkbenchShareFile(shareReadyPdfRef.current)) {
+        return
+      }
+      if (isAlreadyReadyPersistedExport(reconcileOp.identity)) {
         return
       }
     }
@@ -3535,6 +3577,12 @@ export default function SiteDiaryWorkbenchSurface() {
       fileReadyHandoff: SITE_DIARY_PDF_EXPORT_HANDOFF.fileReady,
     })
     if (!shareReadyEntry) {
+      return
+    }
+    if (
+      isAlreadyReadyPersistedExport(backgroundIdentity)
+      || isAlreadyReadyPersistedExport(prepared)
+    ) {
       return
     }
 
@@ -4837,6 +4885,11 @@ export default function SiteDiaryWorkbenchSurface() {
         }
       }
 
+      replacementPdfAuthorisationRef.current = {
+        authorised: true,
+        reportId: startedReportId,
+        generation: startedPrepareGeneration,
+      }
       const obtainPreparedPdfForSave = async () => {
         if (
           joinedExportIdentity?.ok
