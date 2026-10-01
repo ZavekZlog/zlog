@@ -166,7 +166,6 @@ import {
   isDiaryCleanForSaveRetainCheck,
   preparedFileMatchesFingerprint,
   SAVE_CTA_IDLE_LABEL,
-  SAVE_CTA_PREPARING_LABEL,
   SAVE_CTA_SAVING_LABEL,
   SAVE_CTA_SHARE_READY_LABEL,
   shouldIgnoreDuplicateSaveTap,
@@ -732,7 +731,7 @@ export default function SiteDiaryWorkbenchSurface() {
   diaryReportWriteLockBridge.current = reportWriteLockedRef
   const projectDetailsAuthorityRef = useRef(null)
   const projectDetailsPersistRef = useRef(null)
-  const [pdfPreparing, setPdfPreparing] = useState(false)
+  const [, setPdfPreparing] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
   const [showSaveBanner, setShowSaveBanner] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(false)
@@ -754,6 +753,7 @@ export default function SiteDiaryWorkbenchSurface() {
   const postHydratePdfReconcileStartedRef = useRef(false)
   const readyArtifactHydrationRef = useRef(null)
   const acceptedDurableExportIdRef = useRef(null)
+  const saveTailCompletionRef = useRef(null)
   const backgroundPrepareLiveRef = useRef({})
   const [shareReady, setShareReady] = useState(false)
   const invalidatePreparedSharePdf = useCallback((reason) => {
@@ -765,6 +765,7 @@ export default function SiteDiaryWorkbenchSurface() {
     postHydratePdfReconcileAbortRef.current?.abort()
     postHydratePdfReconcileAbortRef.current = null
     shareReadyPdfRef.current = null
+    saveTailCompletionRef.current = null
     pdfPrepareGenerationRef.current = bumpPdfPrepareGeneration(pdfPrepareGenerationRef.current)
     setShareReady((prev) => (prev ? false : prev))
     pdfBackgroundPrepareSchedulerRef.current?.cancel()
@@ -861,6 +862,7 @@ export default function SiteDiaryWorkbenchSurface() {
     completingRef.current = false
     replacementPdfAuthorisationRef.current = null
     acceptedDurableExportIdRef.current = null
+    saveTailCompletionRef.current = null
     invalidatePreparedSharePdf('report-edit-reset')
     setSaving(false)
     setPdfPreparing(false)
@@ -3474,6 +3476,15 @@ export default function SiteDiaryWorkbenchSurface() {
     )) {
       return
     }
+    const saveTailOwner = saveTailCompletionRef.current
+    if (
+      saveTailOwner
+      && saveTailOwner.exportId
+      && String(saveTailOwner.reportId || '') === startedReportId
+      && saveTailOwner.generation === startedGeneration
+    ) {
+      return
+    }
     const reconcileOp = postHydratePdfReconcileRef.current
     if (
       reconcileOp
@@ -4744,6 +4755,16 @@ export default function SiteDiaryWorkbenchSurface() {
       const startedPrepareAuthUserId = pdfPrepareGenerationRef.authUserId ?? null
       const startedMutationRevision = localAutosaveMutationRevisionRef.current
       const startedReportId = String(saved.id)
+      const clearSaveTailCompletionOwner = () => {
+        const owner = saveTailCompletionRef.current
+        if (!owner) return
+        if (
+          owner.generation === startedPrepareGeneration
+          && String(owner.reportId || '') === startedReportId
+        ) {
+          saveTailCompletionRef.current = null
+        }
+      }
       const prepareAbort = new AbortController()
       pdfPrepareAbortRef.current = prepareAbort
       const clearPrepareOwnership = () => {
@@ -4769,6 +4790,7 @@ export default function SiteDiaryWorkbenchSurface() {
           || String(editingReportId || '') !== startedReportId
         ) {
           clearPrepareOwnership()
+          clearSaveTailCompletionOwner()
           return true
         }
         return false
@@ -4893,7 +4915,16 @@ export default function SiteDiaryWorkbenchSurface() {
         generation: startedPrepareGeneration,
       }
       const releaseSaveAfterDurableEnqueue = (enqueued) => {
-        acceptedDurableExportIdRef.current = enqueued?.exportId || null
+        const exportId = enqueued?.exportId || null
+        acceptedDurableExportIdRef.current = exportId
+        saveTailCompletionRef.current = exportId
+          ? {
+              reportId: saved.id,
+              exportId,
+              fingerprint: enqueued?.job?.contentFingerprint || null,
+              generation: startedPrepareGeneration,
+            }
+          : null
         saveLockRef.current = false
         completingRef.current = false
         finalSaveInProgressRef.current = false
@@ -5059,6 +5090,7 @@ export default function SiteDiaryWorkbenchSurface() {
         if (isSiteDiaryPdfExportUserAbortResult(prepared) && dismissStaleWorkerPrepare()) {
           return
         }
+        clearSaveTailCompletionOwner()
         failPdfAfterSave(userMessageForSiteDiaryPdfExportFailure(prepared))
         return
       }
@@ -5098,6 +5130,7 @@ export default function SiteDiaryWorkbenchSurface() {
         ? fingerprintAfterPrepare.contentFingerprint
         : null
       if (!preparedFileMatchesFingerprint(prepared, authoritativeAfterPrepare)) {
+        clearSaveTailCompletionOwner()
         clearPrepareOwnership()
         return
       }
@@ -5106,6 +5139,7 @@ export default function SiteDiaryWorkbenchSurface() {
         && prepared?.exportId
         && String(acceptedDurableExportIdRef.current) !== String(prepared.exportId)
       ) {
+        clearSaveTailCompletionOwner()
         return
       }
       const preparedFingerprint = authoritativeAfterPrepare
@@ -5149,12 +5183,14 @@ export default function SiteDiaryWorkbenchSurface() {
         setError('')
         persistUiErrorRef.current = ''
       })
+      clearSaveTailCompletionOwner()
       return
     } catch (err) {
       const message =
         err instanceof DiarySaveError
           ? friendlyDiarySaveError(err)
           : 'We couldn’t prepare the share. Check your connection and try again.'
+      saveTailCompletionRef.current = null
       if (diaryPersistSucceeded) {
         failPdfAfterSave(message)
       } else {
@@ -6160,7 +6196,7 @@ export default function SiteDiaryWorkbenchSurface() {
                       flexShrink: 0,
                     }}
                   />
-                  {pdfPreparing ? SAVE_CTA_PREPARING_LABEL : SAVE_CTA_SAVING_LABEL}
+                  {SAVE_CTA_SAVING_LABEL}
                 </>
               ) : (
                 shareReady ? SAVE_CTA_SHARE_READY_LABEL : SAVE_CTA_IDLE_LABEL
