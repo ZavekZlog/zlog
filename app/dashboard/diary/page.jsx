@@ -460,6 +460,14 @@ function SiteDiaryEntryPage() {
   const savedDiaryOpenInFlightRef = useRef(null)
   const [openingReportId, setOpeningReportId] = useState(null)
 
+  useEffect(() => {
+    return () => {
+      openingSavedDiaryRef.current = false
+      savedDiaryOpenInFlightRef.current = null
+      setOpeningReportId(null)
+    }
+  }, [])
+
   const mode = searchParams.get('view') === 'saved' ? 'saved' : null
   const hubLifecycleKey = hubReadLifecycleKey(mode, filterProjectId)
   const hubReadLifecycleRef = useRef(null)
@@ -620,7 +628,7 @@ function SiteDiaryEntryPage() {
     setOpeningReportId(row.id)
     navigateToSavedDiaryViewer(href, {
       navigate: (target) => {
-        window.location.assign(target)
+        router.push(target)
       },
     })
   }

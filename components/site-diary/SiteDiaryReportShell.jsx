@@ -6,7 +6,7 @@
  */
 
 import dynamic from 'next/dynamic'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { emitShareDiag } from '@/lib/share-diag-beacon'
 import { loadSiteDiaryWorkbenchSurface } from '@/lib/diary-workbench-module'
 import { DIARY_ACCENT, PremiumShell } from '@/lib/premium-ui'
@@ -70,9 +70,31 @@ function handoffResourceReason(before, tap) {
   return `rsc=${text(rsc, 'none', 'multiple')};chunk=${before ? text(chunks, 'no-new-script', 'multiple-new-scripts') : 'unavailable'}`
 }
 
+function ViewerOpeningShell() {
+  const router = useRouter()
+  return (
+    <PremiumShell
+      title="Site Diary"
+      backHref="/dashboard/diary?view=saved"
+      onBack={(event) => {
+        event?.preventDefault()
+        router.replace('/dashboard/diary?view=saved')
+      }}
+      accent={DIARY_ACCENT}
+      maxWidth={640}
+      stickyBack
+    >
+      <p style={{ color: 'var(--text-2)', fontSize: 16 }}>Opening saved diary…</p>
+    </PremiumShell>
+  )
+}
+
 const SavedDiaryViewerSurface = dynamic(
   () => import('@/components/site-diary/SavedDiaryViewerSurface'),
-  { ssr: false },
+  {
+    ssr: false,
+    loading: ViewerOpeningShell,
+  },
 )
 
 function WorkbenchOpeningShell() {
