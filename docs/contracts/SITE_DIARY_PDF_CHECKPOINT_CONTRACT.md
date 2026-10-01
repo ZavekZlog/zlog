@@ -1,10 +1,10 @@
 # Site Diary PDF & Share Checkpoint Contract
 
-**Version:** 1.5.0
+**Version:** 1.6.0
 **Date Updated:** 2026-10-01
-**Reason Updated:** Record S10 Unit 2 shared Workbench preload acceptance. Prior checkpoints are unchanged.
-**User Decision:** Documentation checkpoint only — Unit 2 accepted on Galaxy S10
-**Previous Version:** 1.4.0
+**Reason Updated:** Record S10 photo-tail H7 prewarm acceptance. Prior checkpoints are unchanged.
+**User Decision:** Documentation checkpoint only — photo-tail H7 fix accepted on Galaxy S10
+**Previous Version:** 1.5.0
 
 **Known-good baseline (protected restore point):** `ab65437`  
 **Commit message:** `checkpoint: lock verified PDF header and share recovery`  
@@ -328,6 +328,65 @@ These are not part of Unit 2:
 1. Saved Viewer open/blink remains separate.
 2. Post-usable photo completion remains separate. On two runs the Workbench was usable at about 1.6–2.4 seconds, while all visible work photos did not finish displaying until roughly 14–15 seconds later. Signed photo URLs were already ready within roughly 30 ms of usable, so this is not a Unit 2 module-load failure.
 3. Locked UX backlog, not implemented here: opening an unchanged saved diary in Edit must not visually imply that a new report is being prepared when the existing PDF artifact is merely being reused.
+
+---
+
+## S10 photo-tail H7 prewarm acceptance
+
+**Date:** 1 October 2026
+**Accepted commit:** `b3245690527ba6aaa018a9ee3f3938534d0075b6`
+**Commit subject:** Delay PDF asset prewarm until saved thumbnails load
+**Authoritative device:** Samsung Galaxy S10 PWA
+**Diary:** the same saved Thailand diary used for the Unit 1A and Unit 2 acceptance runs
+
+This entry does not replace the `ab65437` PDF header and Share checkpoint, the S10 Auto Prepare acceptance, the S10 Workbench photo priority acceptance, the S10 Unit 1A Edit handoff acceptance, or the S10 Unit 2 shared Workbench preload acceptance above.
+
+Canonical release gate for this commit: 221 suites, 1195 tests, 1195 pass, 0 fail. ESLint 0 errors, 65 approved warnings, 0 new. Playwright behavioural 6 passed. Playwright visual 4 passed, 10 skipped.
+
+### H7 prewarm release
+
+H6 remains the first expected saved-work thumbnail becoming visible. H7 remains every expected saved-work thumbnail becoming visible. Full-size PDF asset prewarm now releases on H7. The existing 15-second fallback remains available when H7 does not occur. Prewarm concurrency is unchanged. On both acceptance runs the fallback did not fire, and no full-size `report.jpg` prewarm began before H7.
+
+### S10 Edit sessions
+
+Both runs entered Edit before Viewer H7. Each Viewer session was cancelled with no Viewer H7.
+
+| Edit session | Viewer session | Viewer dwell | Tap → usable | Workbench import | H6 after usable | H6 → H7 | Prewarm trigger | Unit 1A |
+|--------------|----------------|-------------:|-------------:|-----------------:|----------------:|--------:|-----------------|---------|
+| `1790828123786-3010ul0` | `1790828119428-iy4lt6h` | 4.36 sec | 1209 ms | 3 ms, `chunk=no-new-script` | 144 ms | 5424 ms | H7 | USED |
+| `1790828231388-ap238qt` | `1790828226382-7bgjmfm` | 5.01 sec | 1492 ms | 2 ms, `chunk=no-new-script` | 154 ms | 3416 ms | H7 | USED |
+
+### Before / after
+
+Previous interrupted or cold Edit photo tails on the same diary:
+
+| Session | H6 → H7 |
+|---------|--------:|
+| `1790823981342-kwo4236` | ~14.4 sec |
+| `1790824092802-n8r2civ` | ~14.2 sec |
+
+After this repair the two interrupted-Viewer runs completed H6 → H7 in 5424 ms and 3416 ms. The prior ~14–15 second post-usable photo stall did not reproduce. The residual completion times, 5.42 sec and 3.42 sec, are recorded as accepted. They are not a further optimisation in this checkpoint.
+
+**PHOTO TAIL H7 FIX — ACCEPTED ON GALAXY S10**
+
+### Unit 1A protection
+
+Unit 1A remained intact. Warm project/report handoff spans were 5 ms / 4 ms on the first run and 7 ms / 4 ms on the second. Unit 1A is not reopened.
+
+### Unit 2 protection
+
+Unit 2 remained intact. Workbench imports were 3 ms and 2 ms, both `chunk=no-new-script`. Unit 2 is not reopened.
+
+### Report Ready
+
+The existing PDF artifact reuse remained intact. Both runs followed `enqueue=ready` → `r9-complete` → `post-hydrate-pdf-reconcile-ready`. There was no `r6`, `r7`, or `r8` signed blob fetch, no `background-pdf-prepare-start`, and no fresh PDF build. Auto Prepare and the PDF artifact architecture are not reopened. Photo-tail H7 scheduling is not reopened.
+
+### Separate future issues
+
+These are not part of this acceptance:
+
+1. Saved Diary list → Viewer dark/blink/full-document transition remains separate.
+2. Locked UX backlog, not implemented here: opening an unchanged saved diary in Edit must not visually imply that a new report is being prepared when an existing valid PDF is merely being reused.
 
 ---
 
