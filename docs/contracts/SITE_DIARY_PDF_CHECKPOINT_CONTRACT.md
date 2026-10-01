@@ -1,10 +1,10 @@
 # Site Diary PDF & Share Checkpoint Contract
 
-**Version:** 1.3.0
-**Date Updated:** 2026-09-30
-**Reason Updated:** Record S10 Workbench photo priority acceptance at be18d10. Prior checkpoints are unchanged.
-**User Decision:** Documentation checkpoint only — qualitative thumbnail-priority improvement observed on S10
-**Previous Version:** 1.2.0
+**Version:** 1.4.0
+**Date Updated:** 2026-10-01
+**Reason Updated:** Record S10 Unit 1A Viewer to Edit core-row handoff acceptance. Prior checkpoints are unchanged.
+**User Decision:** Documentation checkpoint only — Unit 1A accepted on Galaxy S10
+**Previous Version:** 1.3.0
 
 **Known-good baseline (protected restore point):** `ab65437`  
 **Commit message:** `checkpoint: lock verified PDF header and share recovery`  
@@ -209,6 +209,71 @@ These remain distinct concerns:
 4. Edit transition: ~4 sec black screen before the Workbench appears.
 
 The next technical investigation should concern the saved-diary/Edit navigation rendering behaviour, not Auto Prepare or persistent PDF caching.
+
+---
+
+## S10 Unit 1A Edit handoff acceptance
+
+**Date:** 1 October 2026
+**Accepted commit:** `92a285ce31f31e9b47efc9bcb6d93fe717758d76`
+**Commit subject:** Add verified Viewer to Edit core row handoff
+**Live migration:** `20261001120000_finalize_site_diary_save_expected_report` on the S10 Preview backend
+**Authoritative device:** Samsung Galaxy S10 PWA
+**Edit session:** `1790820078424-lutkznk`
+**Diary:** the same saved Thailand diary used for this acceptance run
+
+This entry does not replace the `ab65437` PDF header and Share checkpoint, the S10 Auto Prepare acceptance, or the S10 Workbench photo priority acceptance above.
+
+Canonical release gate for this commit: 218 suites, 1184 tests, 1184 pass, 0 fail. ESLint 0 errors. Playwright behavioural 6 pass. Playwright visual 4 pass, 10 skipped.
+
+### Edit handoff
+
+Unit 1A reused the Viewer raw project row and the Viewer raw `daily_reports` row. The duplicate project fetch was skipped. The duplicate `daily_reports` fetch was skipped.
+
+| Step | Diagnostic |
+|------|------------|
+| Tap → route commit | 37 ms |
+| Route commit → Workbench import start | 8 ms |
+| Workbench import | 523 ms |
+| Import resolved → Workbench mount | 29 ms |
+| Workbench mount → usable | 1270 ms |
+| Tap → usable Workbench | 1867 ms |
+
+The phone observation for tap → usable Workbench was approximately 3 seconds.
+
+**UNIT 1A — ACCEPTED ON GALAXY S10**
+
+### Child lifecycle
+
+The existing blocking child path still ran before usable:
+
+| Step | Diagnostic |
+|------|------------|
+| Pending cover | 11 ms |
+| Labour | 426 ms |
+| Plant | 416 ms |
+| Photo metadata | 539 ms |
+| Signature | 11 ms |
+
+### Final Save guard
+
+The atomic final-Save stale guard is live. A warm Save sends the acknowledged report baseline. A mismatch returns stale before any report, labour, plant, or photo write. A cold Save that omits the expected baseline keeps the previous write behaviour.
+
+### Report Ready
+
+The accepted persistent PDF reuse remained intact. After the Workbench became usable, export enqueue returned ready. `background-pdf-prepare-start` reached `background-pdf-ready` in approximately 30 ms, with handoff `file-ready`, for the existing artifact of approximately 5.7 MB. There was no PDF invalidation and no fresh PDF build.
+
+The phone observed Report Ready approximately 2 seconds after the Workbench became usable because of fingerprint/readiness work before that existing ready artifact was surfaced.
+
+The Auto Prepare architecture is not reopened.
+
+### Separate future units
+
+These are not part of Unit 1A:
+
+1. The Thailand saved Viewer still has the known open blink. Viewer open was approximately 5.5 seconds in this test.
+2. Workbench module/import latency can vary and previously reached several seconds. That remains a later unit.
+3. Locked UX backlog, not implemented here: opening an unchanged saved diary in Edit must not visually imply that a new report is being prepared. An existing valid PDF should remain silently available. A genuinely changed diary should invalidate the old PDF only when appropriate, and a replacement should be prepared after successful Save.
 
 ---
 
