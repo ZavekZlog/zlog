@@ -91,6 +91,9 @@ const NODE_TESTS = [
   'scripts/check-visual-baselines.test.js',
   'lib/ai-annotation/area-photo-viewer-dormant.test.js',
   'scripts/check-eslint-gate.test.js',
+  'lib/diary-edit-core-row-handoff.test.js',
+  'lib/diary-warm-handoff-final-save.test.js',
+  'lib/diary-atomic-final-save.test.js',
 ]
 
 function run(label, command, args, opts = {}) {

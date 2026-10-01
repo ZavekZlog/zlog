@@ -54,13 +54,16 @@ import {
   fetchOpenDraft,
   updateDiarySetupFields,
 } from '@/lib/diary-draft'
-import { DiarySaveError, DIARY_SAVE_LOG, finalizeSiteDiarySave } from '@/lib/diary-save'
+import { DiarySaveError, DIARY_SAVE_LOG, buildRpcReportPatch, finalizeSiteDiarySave } from '@/lib/diary-save'
 import {
   labourFormToPersistRows,
   plantFormToPersistRows,
   photoRowsToBaseline,
   durablePhotosToBaseline,
   mergeAutosaveAckIntoReportRow,
+  WARM_HANDOFF_REPORT_CHANGED_MESSAGE,
+  decideWarmHandoffFinalSave,
+  readDailyReportRowForWarmFinalSave,
 } from '@/lib/diary-save-dirty'
 import {
   DIARY_AUTOSAVE_DEBOUNCE_MS,
@@ -204,6 +207,10 @@ import {
   loadWorkerReadyPdfArtifact,
   storeWorkerReadyPdfArtifact,
 } from '@/lib/diary-pdf-cache'
+import {
+  hasBoundCoreRowHandoff,
+  readEligibleCoreRowHandoff,
+} from '@/lib/diary-edit-core-row-handoff'
 import { readReportSetupExtras, reportDateInputValue, todayIsoDate } from '@/lib/report-setup'
 import {
   createDiaryWorkbenchLoadWatchdog,
@@ -776,6 +783,7 @@ export default function SiteDiaryWorkbenchSurface() {
   const deferredReportWriteAutosaveRef = useRef(null)
   const ackedSnapshotRef = useRef(null)
   const lastPersistedReportRef = useRef(null)
+  const warmCoreRowHandoffRef = useRef(false)
   const lastPersistedLabourRef = useRef(null)
   const lastPersistedPlantRef = useRef(null)
   const lastPersistedPhotosRef = useRef(null)
@@ -1276,6 +1284,7 @@ export default function SiteDiaryWorkbenchSurface() {
       setLoadDiagnostic('')
       ackedSnapshotRef.current = null
       lastPersistedReportRef.current = null
+      warmCoreRowHandoffRef.current = false
       lastPersistedLabourRef.current = null
       lastPersistedPlantRef.current = null
       lastPersistedPhotosRef.current = null
@@ -1334,16 +1343,46 @@ export default function SiteDiaryWorkbenchSurface() {
           markDiaryHydrationTiming('edit-hydrate-start', readEditHydrateInFlight())
         }
 
+        let coreRowHandoff = null
+        if (
+          progressiveEdit
+          && editNavTiming?.hydrationSessionId
+          && hasBoundCoreRowHandoff({
+            projectId,
+            reportId: editingReportId,
+            hydrationSessionId: editNavTiming.hydrationSessionId,
+          })
+        ) {
+          try {
+            const authResult = await supabase.auth.getUser()
+            if (!cancelled) {
+              coreRowHandoff = readEligibleCoreRowHandoff({
+                userId: authResult?.data?.user?.id || '',
+                projectId,
+                reportId: editingReportId,
+                hydrationSessionId: editNavTiming.hydrationSessionId,
+              })
+            }
+          } catch {
+            coreRowHandoff = null
+          }
+          if (cancelled) return
+        }
+
         markDiaryHydrationTiming('project-hydrate-start', {
           progressiveEdit,
           progressiveCompose,
         })
-        const releaseProjectTrack = progressiveEdit ? beginWorkbenchHydrateRequest() : null
         let proj
-        try {
-          proj = await fetchProjectRowForEditHydrate(supabase, projectId)
-        } finally {
-          releaseProjectTrack?.()
+        if (coreRowHandoff) {
+          proj = coreRowHandoff.project
+        } else {
+          const releaseProjectTrack = progressiveEdit ? beginWorkbenchHydrateRequest() : null
+          try {
+            proj = await fetchProjectRowForEditHydrate(supabase, projectId)
+          } finally {
+            releaseProjectTrack?.()
+          }
         }
         markDiaryHydrationTiming('project-hydrate-end', {
           progressiveEdit,
@@ -1594,24 +1633,30 @@ export default function SiteDiaryWorkbenchSurface() {
           progressiveEdit,
           progressiveCompose,
         })
-        const releaseReportTrack = progressiveEdit ? beginWorkbenchHydrateRequest() : null
         let existing
         let existingError
-        try {
-          const reportRow = await withTimeout(
-            supabase
-              .from('daily_reports')
-              .select('*')
-              .eq('id', editingReportId)
-              .eq('project_id', projectId)
-              .maybeSingle(),
-            DIARY_WORKBENCH_LOAD_TIMEOUT_MS,
-            'daily_reports-timeout',
-          )
-          existing = reportRow.data
-          existingError = reportRow.error
-        } finally {
-          releaseReportTrack?.()
+        if (coreRowHandoff) {
+          existing = coreRowHandoff.report
+          existingError = null
+          if (commit()) warmCoreRowHandoffRef.current = true
+        } else {
+          const releaseReportTrack = progressiveEdit ? beginWorkbenchHydrateRequest() : null
+          try {
+            const reportRow = await withTimeout(
+              supabase
+                .from('daily_reports')
+                .select('*')
+                .eq('id', editingReportId)
+                .eq('project_id', projectId)
+                .maybeSingle(),
+              DIARY_WORKBENCH_LOAD_TIMEOUT_MS,
+              'daily_reports-timeout',
+            )
+            existing = reportRow.data
+            existingError = reportRow.error
+          } finally {
+            releaseReportTrack?.()
+          }
         }
         markDiaryHydrationTiming('report-row-fetch-end', {
           progressiveEdit,
@@ -4104,6 +4149,7 @@ export default function SiteDiaryWorkbenchSurface() {
     const capturedAreaPromise = promiseForSaveOwner(areaOperation)
     const childWalk = locationWalkRef.current?.getAuthoritativeWalk?.(saveOwner) ?? null
     reportWriteOwner = autosaveLifecycleOwnerRef.current ? { ...autosaveLifecycleOwnerRef.current } : null
+    const saveUsedWarmCoreRowHandoff = warmCoreRowHandoffRef.current === true
     reportWriteAutosaveOwnerRef.current = reportWriteOwner
     const tapUserActivation = snapshotUserActivation()
     const tapStartedAt = Date.now()
@@ -4214,7 +4260,7 @@ export default function SiteDiaryWorkbenchSurface() {
         return
       }
 
-      await flushPendingAutosave()
+      const pendingAutosaveResult = await flushPendingAutosave()
 
       const writerBarrier = await awaitSaveTimeWriterBarrier({
         labourWriters: [capturedLabourApplyPromise, capturedManualLabourPromise].filter(Boolean),
@@ -4555,6 +4601,33 @@ export default function SiteDiaryWorkbenchSurface() {
         }
       }
 
+      if (saveUsedWarmCoreRowHandoff) {
+        const liveRead = await readDailyReportRowForWarmFinalSave(supabase, {
+          reportId: editingReportId,
+          projectId,
+        })
+        if (String(editingReportIdRef.current || '') !== String(saveReportId || '')) {
+          releaseReportWriteLock()
+          return
+        }
+        const freshDecision = decideWarmHandoffFinalSave({
+          autosaveResult: pendingAutosaveResult,
+          liveRead,
+          baselineRow: lastPersistedReportRef.current,
+          reportPatch: buildRpcReportPatch(reportPayload, projectId),
+          projectId,
+          reportId: editingReportId,
+        })
+        if (!freshDecision.proceed) {
+          failSave(
+            freshDecision.reason === 'read-failed'
+              ? friendlyDiarySaveError(null)
+              : WARM_HANDOFF_REPORT_CHANGED_MESSAGE,
+          )
+          return
+        }
+      }
+
       const saved = await finalizeSiteDiarySave(supabase, {
         reportId: editingReportId,
         projectId,
@@ -4571,7 +4644,13 @@ export default function SiteDiaryWorkbenchSurface() {
           plant: lastPersistedPlantRef.current,
           photos: lastPersistedPhotosRef.current,
         },
+        expectedReportRow: saveUsedWarmCoreRowHandoff ? lastPersistedReportRef.current : null,
       })
+
+      if (saved?.stale) {
+        failSave(WARM_HANDOFF_REPORT_CHANGED_MESSAGE)
+        return
+      }
 
       if (!saved?.id || saved.id !== editingReportId) {
         failSave('We couldn’t save your Site Diary. Check your connection and try again.')

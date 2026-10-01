@@ -32,6 +32,7 @@ import {
   loadSavedDiaryView,
 } from '@/lib/diary-saved-view'
 import { evictSignInSheetSessionEvidence } from '@/lib/diary-sign-in-sheet-session-cache'
+import { bindCoreRowHandoffSession } from '@/lib/diary-edit-core-row-handoff'
 import { mergeSiteDiarySessionSnapshot } from '@/lib/site-diary-session-context'
 import {
   readSnapshotsFromSavedDiaryView,
@@ -456,7 +457,11 @@ function SavedDiaryViewer() {
       let painted = false
       logSavedDiaryOpen('viewer-route-mounted', { projectId, reportId })
       try {
-        const result = await loadSavedDiaryView(supabase, { projectId, reportId })
+        const result = await loadSavedDiaryView(supabase, {
+          projectId,
+          reportId,
+          viewerGeneration: loadGeneration,
+        })
         if (cancelled) return
         if (!result.ok) {
           sdscSeedRef.current = null
@@ -1140,6 +1145,12 @@ function SavedDiaryViewer() {
                     surface: 'saved-diary-view',
                     hydrationSessionId,
                     elapsedMs: 0,
+                  })
+                  bindCoreRowHandoffSession({
+                    hydrationSessionId,
+                    projectId: editNavProjectId,
+                    reportId: editNavReportId,
+                    viewerGeneration: viewerPublishGenerationRef.current,
                   })
                   const seed = sdscSeedRef.current
                   if (seed) {
