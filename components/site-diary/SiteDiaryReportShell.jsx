@@ -8,6 +8,7 @@
 import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
 import { emitShareDiag } from '@/lib/share-diag-beacon'
+import { loadSiteDiaryWorkbenchSurface } from '@/lib/diary-workbench-module'
 import { DIARY_ACCENT, PremiumShell } from '@/lib/premium-ui'
 
 const EDIT_NAV_TIMING_KEY = 'zlog.siteDiary.editNavTiming.v1'
@@ -103,7 +104,7 @@ const SiteDiaryWorkbenchSurface = dynamic(
       } catch { scriptsBefore = null }
       emitEditHandoff('edit-navigation-workbench-import-start', timing)
     }
-    const pending = import('@/components/site-diary/SiteDiaryWorkbenchSurface')
+    const pending = loadSiteDiaryWorkbenchSurface()
     if (timing) {
       Promise.resolve(pending).then(() => {
         try { emitEditHandoff('edit-navigation-workbench-import-resolved', timing, handoffResourceReason(scriptsBefore, timing.tapStartedAtMs)) } catch { /* diagnostic only */ }

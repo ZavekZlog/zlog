@@ -33,6 +33,7 @@ import {
 } from '@/lib/diary-saved-view'
 import { evictSignInSheetSessionEvidence } from '@/lib/diary-sign-in-sheet-session-cache'
 import { bindCoreRowHandoffSession } from '@/lib/diary-edit-core-row-handoff'
+import { loadSiteDiaryWorkbenchSurface } from '@/lib/diary-workbench-module'
 import { mergeSiteDiarySessionSnapshot } from '@/lib/site-diary-session-context'
 import {
   readSnapshotsFromSavedDiaryView,
@@ -578,7 +579,7 @@ function SavedDiaryViewer() {
   // S3A: warm Workbench surface module only (no mount, hooks, or network).
   useEffect(() => {
     if (loading || !view?.reportId || !view?.projectId) return
-    void import('./SiteDiaryWorkbenchSurface')
+    void loadSiteDiaryWorkbenchSurface().catch(() => {})
   }, [loading, view?.projectId, view?.reportId])
 
   // Warm Edit workbench route/chunks while the user reads the saved diary (no navigation).

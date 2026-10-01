@@ -94,6 +94,7 @@ const NODE_TESTS = [
   'lib/diary-edit-core-row-handoff.test.js',
   'lib/diary-warm-handoff-final-save.test.js',
   'lib/diary-atomic-final-save.test.js',
+  'lib/diary-workbench-module.test.js',
 ]
 
 function run(label, command, args, opts = {}) {
