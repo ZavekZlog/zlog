@@ -1,10 +1,10 @@
 # Site Diary PDF & Share Checkpoint Contract
 
-**Version:** 1.8.0
+**Version:** 1.9.0
 **Date Updated:** 2026-10-01
-**Reason Updated:** Record S10 final-Save report-state acceptance. Prior checkpoints are unchanged.
-**User Decision:** Documentation checkpoint only — final-Save report state accepted on Galaxy S10
-**Previous Version:** 1.7.0
+**Reason Updated:** Record S10 Saved Viewer single-load acceptance. Prior checkpoints are unchanged.
+**User Decision:** Documentation checkpoint only — Saved Viewer single-load accepted on Galaxy S10
+**Previous Version:** 1.8.0
 
 **Known-good baseline (protected restore point):** `ab65437`  
 **Commit message:** `checkpoint: lock verified PDF header and share recovery`  
@@ -476,6 +476,41 @@ Unit 1A, Unit 2, the H7 photo-tail fix, the Saved Viewer blink fix, the worker/c
 Saved Viewer open duration remains a separate performance item. It is not part of this accepted report-state unit and is not fixed in this checkpoint.
 
 On this same S10 run the Thailand Viewer opened in two attempts. Attempt 1 was H0→H1 6664 ms, then cancelled and restarted. Attempt 2 was H0→H1 692 ms and H12 3740 ms. Wall time from the first H0 to the second H12 was about 10.4 seconds. Viewer blink remained absent. This double-load may be a future performance item only if it is later prioritised.
+
+---
+
+## S10 Saved Viewer single-load acceptance
+
+**Date:** 1 October 2026
+**Accepted commit:** `ffc4275a43cc59b3919c5e9d054713a69557bbf7`
+**Commit subject:** Prevent duplicate Saved Viewer load
+**Authoritative device:** Samsung Galaxy S10 PWA
+**Diary:** report `6846b690-b3f8-4a28-b0c1-a9a825a850f0`, the same saved Thailand diary used for the Unit 1A, Unit 2, photo-tail H7, Saved Viewer blink, and final-Save report-state acceptance runs
+
+This entry does not replace the `ab65437` PDF header and Share checkpoint, the S10 Auto Prepare acceptance, the S10 Workbench photo priority acceptance, the S10 Unit 1A Edit handoff acceptance, the S10 Unit 2 shared Workbench preload acceptance, the S10 photo-tail H7 prewarm acceptance, the S10 Saved Viewer blink acceptance, or the S10 final-Save report-state acceptance above.
+
+Canonical release gate for this commit: 226 suites, 1216 tests, 1216 pass, 0 fail. ESLint 0 errors, 65 approved warnings, 0 new. Playwright behavioural 6 passed. Playwright visual 4 passed, 10 skipped.
+
+### Previous defect
+
+The Saved Viewer load effect depended on `publishVerifiedViewerSnapshot`. After the first successful load, publishing the loaded project and report ids changed that publisher’s identity. Effect cleanup cancelled the first load, then the same URL project and report started a second load. The prior S10 open was about 10.4 seconds because of that discarded first load.
+
+### Accepted single load
+
+The Viewer load effect now depends only on the URL project id and report id. The current publisher is kept in a ref. Publication still occurs. A different diary and unmount still cancel. One Viewer hydration/load per saved-diary open is proven.
+
+| Run | Session | H0 → H1 | H0 → H12 | H6 | H7 | Same-diary restart |
+|-----|---------|--------:|---------:|---:|---:|--------------------|
+| 1 | `1790865618770-j9kim6t` | 1600 ms | 5733 ms | 4731 ms | 6235 ms | none |
+| 2 | `1790865714433-g5blgbu` | 3366 ms | 5474 ms | 5540 ms | 5565 ms | none |
+
+Run 1 ended `cancelled` only when the user later navigated Back. Run 2 had no immediate cancelled first attempt and no second load. Phone time was about 5 seconds on Run 1 and about 6 seconds on Run 2, with all photos loaded on Run 2. Viewer blink was none.
+
+**SAVED VIEWER DOUBLE-LOAD FIX — ACCEPTED ON GALAXY S10**
+
+### Protected work
+
+Unit 1A, Unit 2, the H7 photo-tail fix, the Saved Viewer blink fix, final-Save report state, PDF worker/cache, Viewer Share recovery, autosave, Save, auth, navigation URLs, and Back remain intact and are not reopened.
 
 ---
 
