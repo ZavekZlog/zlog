@@ -7,11 +7,39 @@ import {
   pageBackground,
   premiumScopedCss,
   dashboardCardInteractionCss,
-  ModuleHomeCard,
 } from '@/lib/premium-ui'
 import { REPORT_THEME_LIST } from '@/lib/report-theme'
 import { DashboardTopBar } from '@/components/dashboard/DashboardTopBar'
+import { DashboardSiteControlModuleCard } from '@/components/dashboard/DashboardSiteControlModuleCard'
+import { dashboardSiteControlPanelCss } from '@/lib/dashboard-site-control-panel-theme'
 import { DASHBOARD_CONTENT_GRID } from '@/lib/dashboard-content-grid'
+
+/** Dashboard 5-card panel display order only — does not change global REPORT_THEME_LIST. */
+const SITE_CONTROL_PANEL_MODULE_ORDER = ['survey', 'diary', 'progress', 'healthSafety', 'snag']
+
+/** Dashboard-only live copy — parallel rhythm for uniform card layout (a11y labels on cards). */
+const SITE_CONTROL_PANEL_DISPLAY_COPY = {
+  survey: {
+    title: 'Site Survey',
+    description: 'Observations, measurements & photos.',
+  },
+  diary: {
+    title: 'Site Diary',
+    description: 'Daily activity, labour, plant & photos.',
+  },
+  progress: {
+    title: 'Site Progress',
+    description: 'Progress, delays, issues & photos.',
+  },
+  healthSafety: {
+    title: 'Site H&S',
+    description: 'Compliance, incidents & photos.',
+  },
+  snag: {
+    title: 'Site Snags',
+    description: 'Defects, actions, close-out & photos.',
+  },
+}
 
 export default function DashboardPage() {
   const [project, setProject] = useState(null)
@@ -38,20 +66,27 @@ export default function DashboardPage() {
     load()
   }, [])
 
+  const siteControlPanelCards = SITE_CONTROL_PANEL_MODULE_ORDER.map((moduleId) =>
+    REPORT_THEME_LIST.find((card) => card.id === moduleId),
+  ).filter(Boolean)
+
   const renderCard = (card, index, wrapClassName = 'premium-dash-card-wrap') => {
     const isDiary = card.path === 'diary'
     const disabled = isDiary ? false : !project
+    const displayCopy = SITE_CONTROL_PANEL_DISPLAY_COPY[card.id] || {
+      title: card.title,
+      description: card.description,
+    }
     return (
       <div
         key={card.path}
         className={wrapClassName}
         style={{ animationDelay: `${index * 70}ms` }}
       >
-        <ModuleHomeCard
-          title={card.title}
-          description={card.description}
-          icon={card.icon}
-          accent={card.accent}
+        <DashboardSiteControlModuleCard
+          moduleId={card.id}
+          title={displayCopy.title}
+          description={displayCopy.description}
           disabled={disabled}
           onClick={() => {
             if (isDiary) {
@@ -68,7 +103,7 @@ export default function DashboardPage() {
 
   return (
     <div className="dashboard-premium-bg" style={pageBackground}>
-      <style>{`${premiumScopedCss}${dashboardCardInteractionCss}`}</style>
+      <style>{`${premiumScopedCss}${dashboardCardInteractionCss}${dashboardSiteControlPanelCss}`}</style>
       <DashboardTopBar />
 
       <div
@@ -78,14 +113,17 @@ export default function DashboardPage() {
           margin: '0 auto',
         }}
       >
-        <div className="premium-dash-cards-grid" style={{ marginBottom: 0 }}>
-          {REPORT_THEME_LIST.map((card, index) =>
-            renderCard(
-              card,
-              index,
-              index === 4 ? 'premium-dash-card-wrap premium-dash-card-wrap--hs' : 'premium-dash-card-wrap',
-            ),
-          )}
+        <div className="zlog-site-control-panel">
+          <span className="zlog-site-control-panel__bezel" aria-hidden />
+          <div className="premium-dash-cards-grid" style={{ marginBottom: 0 }}>
+            {siteControlPanelCards.map((card, index) => {
+              const wrapClassName =
+                card.id === 'snag'
+                  ? 'premium-dash-card-wrap zlog-scp-wrap--centre'
+                  : 'premium-dash-card-wrap'
+              return renderCard(card, index, wrapClassName)
+            })}
+          </div>
         </div>
       </div>
     </div>
