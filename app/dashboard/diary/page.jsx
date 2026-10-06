@@ -10,16 +10,17 @@
 import * as React from 'react'
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Eye } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import {
   PremiumShell,
   ZlogModulePageHeader,
   ZlogBackControl,
-  ModuleHomeCard,
   SecondaryButton,
   DestructiveButton,
   dashboardCardInteractionCss,
+  ZlogBrandRegion,
+  AUTHENTICATED_SHELL_BRAND_COMPACT_STYLE,
+  AUTHENTICATED_SHELL_HEADER_STYLE,
 } from '@/lib/premium-ui'
 import { ReportDeletionDialog } from '@/components/report-management/ReportDeletionDialog'
 import { REPORT_THEMES } from '@/lib/report-theme'
@@ -56,21 +57,134 @@ const SAVED_DIARY_LIST_COLUMNS =
   'id, project_id, report_date, shift, site_summary, projects(id, name)'
 const useHubLifecycleEffect = React.useLayoutEffect || useEffect
 
-/**
- * Peer cards in one group share a height — the tallest copy sets the row, so
- * neither card has to lose useful words to stay level with its neighbour.
- * Mirrors the dashboard grid rules without reaching into the shared shell.
- */
-const entryChoiceCardsCss = `
-  .zlog-diary-entry-choices > .premium-dash-card-wrap {
-    display: flex;
-    height: 100%;
-    min-width: 0;
-  }
-  .zlog-diary-entry-choices > .premium-dash-card-wrap > .premium-dash-card {
-    flex: 1 1 auto;
-    height: 100%;
+/** Module-only crop of approved hub art (no baked masthead) — mode === null. */
+const APPROVED_SITE_DIARY_MODULE_SRC =
+  '/zlog/site-diary-approved/site-diary-hub-module-v1.png'
+const SITE_DIARY_MODULE_ART_WIDTH = 1024
+const SITE_DIARY_MODULE_ART_HEIGHT = 1380
+
+const approvedArtifactHubCss = `
+  .zlog-sd-approved-hub-shell {
+    min-height: 100vh;
+    min-height: 100dvh;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 0;
+    background: #0d0f12;
+    color: #f3f4f6;
+  }
+
+  .zlog-sd-approved-hub-header {
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    width: 100%;
+    background: #0d0f12;
+    position: relative;
+    z-index: 1;
+    border-bottom: 1px solid var(--edge-highlight);
+  }
+
+  .zlog-sd-approved-hub-stage {
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    background: #032f5c;
+  }
+
+  .zlog-sd-approved-hub-frame {
+    position: relative;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .zlog-sd-approved-hub-art {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1024 / 1380;
+    object-fit: contain;
+    object-position: center top;
+    user-select: none;
+    -webkit-user-drag: none;
+    pointer-events: none;
+  }
+
+  @media (max-width: 768px) {
+    .zlog-sd-approved-hub-shell {
+      height: 100dvh;
+      max-height: 100dvh;
+    }
+
+    .zlog-sd-approved-hub-stage {
+      max-width: none;
+    }
+
+    .zlog-sd-approved-hub-frame {
+      flex: 0 0 auto;
+      align-self: stretch;
+    }
+  }
+
+  .zlog-sd-approved-hit {
+    position: absolute;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    appearance: none;
+    cursor: pointer;
+    z-index: 2;
+  }
+
+  .zlog-sd-approved-hit:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--rust) 85%, white);
+    outline-offset: 2px;
+  }
+
+  /* 1024×1380 module crop — transparent hit zones */
+  .zlog-sd-approved-hit--back {
+    left: 0%;
+    top: 0%;
+    width: 27%;
+    height: 8%;
+  }
+
+  .zlog-sd-approved-hit--card1 {
+    left: 2.5%;
+    top: 19.1%;
+    width: 95%;
+    height: 33.5%;
+  }
+
+  .zlog-sd-approved-hit--card2 {
+    left: 2.5%;
+    top: 53.1%;
+    width: 95%;
+    height: 33.5%;
+  }
+
+  .zlog-sd-approved-hub-error {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 1024px;
+    margin: 0 auto 8px;
+    padding: 12px 14px;
+    font-size: 14px;
+    line-height: 1.45;
+    border-radius: 10px;
+    background: rgba(220, 50, 50, 0.1);
+    border: 1px solid rgba(220, 50, 50, 0.3);
+    color: #ff6b6b;
   }
 `
 
@@ -302,21 +416,6 @@ const savedDiaryListCss = `
     }
   }
 `
-
-const IconNewDiary = (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path
-      d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-6Z"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinejoin="round"
-    />
-    <path d="M14 2v6h6" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
-    <path d="M12 18v-6M9 15h6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-  </svg>
-)
-
-const IconSavedDiaries = <Eye size={22} strokeWidth={1.75} aria-hidden="true" />
 
 function formatReportDate(iso) {
   if (!iso) return 'No date'
@@ -844,6 +943,58 @@ function SiteDiaryEntryPage() {
 
   const remainingSavedDiaries = Math.max(0, totalSavedDiaryCount - reports.length)
 
+  if (mode === null) {
+    return (
+      <>
+        <style>{approvedArtifactHubCss}</style>
+        <div className="zlog-sd-approved-hub-shell">
+          {error ? (
+            <div className="zlog-sd-approved-hub-error" role="alert">
+              {error}
+            </div>
+          ) : null}
+          <header
+            className="zlog-sd-approved-hub-header premium-shell-header"
+            style={AUTHENTICATED_SHELL_HEADER_STYLE}
+          >
+            <ZlogBrandRegion style={AUTHENTICATED_SHELL_BRAND_COMPACT_STYLE} />
+          </header>
+          <div className="zlog-sd-approved-hub-stage">
+            <div className="zlog-sd-approved-hub-frame">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                className="zlog-sd-approved-hub-art"
+                src={APPROVED_SITE_DIARY_MODULE_SRC}
+                alt=""
+                width={SITE_DIARY_MODULE_ART_WIDTH}
+                height={SITE_DIARY_MODULE_ART_HEIGHT}
+                decoding="async"
+              />
+              <button
+                type="button"
+                className="zlog-sd-approved-hit zlog-sd-approved-hit--back"
+                aria-label="Back"
+                onClick={() => router.push('/dashboard')}
+              />
+              <button
+                type="button"
+                className="zlog-sd-approved-hit zlog-sd-approved-hit--card1"
+                aria-label="Start a New Diary"
+                onClick={startNewReport}
+              />
+              <button
+                type="button"
+                className="zlog-sd-approved-hit zlog-sd-approved-hit--card2"
+                aria-label="View or Use Existing Diaries"
+                onClick={openSavedDiaries}
+              />
+            </div>
+          </div>
+        </div>
+      </>
+    )
+  }
+
   return (
     <PremiumShell
       hideModuleNav
@@ -851,7 +1002,6 @@ function SiteDiaryEntryPage() {
       maxWidth={560}
     >
       <style>{dashboardCardInteractionCss}</style>
-      <style>{entryChoiceCardsCss}</style>
       <style>{savedDiaryListCss}</style>
 
       <ZlogModulePageHeader
@@ -873,39 +1023,6 @@ function SiteDiaryEntryPage() {
           }}
         >
           {error}
-        </div>
-      )}
-
-      {mode === null && (
-        <div
-          className="zlog-diary-entry-choices"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-            gap: 12,
-            alignItems: 'stretch',
-          }}
-        >
-          <div className="premium-dash-card-wrap" style={{ animationDelay: '0ms' }}>
-            <ModuleHomeCard
-              title="Start a New Diary"
-              description="Start a fresh diary with your saved details ready."
-              icon={IconNewDiary}
-              accent={DIARY_ACCENT}
-              onClick={startNewReport}
-              style={{ minHeight: 0, height: '100%', padding: '8px 12px 8px' }}
-            />
-          </div>
-          <div className="premium-dash-card-wrap" style={{ animationDelay: '70ms' }}>
-            <ModuleHomeCard
-              title="View Saved Diaries"
-              description="Review past diaries or choose one to continue your next."
-              icon={IconSavedDiaries}
-              accent={DIARY_ACCENT}
-              onClick={openSavedDiaries}
-              style={{ minHeight: 0, height: '100%', padding: '8px 12px 8px' }}
-            />
-          </div>
         </div>
       )}
 
