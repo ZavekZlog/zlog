@@ -87,6 +87,18 @@ const approvedArtifactHubCss = `
     border-bottom: 1px solid var(--edge-highlight);
   }
 
+  .zlog-sd-approved-hub-back {
+    position: absolute;
+    left: max(12px, env(safe-area-inset-left, 0px));
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    pointer-events: auto;
+  }
+
   .zlog-sd-approved-hub-stage {
     box-sizing: border-box;
     flex: 1 1 auto;
@@ -151,14 +163,7 @@ const approvedArtifactHubCss = `
     outline-offset: 2px;
   }
 
-  /* 1024×1380 module crop — transparent hit zones */
-  .zlog-sd-approved-hit--back {
-    left: 0%;
-    top: 0%;
-    width: 27%;
-    height: 8%;
-  }
-
+  /* 1024×1380 module crop — transparent card hit zones */
   .zlog-sd-approved-hit--card1 {
     left: 2.5%;
     top: 19.1%;
@@ -957,6 +962,9 @@ function SiteDiaryEntryPage() {
             className="zlog-sd-approved-hub-header premium-shell-header"
             style={AUTHENTICATED_SHELL_HEADER_STYLE}
           >
+            <div className="zlog-sd-approved-hub-back">
+              <ZlogBackControl href="/dashboard" />
+            </div>
             <ZlogBrandRegion style={AUTHENTICATED_SHELL_BRAND_COMPACT_STYLE} />
           </header>
           <div className="zlog-sd-approved-hub-stage">
@@ -969,12 +977,6 @@ function SiteDiaryEntryPage() {
                 width={SITE_DIARY_MODULE_ART_WIDTH}
                 height={SITE_DIARY_MODULE_ART_HEIGHT}
                 decoding="async"
-              />
-              <button
-                type="button"
-                className="zlog-sd-approved-hit zlog-sd-approved-hit--back"
-                aria-label="Back"
-                onClick={() => router.push('/dashboard')}
               />
               <button
                 type="button"
