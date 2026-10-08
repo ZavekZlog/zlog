@@ -1,0 +1,67 @@
+{
+  "version": "1.0.0",
+  "accepted_functional_baseline": "2d1b370bf8653fd22cd336a54595bd8c8960cf5a",
+  "accepted_visual_checkpoints": [
+    "bf5fac1"
+  ],
+  "integration_branch": "zlog/integration-acceptance",
+  "visual_allowlist": [
+    "app/dashboard/page.jsx",
+    "components/dashboard/DashboardSiteControlApprovedArt.jsx",
+    "components/dashboard/DashboardSiteControlModuleCard.jsx",
+    "lib/dashboard-site-control-panel-artifacts.js",
+    "lib/dashboard-site-control-panel-theme.js",
+    "public/zlog/site-control-panel/site-survey-artifact.webp",
+    "public/zlog/site-control-panel/site-diary-artifact.webp",
+    "public/zlog/site-control-panel/site-progress-artifact.webp",
+    "public/zlog/site-control-panel/site-snag-artifact.webp",
+    "public/zlog/site-control-panel/site-hs-artifact.webp"
+  ],
+  "gate_files": [
+    "docs/ZLOG_ACCEPTANCE_BASELINE.json",
+    "scripts/check-integration-baseline.mjs",
+    "package.json",
+    "docs/contracts/APPROVED_ESLINT_EXCEPTIONS.json"
+  ],
+  "protected_core_files": [
+    "components/site-diary/SiteDiaryWorkbenchSurface.jsx",
+    "components/diary/useSiteDiaryLabour.js",
+    "lib/diary-sign-in-sheet-evidence.js",
+    "lib/sign-in-ocr-provider.js",
+    "lib/parse-signin-sheet.js",
+    "lib/diary-save.js",
+    "lib/diary-autosave.js",
+    "lib/diary-form-hydrate.js",
+    "lib/diary-edit-hydrate.js",
+    "app/api/parse-signin-sheet/",
+    "app/api/site-diary/",
+    "lib/diary-share.js",
+    "lib/site-diary-pdf-export-client.js",
+    "lib/auth/",
+    "proxy.js",
+    "lib/supabase/middleware.js",
+    "lib/diary-cover-photo.js",
+    "lib/image-orientation.js"
+  ],
+  "excluded_wip": [
+    "app/page.tsx visual WIP",
+    "2-card hub commits 5883452 and e4ce316",
+    "app/dashboard/diary/page.jsx",
+    "components/site-diary/SiteDiaryUnifiedEditorChrome.jsx",
+    "components/site-diary/site-diary-unified-editor.css",
+    "unified editor Workbench / Project Details / labour WIP",
+    "lib/sign-in-evidence-preview-telemetry.js",
+    "telemetry and share-diag evidence WIP",
+    "*.bak",
+    "duplicate or untracked hub art"
+  ],
+  "rejected_path_markers": [
+    ".bak",
+    "SiteDiaryUnifiedEditorChrome.jsx",
+    "site-diary-unified-editor.css",
+    "sign-in-evidence-preview-telemetry.js",
+    "app/dashboard/diary/page.jsx",
+    "site-diary-hub-module-v1.png",
+    "site-diary-hub-approved-v1.png"
+  ]
+}

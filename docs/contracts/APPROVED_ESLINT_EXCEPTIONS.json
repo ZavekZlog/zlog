@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "updated": "2026-09-03",
+  "updated": "2026-10-08",
   "description": "Narrow, registered ESLint suppressions for approved Zlog lifecycle/ref patterns. Never disable protected React hook/compiler rules without an ESLINT-* id that matches this registry. Not a licence to skip Android QA.",
   "protectedRules": [
     "react-hooks/set-state-in-effect",
@@ -160,6 +160,16 @@
       "rule": "@next/next/no-img-element",
       "reason": "Company logos must keep original aspect; next/image is not approved for these previews.",
       "preserves": "Report branding logo preview without crop",
+      "tests": [],
+      "manualQA": true,
+      "scope": "existing-img-disable"
+    },
+    {
+      "id": "ESLINT-DASHBOARD-HERO-IMG",
+      "file": "components/dashboard/DashboardSiteControlApprovedArt.jsx",
+      "rule": "@next/next/no-img-element",
+      "reason": "Approved dashboard-only static WebP hero artwork deliberately uses <img>; changing image handling is outside this accepted visual checkpoint and is not required for this fixed local decorative crop.",
+      "preserves": "Accepted bf5fac1 dashboard hero art; next/image is not part of this checkpoint",
       "tests": [],
       "manualQA": true,
       "scope": "existing-img-disable"

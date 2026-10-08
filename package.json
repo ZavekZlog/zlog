@@ -12,6 +12,7 @@
     "test:auth": "node --test lib/auth/login-form.test.js lib/auth/sign-out.test.js lib/auth/return-path.test.js lib/auth/session-persistence.test.js",
     "test:golden-journeys": "node --test lib/golden-journeys/journey-b-new-diary.test.js lib/golden-journeys/journey-c-previous-diary.test.js lib/golden-journeys/journey-d-saved-diary.test.js",
     "check:protected-scope": "node scripts/check-protected-scope.mjs",
+    "check:integration-baseline": "node scripts/check-integration-baseline.mjs",
     "check:change-scope": "node scripts/check-change-scope.mjs",
     "check:approved-copy": "node scripts/check-approved-copy.mjs",
     "check:behaviour-registry": "node scripts/check-behaviour-registry.mjs",
