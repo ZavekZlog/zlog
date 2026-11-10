@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { GlassSection, SecondaryButton, DestructiveButton } from '@/lib/premium-ui'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
 import { SignInOperativeReview } from '@/components/diary/SignInOperativeReview'
@@ -12,6 +12,8 @@ export function SiteDiaryLabourSection({
   setLabourMode,
   setScanError,
   scanLoading,
+  scanRescanning = false,
+  scanRescanRevealToken = 0,
   scanError,
   scanApplyError,
   scanApplyNotice,
@@ -90,6 +92,12 @@ export function SiteDiaryLabourSection({
     paddingTop: 14,
     borderTop: '1px solid var(--edge)',
   }
+
+  const scanReviewAnchorRef = useRef(null)
+  useEffect(() => {
+    if (!scanRescanRevealToken) return
+    scanReviewAnchorRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  }, [scanRescanRevealToken])
 
   return (
     <GlassSection title="Labour" accent={accent}>
@@ -400,25 +408,32 @@ export function SiteDiaryLabourSection({
       </>
       )}
 
-      {labourMode === 'scan' && !scanLoading && scanTradeHoursReviewReady && hasSignInSheetEvidenceOnForm && (
-        <SignInOperativeReview
-          key={`signin-review-${signInSheetPickerKey}`}
-          reviewRows={scanTradeHoursReview}
-          scanOperatives={scanOperatives}
-          onReviewRowsChange={handleScanTradeHoursReviewChange}
-          onOperativeLabourExclusion={handleOperativeLabourExclusion}
-          onOperativeMoveToVisitors={handleOperativeMoveToVisitors}
-          onApply={applyScanOperativesToLabour}
-          warnings={scanWarnings}
-          reportDate={reportDate}
-          applying={scanApplySaving}
-          appliedSaved={scanApplySaved}
-          disabled={scanLoading || scanApplySaving}
-          applyError={scanApplyError}
-          applyNotice={scanApplyNotice}
-          ocrProvider={scanOcrProvider}
-          applyEnabled={scanApplyEnabled}
-        />
+      {labourMode === 'scan' && scanTradeHoursReviewReady && hasSignInSheetEvidenceOnForm && (
+        <div ref={scanReviewAnchorRef}>
+          {scanRescanning ? (
+            <p role="status" style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--text-2)', lineHeight: 1.45 }}>
+              Re-scanning attendance register…
+            </p>
+          ) : null}
+          <SignInOperativeReview
+            key={`signin-review-${signInSheetPickerKey}`}
+            reviewRows={scanTradeHoursReview}
+            scanOperatives={scanOperatives}
+            onReviewRowsChange={handleScanTradeHoursReviewChange}
+            onOperativeLabourExclusion={handleOperativeLabourExclusion}
+            onOperativeMoveToVisitors={handleOperativeMoveToVisitors}
+            onApply={applyScanOperativesToLabour}
+            warnings={scanWarnings}
+            reportDate={reportDate}
+            applying={scanApplySaving}
+            appliedSaved={scanApplySaved}
+            disabled={scanLoading || scanApplySaving}
+            applyError={scanApplyError}
+            applyNotice={scanApplyNotice}
+            ocrProvider={scanOcrProvider}
+            applyEnabled={scanApplyEnabled}
+          />
+        </div>
       )}
 
       {hasSignInSheetEvidenceOnForm && (
@@ -464,7 +479,7 @@ export function SiteDiaryLabourSection({
               Try again
             </SecondaryButton>
           ) : null}
-          {scanLoading && (
+          {scanLoading && !scanRescanning && (
             <p style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--text-2)' }}>
               Reading attendance register…
             </p>
@@ -496,7 +511,7 @@ export function SiteDiaryLabourSection({
                 disabled={scanLoading || scanApplySaving}
                 onClick={retrySignInScan}
               >
-                Re-scan
+                {scanRescanning ? 'Re-scanning…' : 'Re-scan'}
               </SecondaryButton>
             ) : null}
             <DestructiveButton

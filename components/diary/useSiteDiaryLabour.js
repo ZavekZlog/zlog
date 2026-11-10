@@ -75,6 +75,10 @@ export function useSiteDiaryLabour({
   const [manualLabourSaveError, setManualLabourSaveError] = useState('')
   const [manualLabourSaving, setManualLabourSaving] = useState(false)
   const [scanLoading, setScanLoading] = useState(false)
+  /** True only while a user-triggered Re-scan is in flight (not first upload / replace photo). */
+  const [scanRescanning, setScanRescanning] = useState(false)
+  /** Bumped after a successful Re-scan so the Labour section can bring the review into view. */
+  const [scanRescanRevealToken, setScanRescanRevealToken] = useState(0)
   const [scanError, setScanError] = useState('')
   const [scanApplyError, setScanApplyError] = useState('')
   const [scanApplyNotice, setScanApplyNotice] = useState('')
@@ -200,6 +204,7 @@ export function useSiteDiaryLabour({
     scanRequestIdRef.current = nextSignInSheetRequestId(scanRequestIdRef.current)
     const empty = emptySignInSheetWorkingState()
     setScanLoading(empty.scanLoading)
+    setScanRescanning(false)
     setScanError(empty.scanError)
     setScanApplyError(empty.scanApplyError)
     setScanApplyNotice(empty.scanApplyNotice)
@@ -239,7 +244,7 @@ export function useSiteDiaryLabour({
     manualLabourSnapshotRef.current = null
   }, [editingReportId, clearSignInSheetWorkingState])
 
-  const handleSignInSheetFiles = useCallback(async (files, { persistEvidence = true } = {}) => {
+  const handleSignInSheetFiles = useCallback(async (files, { persistEvidence = true, isRescan = false } = {}) => {
     // Camera cancel / empty picker — do not touch loading or draft state
     if (!shouldReplaceSignInSheet(files)) return
     const file = files[0]
@@ -263,21 +268,26 @@ export function useSiteDiaryLabour({
     setManualLabourSaveError('')
     manualLabourSnapshotRef.current = null
     setScanLoading(true)
+    setScanRescanning(Boolean(isRescan))
     setScanError('')
     setScanSignInPreviewLoadError('')
     setScanApplyError('')
     setScanApplyNotice('')
     setScanApplySaving(false)
     setScanApplySaved(false)
-    setScanWarnings([])
-    setScanOperatives([])
-    setScanTradeHoursReview([])
-    setScanTradeHoursOtherDateCount(0)
-    setScanTradeHoursReviewReady(false)
-    setScanReviewEvidencePath(null)
-    setScanOcrProvider(null)
-    setScanApplyEnabled(true)
-    setScanMeta({ matched: 0, ignored: 0, extracted: 0 })
+    // Re-scan keeps the current review mounted so the layout does not collapse.
+    // First upload / replace photo still clears prior OCR results.
+    if (!isRescan) {
+      setScanWarnings([])
+      setScanOperatives([])
+      setScanTradeHoursReview([])
+      setScanTradeHoursOtherDateCount(0)
+      setScanTradeHoursReviewReady(false)
+      setScanReviewEvidencePath(null)
+      setScanOcrProvider(null)
+      setScanApplyEnabled(true)
+      setScanMeta({ matched: 0, ignored: 0, extracted: 0 })
+    }
     let persistedStoragePathForGeneration = null
     try {
       const provider = resolveSignInOcrProvider()
@@ -359,6 +369,8 @@ export function useSiteDiaryLabour({
 
       if (!operatives.length) {
         setScanError('No attendee rows were read from this register. Try another photo or enter labour manually.')
+      } else if (isRescan) {
+        setScanRescanRevealToken((token) => token + 1)
       }
     } catch (err) {
       if (!isSignInSheetRequestCurrent(scanRequestIdRef.current, requestId)) return
@@ -369,18 +381,22 @@ export function useSiteDiaryLabour({
         setScanSheetPreview(null)
       }
       setScanError(err?.message || 'Could not read the Attendance Register')
-      setScanMeta({ matched: 0, ignored: 0, extracted: 0 })
-      setScanOperatives([])
-      setScanTradeHoursReview([])
-      setScanTradeHoursOtherDateCount(0)
-      setScanTradeHoursReviewReady(false)
-      setScanReviewEvidencePath(null)
-      setScanOcrProvider(null)
-      setScanApplyEnabled(true)
-      setScanWarnings([])
+      // Re-scan failure keeps the previous review visible; do not treat it as a new success.
+      if (!isRescan) {
+        setScanMeta({ matched: 0, ignored: 0, extracted: 0 })
+        setScanOperatives([])
+        setScanTradeHoursReview([])
+        setScanTradeHoursOtherDateCount(0)
+        setScanTradeHoursReviewReady(false)
+        setScanReviewEvidencePath(null)
+        setScanOcrProvider(null)
+        setScanApplyEnabled(true)
+        setScanWarnings([])
+      }
     } finally {
       if (isSignInSheetRequestCurrent(scanRequestIdRef.current, requestId)) {
         setScanLoading(false)
+        setScanRescanning(false)
       }
     }
   }, [
@@ -546,7 +562,7 @@ export function useSiteDiaryLabour({
 
   const retrySignInScan = useCallback(() => {
     if (scanLastFile) {
-      handleSignInSheetFiles([scanLastFile], { persistEvidence: false })
+      handleSignInSheetFiles([scanLastFile], { persistEvidence: false, isRescan: true })
     }
   }, [scanLastFile, handleSignInSheetFiles])
 
@@ -826,6 +842,8 @@ export function useSiteDiaryLabour({
     labourMode,
     setLabourMode,
     scanLoading,
+    scanRescanning,
+    scanRescanRevealToken,
     scanError,
     setScanError,
     scanApplyError,

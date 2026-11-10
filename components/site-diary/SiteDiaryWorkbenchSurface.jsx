@@ -5747,6 +5747,8 @@ export default function SiteDiaryWorkbenchSurface() {
           setLabourMode={labourScan.setLabourMode}
           setScanError={labourScan.setScanError}
           scanLoading={labourScan.scanLoading}
+          scanRescanning={labourScan.scanRescanning}
+          scanRescanRevealToken={labourScan.scanRescanRevealToken}
           scanError={labourScan.scanError}
           scanApplyError={labourScan.scanApplyError}
           scanApplyNotice={labourScan.scanApplyNotice}
