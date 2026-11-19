@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { countSignInTradeHoursReviewRows } from '@/lib/labour-from-register'
 import {
   addSignInTradeHoursRow,
@@ -31,16 +31,78 @@ function isOtherDateLabourScanWarning(message) {
   return /dated differently from/i.test(String(message ?? ''))
 }
 
-const cell = {
+const labourTable = {
+  width: '100%',
+  maxWidth: '100%',
+  borderCollapse: 'collapse',
+  tableLayout: 'fixed',
+  fontFamily: 'inherit',
+}
+
+const labourHeadCell = {
+  border: '1px solid #d5d5d5',
+  background: '#f4f4f4',
+  color: '#1a1a1a',
+  fontWeight: 700,
+  fontSize: 13,
+  padding: '8px 10px',
+  lineHeight: 1.25,
+  overflowWrap: 'anywhere',
+}
+
+const labourCell = {
+  border: '1px solid #d5d5d5',
+  background: '#ffffff',
+  color: '#1a1a1a',
+  fontWeight: 700,
+  fontSize: 16,
+  padding: '8px 10px',
+  verticalAlign: 'top',
+  overflowWrap: 'anywhere',
+  lineHeight: 1.3,
+}
+
+const labourAbsentText = {
+  color: '#6b6b6b',
+  fontStyle: 'italic',
+  fontWeight: 500,
+  fontSize: 16,
+}
+
+const labourTextButton = {
+  boxSizing: 'border-box',
+  minHeight: 36,
+  padding: '6px 10px',
+  borderRadius: 6,
+  border: '1px solid #d5d5d5',
+  background: '#f7f7f7',
+  color: '#1a1a1a',
+  fontSize: 13,
+  fontWeight: 600,
+  fontFamily: 'inherit',
+  lineHeight: 1.2,
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+}
+
+const labourValueInput = {
   width: '100%',
   boxSizing: 'border-box',
-  padding: '7px 8px',
-  borderRadius: 8,
-  border: '1px solid var(--edge)',
-  background: 'var(--ink)',
-  color: 'var(--text)',
-  fontSize: 13,
+  margin: 0,
+  padding: 0,
+  border: 'none',
+  borderRadius: 0,
+  background: 'transparent',
+  color: '#1a1a1a',
+  fontWeight: 700,
+  fontSize: 16,
   fontFamily: 'inherit',
+  lineHeight: 1.3,
+}
+
+function reviewTradeIsAbsent(row) {
+  if (row?.tradeAbsent) return true
+  return String(row?.trade || '').trim().toLowerCase() === 'trade not printed'
 }
 
 /**
@@ -296,8 +358,8 @@ export function SignInOperativeReview({
       >
         Labour from Attendance Register
       </div>
-      <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.45 }}>
-        Use ⋯ to correct scan errors or separate visitors from production workers.
+      <p style={{ margin: '0 0 10px', fontSize: 16, color: 'var(--text-2)', lineHeight: 1.45 }}>
+        Use Review under the operatives to move visitors out of labour or exclude someone entered in error.
       </p>
 
       {visibleWarnings.length > 0 && (
@@ -321,38 +383,29 @@ export function SignInOperativeReview({
         </ul>
       )}
 
-      <div
-        style={{
-          border: '1px solid var(--edge)',
-          borderRadius: 10,
-          overflow: 'hidden',
-          background: 'var(--plate)',
-        }}
-      >
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1fr) 56px minmax(72px, 88px) 36px',
-            gap: 8,
-            padding: '8px 12px',
-            borderBottom: '1px solid var(--edge)',
-            fontSize: 11,
-            fontWeight: 600,
-            color: 'var(--text-2)',
-            letterSpacing: '0.04em',
-            textTransform: 'uppercase',
-          }}
-        >
-          <span>Trade</span>
-          <span style={{ textAlign: 'right' }}>Workers</span>
-          <span style={{ textAlign: 'right' }}>Hours on site</span>
-          <span aria-hidden="true" />
-        </div>
-
+      <div style={{ width: '100%', overflowX: 'hidden' }}>
+        <table style={labourTable}>
+          <colgroup>
+            <col style={{ width: '30%' }} />
+            <col style={{ width: '30%' }} />
+            <col style={{ width: '20%' }} />
+            <col style={{ width: '20%' }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th style={{ ...labourHeadCell, textAlign: 'left' }}>Trade</th>
+              <th style={{ ...labourHeadCell, textAlign: 'left' }}>Company</th>
+              <th style={{ ...labourHeadCell, textAlign: 'right' }}>Operatives</th>
+              <th style={{ ...labourHeadCell, textAlign: 'right' }}>Hrs on site</th>
+            </tr>
+          </thead>
+          <tbody>
         {rows.length === 0 ? (
-          <p style={{ margin: 0, padding: '12px', fontSize: 13, color: 'var(--text-2)' }}>
-            No labour for this diary date was read from the register. Add a trade if needed.
-          </p>
+          <tr>
+            <td colSpan={4} style={{ ...labourCell, fontSize: 13, fontWeight: 600 }}>
+              No labour for this diary date was read from the register. Add a trade if needed.
+            </td>
+          </tr>
         ) : (
           rows.map((t) => {
             const workersDraft =
@@ -378,20 +431,14 @@ export function SignInOperativeReview({
               : []
             const adjustOpen = openAdjustPeopleRowKey === t.key
             return (
-              <div key={t.key}>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(0, 1fr) 56px minmax(72px, 88px) 36px',
-                  gap: 8,
-                  padding: '10px 12px',
-                  borderTop: '1px solid rgba(255,255,255,0.06)',
-                  alignItems: 'start',
-                }}
-              >
-                <div>
+              <Fragment key={t.key}>
+              <tr>
+                <td style={{ ...labourCell, textAlign: 'left' }}>
+                  {reviewTradeIsAbsent(t) ? (
+                    <span style={labourAbsentText}>Not on register</span>
+                  ) : (
                   <input
-                    style={{ ...cell, marginBottom: 0, fontWeight: 600 }}
+                    style={{ ...labourValueInput, textAlign: 'left' }}
                     value={t.trade || ''}
                     disabled={disabled}
                     aria-label="Trade"
@@ -406,24 +453,25 @@ export function SignInOperativeReview({
                     onBlur={(e) => handleTradeBlur(t.key, e.target.value)}
                     placeholder="Trade"
                   />
-                  {t.needsReview && !t.hoursComplete ? (
-                    <p
-                      role="status"
-                      style={{ margin: '4px 0 0', fontSize: 12, color: '#F5A623', lineHeight: 1.4 }}
-                    >
-                      Needs review
-                    </p>
-                  ) : null}
-                </div>
-                <div>
+                  )}
+                </td>
+                <td style={{ ...labourCell, textAlign: 'left' }}>
+                  {String(t.company || '').trim() && String(t.company || '').trim().toLowerCase() !== 'trade not printed' ? (
+                    String(t.company || '').trim()
+                  ) : (
+                    <span style={labourAbsentText}>Not on register</span>
+                  )}
+                </td>
+                <td style={{ ...labourCell, textAlign: 'right' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                   <input
-                    style={{ ...cell, marginBottom: 0, textAlign: 'right', fontWeight: 600 }}
+                    style={{ ...labourValueInput, textAlign: 'right', width: 'auto', flex: '1 1 auto', minWidth: 0 }}
                     value={workersDraft}
                     disabled={disabled}
                     readOnly={scanDerived}
                     tabIndex={scanDerived ? -1 : undefined}
                     inputMode="numeric"
-                    aria-label={`Workers for ${t.trade || 'trade'}`}
+                    aria-label={`Workers for ${reviewTradeIsAbsent(t) ? 'this register' : (t.trade || 'trade')}`}
                     aria-readonly={scanDerived ? true : undefined}
                     onChange={
                       scanDerived
@@ -448,10 +496,53 @@ export function SignInOperativeReview({
                           }
                     }
                   />
-                </div>
-                <div>
+                  {canAdjustPeople ? (
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      aria-label={`${bucketOperatives.length} ${bucketOperatives.length === 1 ? 'person' : 'people'} · Review`}
+                      aria-expanded={adjustOpen}
+                      onClick={() => {
+                        setAdjustPeopleRowKey((prev) => {
+                          if (prev === t.key) {
+                            setPeoplePanelAnchor(null)
+                            return null
+                          }
+                          setPeoplePanelAnchor({
+                            rowKey: t.key,
+                            anchor: signInTradeReviewRowPeoplePanelAnchor(t),
+                            rowsPresenceKey,
+                          })
+                          return t.key
+                        })
+                      }}
+                      style={{
+                        ...labourTextButton,
+                        cursor: disabled ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      {bucketOperatives.length} {bucketOperatives.length === 1 ? 'person' : 'people'} · Review
+                    </button>
+                  ) : canRemoveManualRow ? (
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      aria-label="Remove trade row"
+                      onClick={() => handleRemoveManualRow(t.key)}
+                      style={{
+                        ...labourTextButton,
+                        cursor: disabled ? 'not-allowed' : 'pointer',
+                        touchAction: 'manipulation',
+                      }}
+                    >
+                      Del
+                    </button>
+                  ) : null}
+                  </div>
+                </td>
+                <td style={{ ...labourCell, textAlign: 'right' }}>
                   <input
-                    style={{ ...cell, marginBottom: 0, textAlign: 'right', fontWeight: 600 }}
+                    style={{ ...labourValueInput, textAlign: 'right' }}
                     value={
                       scanDerived && t.hoursComplete && t.hours != null
                         ? formatLabourHoursForDisplay(t.hours)
@@ -461,7 +552,7 @@ export function SignInOperativeReview({
                     readOnly={scanDerived}
                     tabIndex={scanDerived ? -1 : undefined}
                     inputMode="decimal"
-                    aria-label={`Hours on site for ${t.trade || 'trade'}`}
+                    aria-label={`Hours on site for ${reviewTradeIsAbsent(t) ? 'this register' : (t.trade || 'trade')}`}
                     aria-readonly={scanDerived ? true : undefined}
                     placeholder="—"
                     onChange={
@@ -487,90 +578,47 @@ export function SignInOperativeReview({
                           }
                     }
                   />
-                </div>
-                <div style={{ position: 'relative', paddingTop: 4 }}>
-                  {canAdjustPeople ? (
-                    <>
-                      <button
-                        type="button"
-                        disabled={disabled}
-                        aria-label={`People on ${t.trade || 'this trade'}`}
-                        aria-expanded={adjustOpen}
-                        onClick={() => {
-                          setAdjustPeopleRowKey((prev) => {
-                            if (prev === t.key) {
-                              setPeoplePanelAnchor(null)
-                              return null
-                            }
-                            setPeoplePanelAnchor({
-                              rowKey: t.key,
-                              anchor: signInTradeReviewRowPeoplePanelAnchor(t),
-                              rowsPresenceKey,
-                            })
-                            return t.key
-                          })
-                        }}
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 8,
-                          border: '1px solid var(--edge)',
-                          background: 'var(--ink)',
-                          color: 'var(--text-2)',
-                          fontSize: 18,
-                          lineHeight: 1,
-                          cursor: disabled ? 'not-allowed' : 'pointer',
-                          padding: 0,
-                        }}
-                      >
-                        ⋯
-                      </button>
-                    </>
-                  ) : canRemoveManualRow ? (
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      aria-label="Remove trade row"
-                      onClick={() => handleRemoveManualRow(t.key)}
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 8,
-                        border: '1px solid var(--edge)',
-                        background: 'var(--ink)',
-                        color: 'var(--text-2)',
-                        fontSize: 11,
-                        fontWeight: 600,
-                        lineHeight: 1.1,
-                        cursor: disabled ? 'not-allowed' : 'pointer',
-                        padding: '2px 4px',
-                        touchAction: 'manipulation',
-                      }}
+                  {t.needsReview && !t.hoursComplete ? (
+                    <p
+                      role="status"
+                      style={{ margin: '4px 0 0', fontSize: 12, color: '#F5A623', lineHeight: 1.4, textAlign: 'right' }}
                     >
-                      Del
-                    </button>
+                      Needs review
+                    </p>
                   ) : null}
-                </div>
-              </div>
+                </td>
+              </tr>
               {adjustOpen && bucketOperatives.length > 0 ? (
+                <tr>
+                  <td colSpan={4} style={{ ...labourCell, padding: 0, background: 'var(--ink)' }}>
                 <div
                   style={{
-                    margin: '0 12px 10px',
+                    margin: 0,
                     padding: '10px 12px',
-                    borderRadius: 10,
-                    border: '1px solid var(--edge)',
                     background: 'var(--ink)',
                   }}
                 >
                   <p
                     style={{
                       margin: '0 0 8px',
-                      fontSize: 12,
-                      fontWeight: 600,
+                      fontSize: 16,
+                      fontWeight: 700,
                       color: 'var(--text)',
+                      lineHeight: 1.4,
                     }}
                   >
-                    People on {t.trade || 'this trade'}
+                    {reviewTradeIsAbsent(t) ? 'People on this register' : `People on ${String(t.trade || '').trim() || 'this trade'}`}
+                  </p>
+                  <p
+                    style={{
+                      margin: '0 0 8px',
+                      fontSize: 16,
+                      fontWeight: 500,
+                      color: 'var(--text)',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    These are the people from the register for this trade. Move visitors out of labour, or exclude someone entered in error.
                   </p>
                   <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
                     {bucketOperatives.map((op) => {
@@ -583,15 +631,17 @@ export function SignInOperativeReview({
                           key={String(op.id)}
                           style={{
                             display: 'flex',
-                            flexDirection: 'column',
-                            gap: 6,
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 8,
                             padding: '8px 0',
-                            borderTop: '1px solid rgba(255,255,255,0.06)',
+                            borderTop: '1px solid #d5d5d5',
                           }}
                         >
                           <span
                             style={{
-                              fontSize: 12,
+                              fontSize: 16,
+                              fontWeight: 500,
                               color: excluded ? 'var(--text-2)' : 'var(--text)',
                               lineHeight: 1.45,
                             }}
@@ -604,8 +654,9 @@ export function SignInOperativeReview({
                               display: 'flex',
                               flexWrap: 'wrap',
                               gap: 8,
-                              alignItems: 'stretch',
-                              width: '100%',
+                              alignItems: 'center',
+                              justifyContent: 'flex-end',
+                              flexShrink: 0,
                             }}
                           >
                             <button
@@ -627,20 +678,14 @@ export function SignInOperativeReview({
                                 }
                               }}
                               style={{
-                                flex: '1 1 140px',
+                                ...labourTextButton,
                                 minHeight: 44,
-                                padding: '8px 10px',
-                                borderRadius: 8,
-                                border: '1px solid var(--edge)',
-                                background: 'var(--plate)',
-                                color: 'var(--text)',
-                                fontSize: 12,
-                                fontWeight: 600,
+                                flex: '1 1 140px',
                                 cursor: disabled || excluded ? 'not-allowed' : 'pointer',
                                 touchAction: 'manipulation',
                               }}
                             >
-                              Move to Visitors
+                              Move to visitors
                             </button>
                             <button
                               type="button"
@@ -664,15 +709,9 @@ export function SignInOperativeReview({
                                 }
                               }}
                               style={{
-                                flex: '1 1 140px',
+                                ...labourTextButton,
                                 minHeight: 44,
-                                padding: '8px 10px',
-                                borderRadius: 8,
-                                border: '1px solid var(--edge)',
-                                background: 'var(--plate)',
-                                color: 'var(--text)',
-                                fontSize: 12,
-                                fontWeight: 600,
+                                flex: '1 1 140px',
                                 cursor: disabled ? 'not-allowed' : 'pointer',
                                 touchAction: 'manipulation',
                               }}
@@ -690,72 +729,30 @@ export function SignInOperativeReview({
                       setPeoplePanelAnchor(null)
                       setAdjustPeopleRowKey(null)
                     }}
-                    style={{
-                      marginTop: 4,
-                      padding: 0,
-                      border: 'none',
-                      background: 'transparent',
-                      color: 'var(--text-2)',
-                      fontSize: 12,
-                      cursor: 'pointer',
-                      textDecoration: 'underline',
-                    }}
+                    style={{ ...labourTextButton, marginTop: 8 }}
                   >
-                    Close
+                    Done
                   </button>
                 </div>
+                  </td>
+                </tr>
               ) : null}
-              </div>
+              </Fragment>
             )
           })
         )}
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1fr) 56px minmax(72px, 88px) 36px',
-            gap: 8,
-            padding: '10px 12px',
-            borderTop: '1px solid var(--edge)',
-            background: 'var(--ink)',
-            alignItems: 'center',
-          }}
-        >
-          <div
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: 'var(--text)',
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-            }}
-          >
-            Total
-          </div>
-          <div
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: 'var(--text)',
-              textAlign: 'right',
-              lineHeight: 1.35,
-            }}
-          >
-            {totalsWorkers}
-          </div>
-          <div
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: 'var(--text)',
-              whiteSpace: 'nowrap',
-              textAlign: 'right',
-              lineHeight: 1.35,
-            }}
-          >
-            {formatLabourHoursForDisplay(totalsHours)} hrs
-          </div>
-        </div>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td style={{ ...labourCell, textAlign: 'left', background: '#f5f5f5', borderTop: '2px solid #bdbdbd' }}>TOTAL</td>
+              <td style={{ ...labourCell, background: '#f5f5f5', borderTop: '2px solid #bdbdbd' }} />
+              <td style={{ ...labourCell, textAlign: 'right', background: '#f5f5f5', borderTop: '2px solid #bdbdbd' }}>{totalsWorkers}</td>
+              <td style={{ ...labourCell, textAlign: 'right', background: '#f5f5f5', borderTop: '2px solid #bdbdbd' }}>
+                {formatLabourHoursForDisplay(totalsHours)} hrs
+              </td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
 
       <button

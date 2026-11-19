@@ -1,9 +1,37 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { GlassSection, SecondaryButton, DestructiveButton } from '@/lib/premium-ui'
 import { ImageSourceButtons } from '@/components/ImageSourceButtons'
-import { SignInOperativeReview } from '@/components/diary/SignInOperativeReview'
+import { displayLabourSummaryRow } from '@/lib/site-diary-labour-form'
+import {
+  formatLabourHoursForDisplay,
+  formatSignInOperativeLabourLine,
+  operativesForSignInTradeReviewRow,
+  reviewPanelActionGuardUntil,
+  reviewPanelActionIsGuarded,
+} from '@/lib/sign-in-trade-hours-review'
+
+const labourSummaryDateFormat = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+})
+
+function labourSummaryDateLabel(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value ?? '').trim())
+  if (!match) return String(value ?? '')
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  if (Number.isNaN(date.getTime())) return String(value ?? '')
+  return labourSummaryDateFormat.format(date)
+}
+
+function scanSummaryRowHasPerson(row) {
+  if (!row || typeof row !== 'object') return false
+  const workers = Number(row.headcount)
+  if (Number.isFinite(workers) && workers > 0) return true
+  return Array.isArray(row.rowIds) && row.rowIds.length > 0
+}
 
 export function SiteDiaryLabourSection({
   accent,
@@ -33,7 +61,16 @@ export function SiteDiaryLabourSection({
   signInSheetPickerKey,
   handleSignInSheetFiles,
   applyScanOperativesToLabour,
+  saveScanLabourSummary,
+  scanSummaryLocked = false,
+  scanSummaryNotice = '',
+  scanSummaryError = '',
+  scanSummarySaving = false,
   retrySignInScan,
+  confirmScanRescan,
+  dismissScanRescanWarning,
+  scanRescanWarning = false,
+  markScanSummaryDirty,
   removeSignInSheetEvidence,
   startManualLabour,
   manualLabourEditing = false,
@@ -58,6 +95,14 @@ export function SiteDiaryLabourSection({
   setLabourRows,
 }) {
   const [manualRowMenuOpenKey, setManualRowMenuOpenKey] = useState(null)
+  const [peopleOpenKey, setPeopleOpenKey] = useState(null)
+  const panelActionGuardUntilRef = useRef(0)
+  const armReviewPanelActionGuard = () => {
+    panelActionGuardUntilRef.current = reviewPanelActionGuardUntil(Date.now())
+  }
+  const reviewPanelActionGuarded = () => (
+    reviewPanelActionIsGuarded(panelActionGuardUntilRef.current, Date.now())
+  )
 
   const manualEditFieldStyle = manualLabourEditing
     ? {
@@ -91,6 +136,73 @@ export function SiteDiaryLabourSection({
     marginTop: 16,
     paddingTop: 14,
     borderTop: '1px solid var(--edge)',
+  }
+
+  const scanDataRows = labourRows.filter(scanSummaryRowHasPerson)
+  const scanSummaryColumns = [
+    'minmax(0, 1fr)',
+    'minmax(0, 1fr)',
+    'auto',
+    'minmax(72px, 0.75fr)',
+  ].join(' ')
+  const needsInputStyle = {
+    width: '100%',
+    boxSizing: 'border-box',
+    background: '#fff3cd',
+    color: '#1a1a1a',
+    border: '1px solid #e6c200',
+    borderRadius: 4,
+    padding: '6px 8px',
+    fontSize: 14,
+    fontWeight: 600,
+  }
+  const editScanSummaryCell = (rowKey, field) => (event) => {
+    const value = event.target.value
+    dismissAutosaveSuccessClaim()
+    invalidatePreparedSharePdf('committed-diary-change')
+    setLabourRows((rows) => rows.map((row) => {
+      if (row.key !== rowKey) return row
+      const needs = { ...(row.needsManualInput || {}) }
+      const flag = field === 'headcount' ? 'operatives' : field
+      needs[flag] = String(value).trim() === ''
+      return { ...row, [field]: value, needsManualInput: needs }
+    }))
+    if (typeof markScanSummaryDirty === 'function') markScanSummaryDirty()
+  }
+  const summaryCellStyle = {
+    borderRight: '1px solid #d5d5d5',
+    borderBottom: '1px solid #d5d5d5',
+    padding: '8px 10px',
+    minWidth: 0,
+    fontSize: 16,
+    lineHeight: 1.3,
+    background: '#ffffff',
+    color: '#1a1a1a',
+  }
+  const summaryHeadStyle = {
+    ...summaryCellStyle,
+    background: '#f4f4f4',
+    fontWeight: 700,
+    fontSize: 13,
+    borderTop: '1px solid #d5d5d5',
+  }
+  const scanCellStyle = {
+    ...summaryCellStyle,
+    display: 'flex',
+    alignItems: 'center',
+    minWidth: 0,
+  }
+  const scanTotalCellStyle = {
+    ...scanCellStyle,
+    background: '#f5f5f5',
+    fontWeight: 700,
+    borderTop: '2px solid #bdbdbd',
+  }
+  const summaryAbsentStyle = {
+    color: '#6b6b6b',
+    fontStyle: 'italic',
+    fontWeight: 500,
+    fontSize: 16,
   }
 
   const scanReviewAnchorRef = useRef(null)
@@ -196,90 +308,79 @@ export function SiteDiaryLabourSection({
           }}
         >
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-            Labour Attendance Summary · {reportDate}
+            Labour Attendance Summary · {labourSummaryDateLabel(reportDate)}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
-            {labourTotals.operatives} {labourTotals.operatives === 1 ? 'worker' : 'workers'} · {labourTotals.hours} hrs
+            {labourTotals.operatives} {labourTotals.operatives === 1 ? 'operative' : 'operatives'} · {labourTotals.hours} hrs
           </div>
         </div>
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1fr) 56px minmax(72px, 88px) 36px',
-            gap: 8,
-            padding: '8px 12px',
-            borderBottom: '1px solid var(--edge)',
-            fontSize: 11,
-            fontWeight: 600,
-            color: 'var(--text-2)',
-            letterSpacing: '0.04em',
-            textTransform: 'uppercase',
-            background: 'rgba(255,255,255,0.04)',
+            gridTemplateColumns: scanSummaryColumns,
+            alignItems: 'stretch',
           }}
         >
-          <span>Trade</span>
-          <span style={{ textAlign: 'right' }}>Workers</span>
-          <span style={{ textAlign: 'right' }}>Hours on site</span>
-          <span aria-hidden="true" />
-        </div>
-        {labourRows.map((row) => (
-          <div
-            key={row.key}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(0, 1fr) 56px minmax(72px, 88px) 36px',
-              gap: 8,
-              padding: '6px 12px',
-              alignItems: 'center',
-              borderTop: '1px solid rgba(255,255,255,0.06)',
-            }}
-          >
-            {manualLabourEditing ? (
+          <span style={summaryHeadStyle}>Trade</span>
+          <span style={summaryHeadStyle}>Company</span>
+          <span style={{ ...summaryHeadStyle, textAlign: 'right' }}>Operatives</span>
+          <span style={{ ...summaryHeadStyle, textAlign: 'right' }}>Total hrs (all operatives)</span>
+        {labourRows.map((row) => {
+          const shown = displayLabourSummaryRow(row, labourRows)
+          return (
+          <Fragment key={row.key}>
+            {manualLabourEditing && shown.trade ? (
               <input
-                style={{ ...manualEditFieldStyle, marginBottom: 0, width: '100%', minWidth: 0 }}
-                value={row.trade}
+                style={{ ...manualEditFieldStyle, ...summaryCellStyle, marginBottom: 0, width: '100%', minWidth: 0 }}
+                value={shown.trade}
                 onChange={(e) => updateLabour(row.key, 'trade', e.target.value)}
                 placeholder="Carpenter"
               />
             ) : (
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', lineHeight: 1.35 }}>
-                {row.trade || '—'}
+              <span style={{ ...summaryCellStyle, fontWeight: 700 }}>
+                {shown.trade ? (
+                  shown.trade
+                ) : (
+                  <span style={summaryAbsentStyle}>Not on register</span>
+                )}
               </span>
             )}
+            <span style={{ ...summaryCellStyle, fontWeight: 700 }}>
+              {shown.company ? (
+                shown.company
+              ) : (
+                <span style={summaryAbsentStyle}>Not on register</span>
+              )}
+            </span>
             {manualLabourEditing ? (
               <input
                 type="number"
                 min="0"
-                style={{ ...manualEditFieldStyle, marginBottom: 0, width: '100%', minWidth: 0, textAlign: 'right' }}
+                style={{ ...manualEditFieldStyle, ...summaryCellStyle, marginBottom: 0, width: '100%', minWidth: 0, textAlign: 'right' }}
                 value={row.headcount}
                 onChange={(e) => updateLabour(row.key, 'headcount', e.target.value)}
                 placeholder="4"
-                aria-label="Workers"
+                aria-label="Operatives"
               />
             ) : (
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', textAlign: 'right' }}>
+              <span style={{ ...summaryCellStyle, fontWeight: 700, textAlign: 'right' }}>
                 {row.headcount ?? '—'}
               </span>
             )}
             {manualLabourEditing ? (
+              <div style={{ ...summaryCellStyle, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
               <input
                 type="number"
                 min="0"
                 step="0.5"
-                style={{ ...manualEditFieldStyle, marginBottom: 0, width: '100%', minWidth: 0, textAlign: 'right' }}
+                style={{ ...manualEditFieldStyle, marginBottom: 0, width: 'auto', flex: '1 1 auto', minWidth: 0, textAlign: 'right' }}
                 value={row.hours}
                 onChange={(e) => updateLabour(row.key, 'hours', e.target.value)}
                 placeholder="8"
                 aria-label="Hours on site"
               />
-            ) : (
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', textAlign: 'right' }}>
-                {row.hours ?? '—'}
-              </span>
-            )}
-            <div style={{ position: 'relative', justifySelf: 'center' }}>
-              {manualLabourEditing && labourRows.length > 1 ? (
-                <>
+              {labourRows.length > 1 ? (
+                <div style={{ position: 'relative', flexShrink: 0 }}>
                   <button
                     type="button"
                     aria-label="Row actions"
@@ -344,11 +445,29 @@ export function SiteDiaryLabourSection({
                       </button>
                     </div>
                   ) : null}
-                </>
+                </div>
               ) : null}
-            </div>
-          </div>
-        ))}
+              </div>
+            ) : (
+              <span style={{ ...summaryCellStyle, fontWeight: 700, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                {row.hours ?? '—'}
+              </span>
+            )}
+          </Fragment>
+          )
+        })}
+          <span style={scanTotalCellStyle}>TOTAL</span>
+          <span style={scanTotalCellStyle} />
+          <span style={{ ...scanTotalCellStyle, justifyContent: 'flex-end', textAlign: 'right' }}>
+            {labourTotals?.operatives ?? 0}
+          </span>
+          <span style={{ ...scanTotalCellStyle, justifyContent: 'flex-end', textAlign: 'right' }}>
+            {formatLabourHoursForDisplay(labourTotals?.hours)}
+          </span>
+        </div>
+        <p style={{ margin: 0, padding: '8px 12px 10px', fontSize: 13, lineHeight: 1.4, color: '#6b6b6b' }}>
+          Total hours on site are the combined hours of all operatives listed.
+        </p>
       </div>
 
       {manualLabourEditing ? (
@@ -400,11 +519,7 @@ export function SiteDiaryLabourSection({
             </button>
           </div>
         </>
-      ) : (
-        <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.45 }}>
-          Tap Manual Entry to edit attendance figures.
-        </p>
-      )}
+      ) : null}
       </>
       )}
 
@@ -412,27 +527,266 @@ export function SiteDiaryLabourSection({
         <div ref={scanReviewAnchorRef}>
           {scanRescanning ? (
             <p role="status" style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--text-2)', lineHeight: 1.45 }}>
-              Re-scanning attendance register…
+              Scanning attendance register...
             </p>
           ) : null}
-          <SignInOperativeReview
-            key={`signin-review-${signInSheetPickerKey}`}
-            reviewRows={scanTradeHoursReview}
-            scanOperatives={scanOperatives}
-            onReviewRowsChange={handleScanTradeHoursReviewChange}
-            onOperativeLabourExclusion={handleOperativeLabourExclusion}
-            onOperativeMoveToVisitors={handleOperativeMoveToVisitors}
-            onApply={applyScanOperativesToLabour}
-            warnings={scanWarnings}
-            reportDate={reportDate}
-            applying={scanApplySaving}
-            appliedSaved={scanApplySaved}
-            disabled={scanLoading || scanApplySaving}
-            applyError={scanApplyError}
-            applyNotice={scanApplyNotice}
-            ocrProvider={scanOcrProvider}
-            applyEnabled={scanApplyEnabled}
-          />
+          <div
+            style={{
+              marginBottom: 12,
+              border: '1px solid var(--edge)',
+              borderRadius: 10,
+              overflow: 'hidden',
+              background: 'var(--plate)',
+            }}
+          >
+            <div
+              style={{
+                padding: '10px 12px',
+                borderBottom: '1px solid var(--edge)',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 8,
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                Labour Attendance Summary · {labourSummaryDateLabel(reportDate)}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                {labourTotals.operatives} {labourTotals.operatives === 1 ? 'operative' : 'operatives'} · {labourTotals.hours} hrs
+              </div>
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: scanSummaryColumns,
+                alignItems: 'stretch',
+                background: 'rgba(255,255,255,0.04)',
+              }}
+            >
+              <span style={summaryHeadStyle}>Trade</span>
+              <span style={summaryHeadStyle}>Company</span>
+              <span style={{ ...summaryHeadStyle, textAlign: 'right' }}>Operatives</span>
+              <span style={{ ...summaryHeadStyle, textAlign: 'right' }}>Total hrs (all operatives)</span>
+            {scanDataRows.map((row) => {
+              const shown = displayLabourSummaryRow(row, scanDataRows)
+              const needs = row.needsManualInput || {}
+              const bucket = Array.isArray(row.rowIds) && row.rowIds.length > 0
+                ? operativesForSignInTradeReviewRow(scanOperatives, row.rowIds).filter(
+                    (op) => op && op.movedToVisitors !== true,
+                  )
+                : []
+              const labourPeople = Math.max(0, Math.trunc(Number(row.headcount) || 0))
+              const peopleOpen = peopleOpenKey === row.key && bucket.length > 0
+              return (
+                <Fragment key={row.key}>
+                  <span style={{ ...scanCellStyle, fontWeight: 700 }}>
+                      {needs.trade && !scanSummaryLocked ? (
+                        <input
+                          style={needsInputStyle}
+                          value={row.trade || ''}
+                          placeholder="Needs manual input"
+                          aria-label="Trade"
+                          onChange={editScanSummaryCell(row.key, 'trade')}
+                        />
+                      ) : needs.trade ? (
+                        <span style={{ ...needsInputStyle, display: 'inline-block' }}>Needs manual input</span>
+                      ) : (
+                        shown.trade || <span style={summaryAbsentStyle}>Not on register</span>
+                      )}
+                    </span>
+                  <span style={{ ...scanCellStyle, fontWeight: 700 }}>
+                    {needs.company && !scanSummaryLocked ? (
+                      <input
+                        style={needsInputStyle}
+                        value={row.company || ''}
+                        placeholder="Needs manual input"
+                        aria-label="Company"
+                        onChange={editScanSummaryCell(row.key, 'company')}
+                      />
+                    ) : needs.company ? (
+                      <span style={{ ...needsInputStyle, display: 'inline-block' }}>Needs manual input</span>
+                    ) : (
+                      shown.company || <span style={summaryAbsentStyle}>Not on register</span>
+                    )}
+                  </span>
+                  <span style={{ ...scanCellStyle, fontWeight: 700, justifyContent: 'flex-end', gap: 8, textAlign: 'right', minWidth: 'min-content', flexWrap: 'nowrap' }}>
+                    {needs.operatives && !scanSummaryLocked ? (
+                      <input
+                        style={{ ...needsInputStyle, textAlign: 'right' }}
+                        value={row.headcount || ''}
+                        placeholder="Needs manual input"
+                        aria-label="Operatives"
+                        inputMode="numeric"
+                        onChange={editScanSummaryCell(row.key, 'headcount')}
+                      />
+                    ) : needs.operatives ? (
+                      <span style={{ ...needsInputStyle, display: 'inline-block' }}>Needs manual input</span>
+                    ) : (
+                      row.headcount ?? '—'
+                    )}
+                    {labourPeople > 0 ? (
+                      <button
+                        type="button"
+                        aria-label={`${labourPeople} ${labourPeople === 1 ? 'person' : 'people'} · Review`}
+                        aria-expanded={peopleOpen}
+                        onPointerDown={armReviewPanelActionGuard}
+                        onClick={() => {
+                          armReviewPanelActionGuard()
+                          setPeopleOpenKey((prev) => (prev === row.key ? null : row.key))
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          flex: '0 0 auto',
+                          margin: 0,
+                          padding: '2px 8px',
+                          border: '1px solid #d5d5d5',
+                          borderRadius: 8,
+                          background: '#f7f7f7',
+                          color: '#1a1a1a',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          lineHeight: 1.3,
+                          whiteSpace: 'nowrap',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {labourPeople} {labourPeople === 1 ? 'person' : 'people'} · Review
+                      </button>
+                    ) : null}
+                  </span>
+                  <span style={{ ...scanCellStyle, fontWeight: 700, justifyContent: 'flex-end', textAlign: 'right' }}>
+                    {needs.hours && !scanSummaryLocked ? (
+                      <input
+                        style={{ ...needsInputStyle, textAlign: 'right' }}
+                        value={row.hours || ''}
+                        placeholder="Needs manual input"
+                        aria-label="Hours on site"
+                        inputMode="decimal"
+                        onChange={editScanSummaryCell(row.key, 'hours')}
+                      />
+                    ) : needs.hours ? (
+                      <span style={{ ...needsInputStyle, display: 'inline-block' }}>Needs manual input</span>
+                    ) : (
+                      row.hours ?? '—'
+                    )}
+                  </span>
+                {peopleOpen ? (
+                  <div style={{ gridColumn: '1 / -1', padding: '10px 12px', background: '#ffffff', borderBottom: '1px solid #d5d5d5' }}>
+                    <p style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700, color: '#1a1a1a', lineHeight: 1.4 }}>
+                      {shown.trade ? `People on ${shown.trade}` : 'People on this register'}
+                    </p>
+                    <p style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 500, color: '#1a1a1a', lineHeight: 1.4 }}>
+                      {shown.trade
+                        ? 'These are the people from the register for this trade. Move visitors out of labour, or exclude someone entered in error.'
+                        : 'These are the people from the register for this company. Move anyone who was visiting to the Visitors section, or exclude someone entered in error.'}
+                    </p>
+                    <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                      {bucket.map((op) => {
+                        const excluded = op.excludedFromLabour === true
+                        const line = formatSignInOperativeLabourLine(op, shown.trade, { includeTradeSuffix: false })
+                        return (
+                          <li
+                            key={String(op.id)}
+                            style={{
+                              display: 'flex',
+                              flexWrap: 'nowrap',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 8,
+                              padding: '4px 0',
+                              borderTop: '1px solid #d5d5d5',
+                            }}
+                          >
+                            <span style={{ flex: '1 1 auto', minWidth: 0, fontSize: 14, fontWeight: 500, color: excluded ? '#6b6b6b' : '#1a1a1a', lineHeight: 1.3 }}>
+                              {line}
+                              {excluded ? ' · Excluded from labour' : ''}
+                            </span>
+                            <div style={{ display: 'flex', flexWrap: 'nowrap', flex: '0 0 auto', gap: 6 }}>
+                              <button
+                                type="button"
+                                disabled={excluded}
+                                onClick={() => {
+                                  if (reviewPanelActionGuarded()) return
+                                  if (typeof handleOperativeMoveToVisitors !== 'function') return
+                                  handleOperativeMoveToVisitors({
+                                    reviewRowKey: row.reviewKey,
+                                    operativeId: op.id,
+                                    tradeLabel: shown.trade || '',
+                                  })
+                                }}
+                                style={{ padding: '4px 8px', border: '1px solid #d5d5d5', borderRadius: 8, background: '#f7f7f7', color: '#1a1a1a', fontSize: 12, fontWeight: 600, lineHeight: 1.2, whiteSpace: 'nowrap', cursor: excluded ? 'not-allowed' : 'pointer' }}
+                              >
+                                Move to Visitors section
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (reviewPanelActionGuarded()) return
+                                  if (typeof handleOperativeLabourExclusion !== 'function') return
+                                  handleOperativeLabourExclusion({
+                                    reviewRowKey: row.reviewKey,
+                                    operativeId: op.id,
+                                    exclude: !excluded,
+                                  })
+                                }}
+                                style={{ padding: '4px 8px', border: '1px solid #d5d5d5', borderRadius: 8, background: '#f7f7f7', color: '#1a1a1a', fontSize: 12, fontWeight: 600, lineHeight: 1.2, whiteSpace: 'nowrap', cursor: 'pointer' }}
+                              >
+                                {excluded ? 'Include in labour' : 'Exclude from labour'}
+                              </button>
+                            </div>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                    <button
+                      type="button"
+                      onClick={() => setPeopleOpenKey(null)}
+                      style={{ marginTop: 8, minHeight: 36, padding: '6px 10px', border: '1px solid #d5d5d5', borderRadius: 8, background: '#f7f7f7', color: '#1a1a1a', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      Done
+                    </button>
+                  </div>
+                ) : null}
+                </Fragment>
+              )
+            })}
+              <span style={scanTotalCellStyle}>TOTAL</span>
+              <span style={scanTotalCellStyle} />
+              <span style={{ ...scanTotalCellStyle, justifyContent: 'flex-end', textAlign: 'right' }}>
+                {labourTotals?.operatives ?? 0}
+              </span>
+              <span style={{ ...scanTotalCellStyle, justifyContent: 'flex-end', textAlign: 'right' }}>
+                {formatLabourHoursForDisplay(labourTotals?.hours)}
+              </span>
+            </div>
+            <p style={{ margin: 0, padding: '8px 12px 10px', fontSize: 13, lineHeight: 1.4, color: '#6b6b6b' }}>
+              Total hours on site are the combined hours of all operatives listed.
+            </p>
+            {scanSummaryLocked ? null : (
+              <div style={{ padding: '10px 12px' }}>
+                <SecondaryButton
+                  type="button"
+                  disabled={scanSummarySaving}
+                  onClick={saveScanLabourSummary}
+                >
+                  {scanSummarySaving ? 'Saving…' : 'Save changes'}
+                </SecondaryButton>
+                {scanSummaryNotice ? (
+                  <p role="status" style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--text-2)', lineHeight: 1.4 }}>
+                    {scanSummaryNotice}
+                  </p>
+                ) : null}
+                {scanSummaryError ? (
+                  <p role="alert" style={{ margin: '10px 0 0', fontSize: 13, color: '#ff6b6b', lineHeight: 1.4 }}>
+                    {scanSummaryError}
+                  </p>
+                ) : null}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -493,7 +847,7 @@ export function SiteDiaryLabourSection({
               disabled={scanLoading}
               cameraLabel="Take new photo"
               galleryLabel="Choose from gallery"
-              hint="Take new photo or Choose from gallery replaces this Attendance Register photo and clears its current scan results. Re-scan reads the current photo again. Delete photo removes the photo; the applied Labour Attendance Summary is unchanged."
+              hint="Take new photo or Choose from gallery replaces this Attendance Register photo and clears its current scan results. Scan register again reads the current photo again. Delete photo removes the photo; the applied Labour Attendance Summary is unchanged."
             />
           </div>
           <div
@@ -511,8 +865,27 @@ export function SiteDiaryLabourSection({
                 disabled={scanLoading || scanApplySaving}
                 onClick={retrySignInScan}
               >
-                {scanRescanning ? 'Re-scanning…' : 'Re-scan'}
+                {scanRescanning ? 'Scanning...' : 'Scan register again'}
               </SecondaryButton>
+            ) : null}
+            {scanRescanWarning ? (
+              <div style={{ flexBasis: '100%' }}>
+                <p role="status" style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--text)', lineHeight: 1.4 }}>
+                  You have typed figures that are not saved. Scanning again will replace this table.
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                  <SecondaryButton type="button" onClick={confirmScanRescan}>
+                    Scan again anyway
+                  </SecondaryButton>
+                  <button
+                    type="button"
+                    onClick={dismissScanRescanWarning}
+                    style={{ padding: '8px 10px', border: 'none', background: 'transparent', color: 'var(--text-2)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    Keep what I typed
+                  </button>
+                </div>
+              </div>
             ) : null}
             <DestructiveButton
               type="button"

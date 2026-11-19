@@ -1426,14 +1426,14 @@ function SavedDiaryViewer({ openingFrameHeld = false, onOpeningFrame = null }) {
           <>
             <p style={{ ...valueStyle, margin: '0 0 10px', fontWeight: 600 }}>
               {view.labourTotals?.operatives ?? view.labourTotal}{' '}
-              {(view.labourTotals?.operatives ?? view.labourTotal) === 1 ? 'worker' : 'workers'} ·{' '}
+              {(view.labourTotals?.operatives ?? view.labourTotal) === 1 ? 'operative' : 'operatives'} ·{' '}
               {view.labourTotals?.hours ?? 0} hrs
             </p>
             <RecordList
               rows={view.labour}
               columns={[
                 { key: 'trade', label: 'Trade' },
-                { key: 'headcount', label: 'Workers' },
+                { key: 'headcount', label: 'Operatives' },
                 { key: 'hours', label: 'Hours on site' },
               ]}
             />

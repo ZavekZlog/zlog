@@ -5768,7 +5768,16 @@ export default function SiteDiaryWorkbenchSurface() {
           signInSheetPickerKey={labourScan.signInSheetPickerKey}
           handleSignInSheetFiles={labourScan.handleSignInSheetFiles}
           applyScanOperativesToLabour={labourScan.applyScanOperativesToLabour}
+          saveScanLabourSummary={labourScan.saveScanLabourSummary}
+          scanSummaryLocked={labourScan.scanSummaryLocked}
+          scanSummaryNotice={labourScan.scanSummaryNotice}
+          scanSummaryError={labourScan.scanSummaryError}
+          scanSummarySaving={labourScan.scanSummarySaving}
           retrySignInScan={labourScan.retrySignInScan}
+          confirmScanRescan={labourScan.confirmScanRescan}
+          dismissScanRescanWarning={labourScan.dismissScanRescanWarning}
+          scanRescanWarning={labourScan.scanRescanWarning}
+          markScanSummaryDirty={labourScan.markScanSummaryDirty}
           removeSignInSheetEvidence={labourScan.removeSignInSheetEvidence}
           startManualLabour={labourScan.startManualLabour}
           manualLabourEditing={labourScan.manualLabourEditing}

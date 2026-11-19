@@ -34,7 +34,7 @@ import {
   applyOperativeMoveToVisitorsFromReview,
   initSignInTradeHoursReviewFromOperatives,
 } from '@/lib/sign-in-trade-hours-review'
-import { applyTradeHoursReviewToLabourSummary } from '@/lib/labour-from-register'
+import { applyTradeHoursReviewToLabourSummary, applyReviewChangeToLabourSummary, labourSummaryRowsFromSignInReview } from '@/lib/labour-from-register'
 import {
   LABOUR_APPLY_SAVE_FAIL_MESSAGE,
   persistAppliedLabourRows,
@@ -84,6 +84,13 @@ export function useSiteDiaryLabour({
   const [scanApplyNotice, setScanApplyNotice] = useState('')
   const [scanApplySaving, setScanApplySaving] = useState(false)
   const [scanApplySaved, setScanApplySaved] = useState(false)
+  const [scanSummaryLocked, setScanSummaryLocked] = useState(false)
+  const [scanSummaryNotice, setScanSummaryNotice] = useState('')
+  const [scanSummaryError, setScanSummaryError] = useState('')
+  const [scanSummarySaving, setScanSummarySaving] = useState(false)
+  const scanSummaryInFlightRef = useRef(false)
+  const scanSummaryDirtyRef = useRef(false)
+  const [scanRescanWarning, setScanRescanWarning] = useState(false)
   const labourApplyInFlightRef = useRef(false)
   const labourApplyInFlightTokenRef = useRef(null)
   const labourApplyPromiseRef = useRef(null)
@@ -348,6 +355,12 @@ export function useSiteDiaryLabour({
       setScanOperatives(operatives)
       const reviewed = initSignInTradeHoursReviewFromOperatives(operatives)
       setScanTradeHoursReview(reviewed.rows)
+      setLabourRows(labourSummaryRowsFromSignInReview(reviewed.rows, { makeKey: makeUuid }))
+      setScanSummaryLocked(false)
+      setScanSummaryNotice('')
+      setScanSummaryError('')
+      scanSummaryDirtyRef.current = false
+      setScanRescanWarning(false)
       setScanTradeHoursOtherDateCount(reviewed.otherDateCount)
       setScanTradeHoursReviewReady(true)
       setScanOcrProvider(result.provider || provider)
@@ -402,8 +415,10 @@ export function useSiteDiaryLabour({
   }, [
     editingReportId,
     invalidatePreparedSharePdf,
+    makeUuid,
     projectId,
     reportDate,
+    setLabourRows,
     signInSheetStoragePath,
     supabase,
     updateDiarySetupFields,
@@ -561,10 +576,35 @@ export function useSiteDiaryLabour({
   ])
 
   const retrySignInScan = useCallback(() => {
+    if (!scanLastFile) return
+    if (scanSummaryDirtyRef.current && !scanSummaryLocked) {
+      setScanRescanWarning(true)
+      return
+    }
+    setScanRescanWarning(false)
+    handleSignInSheetFiles([scanLastFile], { persistEvidence: false, isRescan: true })
+  }, [scanLastFile, handleSignInSheetFiles, scanSummaryLocked])
+
+  const confirmScanRescan = useCallback(() => {
+    setScanRescanWarning(false)
     if (scanLastFile) {
       handleSignInSheetFiles([scanLastFile], { persistEvidence: false, isRescan: true })
     }
   }, [scanLastFile, handleSignInSheetFiles])
+
+  const dismissScanRescanWarning = useCallback(() => {
+    setScanRescanWarning(false)
+  }, [])
+
+  const markScanSummaryDirty = useCallback(() => {
+    scanSummaryDirtyRef.current = true
+  }, [])
+
+  const syncSummaryFiguresFromReview = useCallback((reviewRows) => {
+    setLabourRows((rows) => applyReviewChangeToLabourSummary(rows, reviewRows, { makeKey: makeUuid }))
+    setScanSummaryLocked(false)
+    scanSummaryDirtyRef.current = true
+  }, [makeUuid, setLabourRows])
 
   const removeSignInSheetEvidence = useCallback(async () => {
     if (
@@ -742,6 +782,77 @@ export function useSiteDiaryLabour({
     supabase,
   ])
 
+  const saveScanLabourSummary = useCallback((event) => {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+    if (typeof event?.nativeEvent?.stopImmediatePropagation === 'function') {
+      event.nativeEvent.stopImmediatePropagation()
+    }
+    if (typeof reportWriteLockedRef !== 'undefined' && reportWriteLockedRef?.current) return
+    if (scanSummaryInFlightRef.current) return
+    setScanSummaryError('')
+    if (!editingReportId) {
+      setScanSummaryNotice('Save the diary first. These figures stay on this screen.')
+      return
+    }
+    dismissAutosaveSuccessClaim()
+    invalidatePreparedSharePdf('committed-diary-change')
+    const saveReportId = editingReportId
+    const saveRevision = scanLifecycleRevisionRef.current
+    const saveStillCurrent = () => (
+      scanLifecycleReportIdRef.current === saveReportId
+      && scanLifecycleRevisionRef.current === saveRevision
+    )
+    const writerOwner = (
+      typeof reportLifecycleOwnerRef !== 'undefined'
+      && reportLifecycleOwnerRef?.current
+    ) ? diaryAutosaveOperationOwner(reportLifecycleOwnerRef.current) : null
+    const publicationOwnerCurrent = () => {
+      if (typeof diaryAutosaveOwnersEqual !== 'function' || !writerOwner) return true
+      if (typeof reportLifecycleOwnerRef === 'undefined' || !reportLifecycleOwnerRef?.current) return false
+      return diaryAutosaveOwnersEqual(writerOwner, reportLifecycleOwnerRef.current)
+    }
+    scanSummaryInFlightRef.current = true
+    setScanSummarySaving(true)
+    setScanSummaryNotice('')
+    const persistPromise = persistAppliedLabourRows(supabase, editingReportId, projectId, _labourRows)
+      .then((labourPayload) => {
+        if (publishedLabourPayloadRef) {
+          publishedLabourPayloadRef.current = {
+            owner: writerOwner,
+            reportId: writerOwner?.reportId || editingReportId,
+            payload: labourPayload,
+          }
+        }
+        return labourPayload
+      })
+    void persistPromise
+      .then((labourPayload) => {
+        if (!saveStillCurrent() || !publicationOwnerCurrent()) return
+        lastPersistedLabourRef.current = labourPayload
+        scanSummaryDirtyRef.current = false
+        setScanSummaryLocked(true)
+      })
+      .catch(() => {
+        if (!saveStillCurrent() || !publicationOwnerCurrent()) return
+        setScanSummaryError('We couldn’t save the Labour Attendance Summary. The figures are still on this screen. Check your connection and try again.')
+      })
+      .finally(() => {
+        scanSummaryInFlightRef.current = false
+        setScanSummarySaving(false)
+      })
+  }, [
+    _labourRows,
+    dismissAutosaveSuccessClaim,
+    editingReportId,
+    invalidatePreparedSharePdf,
+    lastPersistedLabourRef,
+    projectId,
+    reportLifecycleOwnerRef,
+    reportWriteLockedRef,
+    supabase,
+  ])
+
   const hydrateSignInFromReport = useCallback(async (existing, isCancelled) => {
     const hydratedSignInPath = signInSheetRemovedRef.current
       ? null
@@ -790,8 +901,9 @@ export function useSiteDiaryLabour({
       setScanApplySaved(false)
       setScanOperatives(result.operatives)
       setScanTradeHoursReview(result.reviewRows)
+      syncSummaryFiguresFromReview(result.reviewRows)
     },
-    [scanOperatives],
+    [scanOperatives, syncSummaryFiguresFromReview],
   )
 
   const handleOperativeMoveToVisitors = useCallback(
@@ -831,11 +943,12 @@ export function useSiteDiaryLabour({
       setScanApplySaved(false)
       setScanOperatives(result.operatives)
       setScanTradeHoursReview(result.reviewRows)
+      syncSummaryFiguresFromReview(result.reviewRows)
       if (typeof onVisitorsChange === 'function') {
         onVisitorsChange(result.visitorsText, result.visitorsRegisterProvenance)
       }
     },
-    [scanOperatives, visitors, visitorsRegisterProvenance, onVisitorsChange, scanReviewEvidencePath],
+    [scanOperatives, visitors, visitorsRegisterProvenance, onVisitorsChange, scanReviewEvidencePath, syncSummaryFiguresFromReview],
   )
 
   return {
@@ -867,7 +980,16 @@ export function useSiteDiaryLabour({
     clearSignInSheetWorkingState,
     handleSignInSheetFiles,
     applyScanOperativesToLabour,
+    saveScanLabourSummary,
+    scanSummaryLocked,
+    scanSummaryNotice,
+    scanSummaryError,
+    scanSummarySaving,
     retrySignInScan,
+    confirmScanRescan,
+    dismissScanRescanWarning,
+    scanRescanWarning,
+    markScanSummaryDirty,
     removeSignInSheetEvidence,
     startManualLabour,
     manualLabourEditing,
