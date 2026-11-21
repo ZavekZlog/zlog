@@ -2,6 +2,10 @@
  * Standalone Site Diary PDF export worker — environment (no Next.js / server-only).
  */
 
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 export const CLAIM_RPC_NAME = 'claim_next_site_diary_pdf_export'
 export const COMPLETE_RPC_NAME = 'complete_site_diary_pdf_export'
 export const FAIL_RPC_NAME = 'fail_site_diary_pdf_export'
@@ -11,6 +15,53 @@ export const SITE_DIARY_PDF_EXPORT_STORAGE_BUCKET = 'site-diary-pdf-exports'
 export const DEFAULT_POLL_MS = 5000
 export const MIN_POLL_MS = 1000
 export const MAX_POLL_MS = 300_000
+
+/**
+ * Fill missing environment variables from the repo `.env.local`.
+ * Existing process values win. Never logs names or values.
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @param {(path: string, encoding: 'utf8') => string} [readFile]
+ */
+export function loadWorkerEnvLocal(env, readFile = readFileSync) {
+  const here = dirname(fileURLToPath(import.meta.url))
+  const path = join(here, '..', '..', '.env.local')
+  let raw = ''
+  try {
+    raw = readFile(path, 'utf8')
+  } catch {
+    return
+  }
+  applyEnvLocalAssignments(env, raw)
+}
+
+/**
+ * @param {NodeJS.ProcessEnv} env
+ * @param {string} raw
+ */
+export function applyEnvLocalAssignments(env, raw) {
+  const text = String(raw || '')
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const body = trimmed.startsWith('export ') ? trimmed.slice(7).trim() : trimmed
+    const eq = body.indexOf('=')
+    if (eq <= 0) continue
+    const key = body.slice(0, eq).trim()
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue
+    let value = body.slice(eq + 1).trim()
+    if (
+      (value.startsWith('"') && value.endsWith('"'))
+      || (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+    const current = env[key]
+    if (current === undefined || String(current).trim() === '') {
+      env[key] = value
+    }
+  }
+}
 
 /**
  * @param {NodeJS.ProcessEnv} env

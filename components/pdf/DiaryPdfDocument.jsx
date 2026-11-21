@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, Image, Link, Font, StyleSheet } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, Font, StyleSheet } from '@react-pdf/renderer'
 import { PdfHeader, PdfFooter } from '@/components/pdf/PdfHeader'
 import { computeProjectDay, formatProjectDateDisplay } from '@/lib/project-day'
 import {
@@ -19,7 +19,6 @@ import {
   PDF_PAGE_W,
   PDF_PHOTO_BAND_PAD_X,
   PDF_PHOTO_BAND_PAD_Y,
-  PDF_PHOTO_CAPTION_MAX_LINES,
   PDF_PHOTO_CAPTION_SIZE,
   PDF_PHOTO_FIT,
   PDF_PHOTO_FRAME_BORDER,
@@ -37,7 +36,6 @@ const CONTENT_H = PDF_CONTENT_H
 const INK = '#1C2126'
 const BODY = '#39424B'
 const MUTED = '#6B7580'
-const ZLOG_URL = 'https://zlog.app'
 
 /**
  * react-pdf breaks a word wherever the line runs out, which splits personal
@@ -75,9 +73,11 @@ const TABLE_RULE_W = 0.9
 const TABLE_LABEL_BG = '#EFF2F4'
 const TABLE_LABEL_INK = '#3D464E'
 const TABLE_PAD_Y = 5.5
-const TABLE_PAD_X = 7
+const TABLE_PAD_X = 10
 const TABLE_LABEL_SIZE = 7.8
-const TABLE_VALUE_SIZE = 9
+const TABLE_VALUE_SIZE = 9.5
+const PDF_DOVE_GREY = '#E4E2DE'
+const TABLE_TOP_RULE_W = 2
 
 /**
  * Space a section must have after its banner before it may open on a page:
@@ -94,6 +94,15 @@ const SECTION_PRESENCE_AHEAD = 72
  */
 const PAGE1_FRAME_INSET = PDF_PAGE_PAD_X
 const PAGE1_FRAME_W = PDF_PAGE_W - PAGE1_FRAME_INSET * 2
+/**
+ * Closed page rectangle. The stroke sits just outside the flowing content so
+ * a table or box rule cannot land on it. The banner and the cover identity
+ * band bleed back to the inner edge of that stroke.
+ */
+const PDF_FRAME_INSET = 36
+const PDF_FRAME_BORDER = 0.9
+const PDF_FRAME_BLEED = 5.1
+const PDF_FRAME_BOTTOM = 22
 const PAGE1_BANNER_H = 48
 const PAGE1_GUTTER = 42
 const PAGE1_INNER_W = PDF_PAGE_W - PAGE1_GUTTER * 2
@@ -119,7 +128,7 @@ const LABOUR_COLUMNS = [
   { key: 'trade', header: 'Trade', width: '34%' },
   { key: 'company', header: 'Company', width: '38%' },
   { key: 'operatives', header: 'Operatives', width: '14%', numeric: true },
-  { key: 'hours', header: 'Hours', width: '14%', numeric: true },
+  { key: 'hours', header: 'Total hrs (all operatives)', width: '14%', numeric: true },
 ]
 
 const EQUIPMENT_COLUMNS = [
@@ -200,7 +209,7 @@ const styles = StyleSheet.create({
   pageOne: {
     minHeight: PDF_PAGE_H,
     maxHeight: PDF_PAGE_H,
-    paddingTop: PAGE1_FRAME_INSET,
+    paddingTop: PDF_PAGE_MARGIN_TOP,
     paddingLeft: PAGE1_GUTTER,
     paddingRight: PAGE1_GUTTER,
     paddingBottom: PDF_PAGE_H - PAGE1_FOOTER_TOP + 12,
@@ -211,14 +220,12 @@ const styles = StyleSheet.create({
   },
   pageOneFrame: {
     position: 'absolute',
-    top: PAGE1_FRAME_INSET,
-    left: PAGE1_FRAME_INSET,
-    right: PAGE1_FRAME_INSET,
-    bottom: PDF_PAGE_H - PAGE1_FOOTER_TOP - 6,
+    top: PDF_PAGE_MARGIN_TOP - PDF_FRAME_BORDER,
+    left: PDF_FRAME_INSET,
+    right: PDF_FRAME_INSET,
+    bottom: PDF_FRAME_BOTTOM,
     borderWidth: 0.9,
     borderStyle: 'solid',
-    borderColor: '#7C858D',
-    borderBottomWidth: 0,
   },
   // Shallow banner: company identity, then a restrained report title. The
   // banner must not out-weigh the project name or the cover photograph.
@@ -249,6 +256,15 @@ const styles = StyleSheet.create({
   // ---- Project identity: document masthead, not a table -------------------
   identityBlock: {
     width: '100%',
+    marginTop: -18,
+    marginHorizontal: -PDF_FRAME_BLEED,
+    backgroundColor: PDF_DOVE_GREY,
+    paddingTop: 10,
+    paddingBottom: 8,
+    paddingHorizontal: 14,
+    borderBottomWidth: 0.6,
+    borderBottomStyle: 'solid',
+    borderBottomColor: '#C5C3BF',
   },
   identityName: {
     color: INK,
@@ -261,30 +277,6 @@ const styles = StyleSheet.create({
     color: BODY,
     fontSize: 9.5,
     lineHeight: 1.35,
-  },
-  identityMetaRow: {
-    flexDirection: 'row',
-    marginTop: 8,
-    paddingTop: 7,
-    borderTopWidth: 0.5,
-    borderTopStyle: 'solid',
-    borderTopColor: '#D6DBDF',
-  },
-  identityMetaItem: {
-    width: '50%',
-    paddingRight: 12,
-  },
-  identityMetaLabel: {
-    color: MUTED,
-    fontSize: 7.5,
-    fontFamily: 'Helvetica-Bold',
-    letterSpacing: 0.7,
-  },
-  identityMetaValue: {
-    marginTop: 2,
-    color: INK,
-    fontSize: 9.5,
-    lineHeight: 1.3,
   },
 
   coverPhotoBlock: {
@@ -310,7 +302,7 @@ const styles = StyleSheet.create({
     width: '100%',
     borderWidth: TABLE_BORDER_W,
     borderStyle: 'solid',
-    borderColor: TABLE_BORDER,
+    borderColor: TABLE_RULE,
   },
   scheduleGridRow: {
     flexDirection: 'row',
@@ -333,15 +325,15 @@ const styles = StyleSheet.create({
     width: '40%',
     justifyContent: 'center',
     paddingVertical: PAGE1_GRID_PAD_Y,
-    paddingHorizontal: 6,
-    backgroundColor: TABLE_LABEL_BG,
+    paddingHorizontal: TABLE_PAD_X,
+    backgroundColor: PDF_DOVE_GREY,
     borderRightWidth: TABLE_RULE_W,
     borderRightStyle: 'solid',
     borderRightColor: TABLE_RULE,
   },
   scheduleGridLabel: {
     color: TABLE_LABEL_INK,
-    fontSize: TABLE_LABEL_SIZE,
+    fontSize: TABLE_VALUE_SIZE,
     fontFamily: 'Helvetica-Bold',
     letterSpacing: 0.35,
     lineHeight: 1.2,
@@ -413,12 +405,22 @@ const styles = StyleSheet.create({
   // ---- Section banner: full-width divider for the diary record -----------
   // Spans the same width as the schedules beneath it so the left and right
   // edges line up exactly. Kept shallow: a divider, not a card.
-  sectionBanner: {
+  sectionBannerWrap: {
     width: '100%',
     marginTop: 14,
+  },
+  tableTopRule: {
+    width: '100%',
+    height: TABLE_TOP_RULE_W,
+  },
+  sectionBanner: {
+    width: '100%',
     paddingVertical: 4.5,
     paddingHorizontal: TABLE_PAD_X,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: PDF_DOVE_GREY,
   },
   // Photo-area pages are already a fresh sheet below chrome — no prior
   // section to separate from. Drop the record-stream top margin so the
@@ -430,12 +432,27 @@ const styles = StyleSheet.create({
     paddingVertical: 4.5,
     paddingHorizontal: TABLE_PAD_X,
     justifyContent: 'center',
+    backgroundColor: PDF_DOVE_GREY,
   },
   sectionBannerText: {
-    color: '#FFFFFF',
     fontSize: 8.5,
     fontFamily: 'Helvetica-Bold',
     letterSpacing: 1,
+    textAlign: 'left',
+  },
+  sectionBannerAside: {
+    marginLeft: 8,
+    fontSize: 7.5,
+    fontFamily: 'Helvetica-Oblique',
+    color: MUTED,
+    textAlign: 'right',
+  },
+  evidenceNote: {
+    marginTop: 4,
+    marginBottom: 6,
+    fontSize: 7.5,
+    fontFamily: 'Helvetica-Oblique',
+    color: MUTED,
   },
 
   body: { marginTop: 6, fontSize: 9.5, lineHeight: 1.5, color: BODY },
@@ -491,9 +508,10 @@ const styles = StyleSheet.create({
   caption: {
     fontSize: PDF_PHOTO_CAPTION_SIZE,
     fontFamily: 'Helvetica',
-    color: BODY,
+    color: MUTED,
     lineHeight: 1.25,
     textAlign: 'left',
+    textOverflow: 'ellipsis',
   },
   assignedTo: {
     fontSize: 7.5,
@@ -508,21 +526,22 @@ const styles = StyleSheet.create({
     width: '100%',
     borderWidth: TABLE_BORDER_W,
     borderStyle: 'solid',
-    borderColor: TABLE_BORDER,
+    borderColor: TABLE_RULE,
   },
   // Header and totals are separated by the perimeter colour at the internal
   // weight: read as structure without becoming a heavy rule mid-table.
   dataHeaderRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    backgroundColor: TABLE_LABEL_BG,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: TABLE_RULE_W,
     borderBottomStyle: 'solid',
-    borderBottomColor: TABLE_BORDER,
+    borderBottomColor: TABLE_RULE,
   },
   dataRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: TABLE_RULE_W,
     borderBottomStyle: 'solid',
     borderBottomColor: TABLE_RULE,
@@ -530,10 +549,10 @@ const styles = StyleSheet.create({
   dataTotalsRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    backgroundColor: TABLE_LABEL_BG,
+    backgroundColor: '#FFFFFF',
     borderTopWidth: TABLE_RULE_W,
     borderTopStyle: 'solid',
-    borderTopColor: TABLE_BORDER,
+    borderTopColor: TABLE_RULE,
   },
   dataCell: {
     justifyContent: 'center',
@@ -544,10 +563,10 @@ const styles = StyleSheet.create({
     borderRightColor: TABLE_RULE,
   },
   dataCellLast: { borderRightWidth: 0 },
-  dataLabelCell: { backgroundColor: TABLE_LABEL_BG },
+  dataLabelCell: { backgroundColor: PDF_DOVE_GREY },
   dataHeaderText: {
     color: TABLE_LABEL_INK,
-    fontSize: TABLE_LABEL_SIZE,
+    fontSize: TABLE_VALUE_SIZE,
     fontFamily: 'Helvetica-Bold',
     letterSpacing: 0.35,
     lineHeight: 1.2,
@@ -621,16 +640,28 @@ const styles = StyleSheet.create({
   },
 })
 
-function PageChrome({ brandColor, logoUrl, companyName, reportTitle, reportReference = '' }) {
+function PageChrome({
+  brandColor,
+  logoUrl,
+  reportTitle,
+  projectReference = '',
+  projectName = '',
+}) {
   return (
     <>
       <PdfHeader
         brandColor={brandColor}
         logoUrl={logoUrl}
-        companyName={companyName}
         reportTitle={reportTitle}
+        projectName={projectName}
+        projectReference={projectReference}
+        edgeBleed={PDF_FRAME_BLEED}
       />
-      <PdfFooter reportReference={reportReference} />
+      <PdfFooter projectName={projectName} projectReference={projectReference} />
+      <View
+        style={[styles.pageOneFrame, { borderColor: resolvePdfAccent(brandColor) }]}
+        fixed
+      />
     </>
   )
 }
@@ -644,7 +675,8 @@ function cleanPdfValue(value) {
  * a value are dropped rather than rendered empty, so nothing on Page 1 is
  * fabricated and the grid never shows a hole.
  */
-function ScheduleGrid({ rows }) {
+function ScheduleGrid({ rows, accent = null }) {
+  const labelColor = resolvePdfAccent(accent)
   const visible = rows.filter((item) => item.value)
   if (!visible.length) return null
 
@@ -672,7 +704,7 @@ function ScheduleGrid({ rows }) {
               ]}
             >
               <View style={styles.scheduleGridLabelCell}>
-                <Text style={styles.scheduleGridLabel}>{item.label}</Text>
+                <Text style={[styles.scheduleGridLabel, { color: labelColor }]}>{item.label}</Text>
               </View>
               <View style={styles.scheduleGridValueCell}>
                 <Text style={styles.scheduleGridValue}>{item.value}</Text>
@@ -687,14 +719,12 @@ function ScheduleGrid({ rows }) {
 }
 
 /**
- * Project identity masthead: the project name carries first-level prominence,
- * with reference and report date as a compact secondary line.
+ * Cover identity: site name and address in one dove-grey band flush under the
+ * banner. The report date stays in that same band. The project reference lives
+ * in the banner, not here.
  */
-function ProjectIdentity({ projectName, projectAddress, projectReference, reportDate }) {
-  const meta = [
-    { label: 'PROJECT REFERENCE', value: projectReference },
-    { label: 'REPORT DATE', value: reportDate },
-  ].filter((item) => item.value)
+function ProjectIdentity({ projectName, projectAddress, reportDate }) {
+  if (!projectName && !projectAddress && !reportDate) return null
 
   return (
     <View style={styles.identityBlock}>
@@ -702,16 +732,7 @@ function ProjectIdentity({ projectName, projectAddress, projectReference, report
       {projectAddress ? (
         <Text style={styles.identityAddress}>{projectAddress}</Text>
       ) : null}
-      {meta.length ? (
-        <View style={styles.identityMetaRow}>
-          {meta.map((item) => (
-            <View key={item.label} style={styles.identityMetaItem}>
-              <Text style={styles.identityMetaLabel}>{item.label}</Text>
-              <Text style={styles.identityMetaValue}>{item.value}</Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
+      {reportDate ? <Text style={styles.identityAddress}>{reportDate}</Text> : null}
     </View>
   )
 }
@@ -721,13 +742,22 @@ function ProjectIdentity({ projectName, projectAddress, projectReference, report
  * removes the leading margin where the heading opens a page. `minPresenceAhead`
  * stops a heading being stranded at the foot of a page, away from its content.
  */
-function SectionHeading({ children, accent }) {
+function numberedSectionLabel(number, children) {
+  if (typeof children !== 'string') return children
+  const label = children.toUpperCase()
+  return number ? `${number}. ${label}` : label
+}
+
+function SectionHeading({ children, accent, number = null }) {
   const color = resolvePdfAccent(accent)
   return (
-    <View minPresenceAhead={SECTION_PRESENCE_AHEAD}>
-      <Text style={[styles.sectionHeading, { borderBottomColor: color }]}>
-        {typeof children === 'string' ? children.toUpperCase() : children}
-      </Text>
+    <View minPresenceAhead={SECTION_PRESENCE_AHEAD} style={styles.sectionBannerWrap}>
+      <View style={[styles.tableTopRule, { backgroundColor: color }]} />
+      <View style={styles.sectionBanner}>
+        <Text style={[styles.sectionBannerText, { color }]}>
+          {numberedSectionLabel(number, children)}
+        </Text>
+      </View>
     </View>
   )
 }
@@ -738,24 +768,38 @@ function SectionHeading({ children, accent }) {
  *
  * columns: [{ key, header, width, numeric? }]
  */
-function DataTable({ columns, rows, totals = null }) {
+function DataTable({ columns, rows, totals = null, accent = null }) {
+  const labelColor = resolvePdfAccent(accent)
   const lastIndex = columns.length - 1
 
-  const renderCells = (record, textStyle) =>
-    columns.map((column, index) => (
-      <View
-        key={column.key}
-        style={[
-          styles.dataCell,
-          { width: column.width },
-          index === lastIndex ? styles.dataCellLast : null,
-        ]}
-      >
-        <Text style={[textStyle, column.numeric ? styles.numeric : null]}>
-          {record[column.key] ?? ''}
-        </Text>
-      </View>
-    ))
+  const renderCells = (record, role) =>
+    columns.map((column, index) => {
+      const isLabel = index === 0
+      const textStyle = isLabel
+        ? [styles.dataHeaderText, { color: labelColor }]
+        : role === 'header'
+          ? [styles.dataHeaderText, { color: INK }]
+          : role === 'total'
+            ? styles.dataTotalText
+            : styles.dataValueText
+      return (
+        <View
+          key={column.key}
+          style={[
+            styles.dataCell,
+            {
+              width: column.width,
+              backgroundColor: isLabel ? PDF_DOVE_GREY : '#FFFFFF',
+            },
+            index === lastIndex ? styles.dataCellLast : null,
+          ]}
+        >
+          <Text style={[textStyle, !isLabel && column.numeric ? styles.numeric : null]}>
+            {record[column.key] ?? ''}
+          </Text>
+        </View>
+      )
+    })
 
   // No `minPresenceAhead` here: it reserves space *after* the node, which for
   // a tall table pushes the whole schedule onto the next page and strands its
@@ -769,20 +813,10 @@ function DataTable({ columns, rows, totals = null }) {
         renders its header once.
       */}
       <View style={styles.dataHeaderRow} wrap={false} fixed>
-        {columns.map((column, index) => (
-          <View
-            key={column.key}
-            style={[
-              styles.dataCell,
-              { width: column.width },
-              index === lastIndex ? styles.dataCellLast : null,
-            ]}
-          >
-            <Text style={[styles.dataHeaderText, column.numeric ? styles.numeric : null]}>
-              {column.header}
-            </Text>
-          </View>
-        ))}
+        {renderCells(
+          Object.fromEntries(columns.map((column) => [column.key, column.header])),
+          'header',
+        )}
       </View>
 
       {rows.map((record, rowIndex) => (
@@ -794,13 +828,13 @@ function DataTable({ columns, rows, totals = null }) {
           ]}
           wrap={false}
         >
-          {renderCells(record, styles.dataValueText)}
+          {renderCells(record, 'body')}
         </View>
       ))}
 
       {totals ? (
         <View style={styles.dataTotalsRow} wrap={false}>
-          {renderCells(totals, styles.dataTotalText)}
+          {renderCells(totals, 'total')}
         </View>
       ) : null}
     </View>
@@ -811,7 +845,8 @@ function DataTable({ columns, rows, totals = null }) {
  * Label/value schedule in the shared table family, one pair per row. Used where
  * a full column table would be the wrong shape for the data.
  */
-function ScheduleList({ rows, labelWidth = '30%' }) {
+function ScheduleList({ rows, labelWidth = '30%', accent = null }) {
+  const labelColor = resolvePdfAccent(accent)
   const visible = rows.filter((item) => item.value)
   if (!visible.length) return null
 
@@ -827,7 +862,7 @@ function ScheduleList({ rows, labelWidth = '30%' }) {
           wrap={false}
         >
           <View style={[styles.dataCell, styles.dataLabelCell, { width: labelWidth }]}>
-            <Text style={styles.dataHeaderText}>{item.label}</Text>
+            <Text style={[styles.dataHeaderText, { color: labelColor }]}>{item.label}</Text>
           </View>
           <View style={[styles.dataCell, styles.dataCellLast, { flex: 1 }]}>
             <Text style={styles.dataValueText}>{item.value}</Text>
@@ -838,21 +873,67 @@ function ScheduleList({ rows, labelWidth = '30%' }) {
   )
 }
 
-function PageOneFooter({ reportReference = '' }) {
+function PageOneFooter({ projectName = '', projectReference = '' }) {
+  const name = String(projectName || '').trim()
+  const reference = String(projectReference || '').trim()
+  const identity = [name, reference].filter(Boolean).join(' · ') || ' '
   return (
     <View style={styles.pageOneFooter}>
-      <Link src={ZLOG_URL} style={styles.pageOneFooterLeft}>
-        Produced with Zlog
-      </Link>
+      <Text style={styles.pageOneFooterLeft}>{identity}</Text>
+      <Text style={styles.pageOneFooterCentre}>Daily Site Diary</Text>
       <Text
-        style={styles.pageOneFooterCentre}
+        style={styles.pageOneFooterRight}
         render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`}
       />
-      <Text style={styles.pageOneFooterRight}>
-        {reportReference ? `Report reference: ${reportReference}` : ' '}
-      </Text>
     </View>
   )
+}
+
+function coverScheduleRows({
+  clientName,
+  projectManager,
+  companyName,
+  authorName,
+  reportingOnBehalfOf,
+  authorRole,
+  commencementDate,
+  plannedCompletionDate,
+  shift,
+  weather,
+  reportDate,
+}) {
+  const programme = computeProjectDay({
+    startDate: commencementDate,
+    plannedCompletionDate,
+    asOfDate: reportDate,
+  })
+  const projectDay =
+    Number.isFinite(programme.currentDay) && programme.currentDay > 0
+      ? String(programme.currentDay)
+      : ''
+  const projectWeek = projectDay ? String(Math.ceil(Number(projectDay) / 7)) : ''
+  const displayDate = (value) =>
+    cleanPdfValue(value) ? formatProjectDateDisplay(value) : ''
+
+  // Ordered so the grid pairs up as Client/Project Manager, Reporting
+  // Organisation/Report Author, and so on. Project name, address, reference and
+  // report date live in the masthead above and are not repeated here.
+  // No Site Manager field exists in the report payload; the author is recorded
+  // as the author, not inferred to be the Site Manager.
+  return [
+    { label: 'Client', value: cleanPdfValue(clientName) },
+    { label: 'Project Manager', value: cleanPdfValue(projectManager) },
+    { label: 'Reporting Organisation', value: cleanPdfValue(companyName) },
+    { label: 'Report Author', value: cleanPdfValue(authorName) },
+    { label: 'Reporting on behalf of', value: cleanPdfValue(reportingOnBehalfOf) },
+    { label: 'Author Role', value: cleanPdfValue(authorRole) },
+    { label: 'Commencement Date', value: displayDate(commencementDate) },
+    { label: 'Shift', value: cleanPdfValue(shift) },
+    { label: 'Planned Completion Date', value: displayDate(plannedCompletionDate) },
+    { label: 'Weather', value: cleanPdfValue(weather) },
+    { label: 'Project Day', value: projectDay },
+    { label: 'Project Week', value: projectWeek },
+  ]
 }
 
 function PageOne({
@@ -874,40 +955,24 @@ function PageOne({
   coverPhotoUrl,
   brandColor,
   logoUrl,
+  detailsNumber = null,
 }) {
   const accent = resolvePdfAccent(brandColor)
-  const programme = computeProjectDay({
-    startDate: commencementDate,
-    plannedCompletionDate,
-    asOfDate: reportDate,
-  })
-  const projectDay =
-    Number.isFinite(programme.currentDay) && programme.currentDay > 0
-      ? String(programme.currentDay)
-      : ''
-  const projectWeek = projectDay ? String(Math.ceil(Number(projectDay) / 7)) : ''
   const displayDate = (value) =>
     cleanPdfValue(value) ? formatProjectDateDisplay(value) : ''
-
-  // Ordered so the grid pairs up as Client/Project Manager, Reporting
-  // Organisation/Report Author, and so on. Project name, address, reference and
-  // report date live in the masthead above and are not repeated here.
-  // No Site Manager field exists in the report payload; the author is recorded
-  // as the author, not inferred to be the Site Manager.
-  const scheduleRows = [
-    { label: 'Client', value: cleanPdfValue(clientName) },
-    { label: 'Project Manager', value: cleanPdfValue(projectManager) },
-    { label: 'Reporting Organisation', value: cleanPdfValue(companyName) },
-    { label: 'Report Author', value: cleanPdfValue(authorName) },
-    { label: 'Reporting on behalf of', value: cleanPdfValue(reportingOnBehalfOf) },
-    { label: 'Author Role', value: cleanPdfValue(authorRole) },
-    { label: 'Commencement Date', value: displayDate(commencementDate) },
-    { label: 'Shift', value: cleanPdfValue(shift) },
-    { label: 'Planned Completion Date', value: displayDate(plannedCompletionDate) },
-    { label: 'Weather', value: cleanPdfValue(weather) },
-    { label: 'Project Day', value: projectDay },
-    { label: 'Project Week', value: projectWeek },
-  ]
+  const scheduleRows = coverScheduleRows({
+    clientName,
+    projectManager,
+    companyName,
+    authorName,
+    reportingOnBehalfOf,
+    authorRole,
+    commencementDate,
+    plannedCompletionDate,
+    shift,
+    weather,
+    reportDate,
+  })
 
   const hasScheduleRows = scheduleRows.some((item) => item.value)
 
@@ -916,16 +981,15 @@ function PageOne({
       <PageChrome
         brandColor={brandColor}
         logoUrl={logoUrl}
-        companyName={companyName}
         reportTitle="DAILY SITE DIARY"
         reportReference={cleanPdfValue(reportReference)}
+        projectReference={cleanPdfValue(projectReference)}
+        projectName={cleanPdfValue(projectName)}
       />
-      <View style={styles.pageOneFrame} />
 
       <ProjectIdentity
         projectName={cleanPdfValue(projectName)}
         projectAddress={cleanPdfValue(projectAddress)}
-        projectReference={cleanPdfValue(projectReference)}
         reportDate={displayDate(reportDate)}
       />
 
@@ -939,9 +1003,9 @@ function PageOne({
       ) : null}
 
       {hasScheduleRows ? (
-        <SectionHeading accent={accent}>PROJECT / REPORT DETAILS</SectionHeading>
+        <SectionHeading accent={accent} number={detailsNumber}>PROJECT / REPORT DETAILS</SectionHeading>
       ) : null}
-      <ScheduleGrid rows={scheduleRows} />
+      <ScheduleGrid rows={scheduleRows} accent={accent} />
     </Page>
   )
 }
@@ -987,8 +1051,8 @@ function FramedPhoto({
       </View>
       <View style={[styles.photoInfoBand, { height: bandHeight }]}>
         <Text style={[styles.photoRef, { color: resolvePdfAccent(accent) }]}>{refLabel}</Text>
-        <Text style={styles.caption} maxLines={PDF_PHOTO_CAPTION_MAX_LINES}>
-          {captionText || '—'}
+        <Text style={styles.caption} maxLines={1}>
+          {captionText}
         </Text>
         {assignedLine ? (
           <Text style={styles.assignedTo} maxLines={1}>
@@ -1021,7 +1085,9 @@ function PhotoGrid({ photos, cols, rows, brandColor, contentH = PDF_CONTENT_H })
       {chunks.map((row, rowIndex) => {
         const bandHeight = photoRowBandHeight(
           row.map((photo) => ({
-            caption: photoTileCaption(photo),
+            // One caption line on every frame. Length must not change the band,
+            // or an empty caption would shift the grid.
+            caption: '',
             assignedToLine: photoTileAssignedToLine(photo),
           })),
           frameW,
@@ -1061,12 +1127,12 @@ function PhotoGrid({ photos, cols, rows, brandColor, contentH = PDF_CONTENT_H })
  * Never use record-stream minPresenceAhead, and never wrap={false}: both can
  * leave an explicit photo page empty while React-PDF advances again.
  */
-function AreaPhotoSectionBanner({ children, accent }) {
+function AreaPhotoSectionBanner({ children, accent, number = null }) {
   const color = resolvePdfAccent(accent)
   return (
-    <View style={[styles.areaPhotoSectionBanner, { backgroundColor: color }]}>
-      <Text style={styles.sectionBannerText}>
-        {typeof children === 'string' ? children.toUpperCase() : children}
+    <View style={styles.areaPhotoSectionBanner}>
+      <Text style={[styles.sectionBannerText, { color }]}>
+        {numberedSectionLabel(number, children)}
       </Text>
     </View>
   )
@@ -1085,6 +1151,9 @@ function AreaPhotographicSection({
   logoUrl,
   companyName,
   reportReference = '',
+  projectReference = '',
+  projectName = '',
+  sectionNumber = null,
 }) {
   const perPage = layout === 'full' ? 1 : layout === 'grid6' ? 6 : 4
   const { cols, rows } = photoGridForTier(perPage)
@@ -1108,9 +1177,11 @@ function AreaPhotographicSection({
           companyName={companyName}
           reportTitle={heading}
           reportReference={reportReference}
+          projectReference={projectReference}
+          projectName={projectName}
         />
         {isFirst ? (
-          <AreaPhotoSectionBanner accent={brandColor}>{heading}</AreaPhotoSectionBanner>
+          <AreaPhotoSectionBanner accent={brandColor} number={sectionNumber}>{heading}</AreaPhotoSectionBanner>
         ) : null}
         <View style={styles.photoStage}>
           <PhotoGrid
@@ -1170,7 +1241,7 @@ function GridPages({
   )
 }
 
-function LabourTable({ items = [], brandColor = null }) {
+function LabourTable({ items = [], brandColor = null, number = null, registerAttached = false }) {
   const accent = resolvePdfAccent(brandColor)
   const rows = Array.isArray(items)
     ? items.filter(
@@ -1195,14 +1266,25 @@ function LabourTable({ items = [], brandColor = null }) {
 
   return (
     <>
-      <SectionBanner accent={accent}>Labour</SectionBanner>
+      <SectionBanner
+        accent={accent}
+        number={number}
+        aside={
+          registerAttached
+            ? 'Source: site attendance register, scanned'
+            : 'Source: entered manually'
+        }
+      >
+        Labour
+      </SectionBanner>
       {rows.length === 0 ? (
         <Text style={styles.emptyState}>No labour recorded.</Text>
       ) : (
         <DataTable
+          accent={accent}
           columns={LABOUR_COLUMNS}
           rows={rows.map((item) => ({
-            trade: item.trade || '—',
+            trade: String(item.trade || '').trim() || 'Not on register',
             company: item.company || '—',
             operatives:
               item.headcount != null && item.headcount !== ''
@@ -1224,7 +1306,7 @@ function LabourTable({ items = [], brandColor = null }) {
   )
 }
 
-function EquipmentHireTable({ items = [], brandColor = null }) {
+function EquipmentHireTable({ items = [], brandColor = null, number = null }) {
   const accent = resolvePdfAccent(brandColor)
   const rows = Array.isArray(items)
     ? items.filter(
@@ -1239,11 +1321,12 @@ function EquipmentHireTable({ items = [], brandColor = null }) {
 
   return (
     <>
-      <SectionBanner accent={accent}>Equipment on hire</SectionBanner>
+      <SectionBanner accent={accent} number={number}>Equipment on hire</SectionBanner>
       {rows.length === 0 ? (
         <Text style={styles.emptyState}>No equipment on hire recorded.</Text>
       ) : (
         <DataTable
+          accent={accent}
           columns={EQUIPMENT_COLUMNS}
           rows={rows.map((item) => ({
             description: item.description || '—',
@@ -1267,17 +1350,21 @@ function EquipmentHireTable({ items = [], brandColor = null }) {
  * (photo areas, declaration after photos) must pass false — the guard reserves
  * space after the banner and forces an empty auto-continuation.
  */
-function SectionBanner({ children, accent, presenceAhead = true }) {
+function SectionBanner({ children, accent, presenceAhead = true, number = null, aside = null }) {
   const color = resolvePdfAccent(accent)
   return (
     <View
-      style={[styles.sectionBanner, { backgroundColor: color }]}
+      style={styles.sectionBannerWrap}
       minPresenceAhead={presenceAhead ? SECTION_PRESENCE_AHEAD : undefined}
       wrap={presenceAhead ? false : undefined}
     >
-      <Text style={styles.sectionBannerText}>
-        {typeof children === 'string' ? children.toUpperCase() : children}
-      </Text>
+      <View style={[styles.tableTopRule, { backgroundColor: color }]} />
+      <View style={styles.sectionBanner}>
+        <Text style={[styles.sectionBannerText, { color }]}>
+          {numberedSectionLabel(number, children)}
+        </Text>
+        {aside ? <Text style={styles.sectionBannerAside}>{aside}</Text> : null}
+      </View>
     </View>
   )
 }
@@ -1308,7 +1395,7 @@ function toRecordRows(items, columns) {
  * records renders nothing at all, so a report that never captured it does not
  * gain an empty heading.
  */
-function RecordSection({ title, columns, items, accent }) {
+function RecordSection({ title, columns, items, accent, number = null }) {
   const rows = toRecordRows(items, columns)
   if (!rows.length) return null
   // A fragment, not a wrapper View: react-pdf refuses to break before a node
@@ -1316,8 +1403,8 @@ function RecordSection({ title, columns, items, accent }) {
   // honour `minPresenceAhead` and ends up stranded at the foot of a page.
   return (
     <>
-      <SectionBanner accent={accent}>{title}</SectionBanner>
-      <DataTable columns={columns} rows={rows} />
+      <SectionBanner accent={accent} number={number}>{title}</SectionBanner>
+      <DataTable columns={columns} rows={rows} accent={accent} />
     </>
   )
 }
@@ -1340,6 +1427,9 @@ function ReportContentPage({
   temporaryWorks,
   workAreas,
   reportReference = '',
+  projectReference = '',
+  projectName = '',
+  sectionNumbers = {},
   trailing = null,
 }) {
   const accent = resolvePdfAccent(brandColor)
@@ -1355,46 +1445,58 @@ function ReportContentPage({
         companyName={companyName}
         reportTitle="Site Diary — Site records"
         reportReference={reportReference}
+        projectReference={projectReference}
+        projectName={projectName}
       />
-      <SectionBanner accent={accent}>Site summary</SectionBanner>
+      <SectionBanner accent={accent} number={sectionNumbers.summary}>Site summary</SectionBanner>
       <Text style={styles.body}>{siteSummary || '—'}</Text>
-      <LabourTable items={labour} brandColor={accent} />
-      <EquipmentHireTable items={equipmentHire} brandColor={accent} />
+      <LabourTable items={labour}
+        brandColor={accent}
+        number={sectionNumbers.labour}
+        registerAttached={sectionNumbers.register != null}
+      />
+      <EquipmentHireTable items={equipmentHire} brandColor={accent} number={sectionNumbers.equipment} />
       <RecordSection
         title="Site attendance"
         columns={ATTENDANCE_COLUMNS}
         items={attendance}
         accent={accent}
+        number={sectionNumbers.attendance}
       />
       <RecordSection
         title="Visitors"
         columns={VISITOR_COLUMNS}
         items={visitors}
         accent={accent}
+        number={sectionNumbers.visitors}
       />
       <RecordSection
         title="Permits to work"
         columns={PERMIT_COLUMNS}
         items={permits}
         accent={accent}
+        number={sectionNumbers.permits}
       />
       <RecordSection
         title="Deliveries"
         columns={DELIVERY_COLUMNS}
         items={deliveries}
         accent={accent}
+        number={sectionNumbers.deliveries}
       />
       <RecordSection
         title="Temporary works & scaffolding checks"
         columns={TEMPORARY_WORKS_COLUMNS}
         items={temporaryWorks}
         accent={accent}
+        number={sectionNumbers.temporaryWorks}
       />
       <RecordSection
         title="Work area records"
         columns={WORK_AREA_COLUMNS}
         items={workAreas}
         accent={accent}
+        number={sectionNumbers.workAreas}
       />
       {trailing}
     </Page>
@@ -1415,12 +1517,13 @@ function DeclarationBlock({
   reportDate,
   signatureSrc,
   presenceAhead = true,
+  number = null,
 }) {
   const accent = resolvePdfAccent(brandColor)
 
   return (
     <View wrap={presenceAhead ? false : undefined}>
-      <SectionBanner accent={accent} presenceAhead={presenceAhead}>
+      <SectionBanner accent={accent} presenceAhead={presenceAhead} number={number}>
         Declaration &amp; signature
       </SectionBanner>
       <Text style={[styles.signDeclaration, styles.body]}>{DECLARATION}</Text>
@@ -1428,6 +1531,7 @@ function DeclarationBlock({
         <View style={styles.signMeta}>
           <ScheduleList
             labelWidth="38%"
+            accent={accent}
             rows={[
               { label: 'Author Name', value: authorName?.trim() || '—' },
               { label: 'Position / Role', value: authorRole?.trim() || '—' },
@@ -1463,10 +1567,13 @@ function DeclarationPage({
   logoUrl,
   companyName,
   reportReference = '',
+  projectReference = '',
+  projectName = '',
   authorName,
   authorRole,
   reportDate,
   signatureSrc,
+  sectionNumber = null,
 }) {
   return (
     <Page size="A4" style={styles.page}>
@@ -1476,6 +1583,8 @@ function DeclarationPage({
         companyName={companyName}
         reportTitle="Declaration & signature"
         reportReference={reportReference}
+        projectReference={projectReference}
+        projectName={projectName}
       />
       <DeclarationBlock
         brandColor={brandColor}
@@ -1484,9 +1593,83 @@ function DeclarationPage({
         reportDate={reportDate}
         signatureSrc={signatureSrc}
         presenceAhead={false}
+        number={sectionNumber}
       />
     </Page>
   )
+}
+
+const ATTENDANCE_SHEET_GAP = PDF_GRID_GAP
+
+function attendanceRegisterPageGroups(sheets) {
+  const list = (Array.isArray(sheets) ? sheets : []).filter(
+    (sheet) => sheet && (sheet.imageSrc || sheet.fileName),
+  )
+  const groups = []
+  for (let index = 0; index < list.length; index += 2) {
+    groups.push(list.slice(index, index + 2))
+  }
+  return groups
+}
+
+/**
+ * Attendance evidence on its own page, after the site records (labour table)
+ * and before the work photographs. One sheet fills the top half of the page.
+ * Two sheets share the page. The image src is the original file; this frame
+ * only sets the display size.
+ */
+function AttendanceRegisterPages({
+  sheets,
+  brandColor,
+  logoUrl,
+  companyName,
+  reportReference = '',
+  projectReference = '',
+  projectName = '',
+  sectionNumber = null,
+}) {
+  const groups = attendanceRegisterPageGroups(sheets)
+  if (!groups.length) return null
+  const sheetHeight = (photoPageGridContentHeight() - ATTENDANCE_SHEET_GAP) / 2
+  return groups.map((group, pageIndex) => {
+    const frameHeight = group.length === 1 ? PDF_PAGE_H / 2 : sheetHeight
+    return (
+    <Page key={`attendance-register-${pageIndex}`} size="A4" style={styles.page}>
+      <PageChrome
+        brandColor={brandColor}
+        logoUrl={logoUrl}
+        companyName={companyName}
+        reportTitle="Attendance Register"
+        reportReference={reportReference}
+        projectReference={projectReference}
+        projectName={projectName}
+      />
+      {pageIndex === 0 ? (
+        <SectionBanner accent={brandColor} presenceAhead={false} number={sectionNumber}>
+          Attendance Register
+        </SectionBanner>
+      ) : null}
+      <Text style={styles.evidenceNote}>Legal document - reproduced untouched.</Text>
+      {group.map((sheet, sheetIndex) => (
+        <View
+          key={`attendance-sheet-${pageIndex}-${sheetIndex}`}
+          style={{
+            height: frameHeight,
+            justifyContent: 'flex-start',
+            marginBottom: sheetIndex === 0 && group.length > 1 ? ATTENDANCE_SHEET_GAP : 0,
+          }}
+        >
+          {sheet.imageSrc ? (
+            // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image
+            <Image src={sheet.imageSrc} style={styles.imageContain} />
+          ) : (
+            <Text style={styles.body}>Attached record: {sheet.fileName}</Text>
+          )}
+        </View>
+      ))}
+    </Page>
+    )
+  })
 }
 
 /**
@@ -1504,6 +1687,41 @@ function DeclarationPage({
  * labour: [{ trade, company, headcount|count, hours }]
  * equipmentHire: [{ description, supplier, quantity, status }]
  */
+function diarySectionNumbers({
+  coverDetails,
+  attendance,
+  visitors,
+  permits,
+  deliveries,
+  temporaryWorks,
+  workAreas,
+  attendanceRegisterSheets,
+  areas,
+}) {
+  const numbers = { photos: [] }
+  let next = 0
+  const take = () => {
+    next += 1
+    return next
+  }
+  numbers.details = coverDetails ? take() : null
+  numbers.summary = take()
+  numbers.labour = take()
+  numbers.equipment = take()
+  numbers.attendance = toRecordRows(attendance, ATTENDANCE_COLUMNS).length ? take() : null
+  numbers.visitors = toRecordRows(visitors, VISITOR_COLUMNS).length ? take() : null
+  numbers.permits = toRecordRows(permits, PERMIT_COLUMNS).length ? take() : null
+  numbers.deliveries = toRecordRows(deliveries, DELIVERY_COLUMNS).length ? take() : null
+  numbers.temporaryWorks = toRecordRows(temporaryWorks, TEMPORARY_WORKS_COLUMNS).length ? take() : null
+  numbers.workAreas = toRecordRows(workAreas, WORK_AREA_COLUMNS).length ? take() : null
+  const hasPhotos = areas.length > 0
+  if (!hasPhotos) numbers.declaration = take()
+  numbers.register = attendanceRegisterPageGroups(attendanceRegisterSheets).length ? take() : null
+  numbers.photos = areas.map(() => take())
+  if (hasPhotos) numbers.declaration = take()
+  return numbers
+}
+
 export function DiaryPdfDocument({
   projectName = '',
   projectAddress = '',
@@ -1534,8 +1752,32 @@ export function DiaryPdfDocument({
   authorName = '',
   authorRole = '',
   signatureSrc = null,
+  attendanceRegisterSheets = [],
 }) {
   const schedule = buildPhotoAreaSchedule(photos)
+  const sectionNumbers = diarySectionNumbers({
+    coverDetails: coverScheduleRows({
+      clientName,
+      projectManager,
+      companyName,
+      authorName,
+      reportingOnBehalfOf,
+      authorRole,
+      commencementDate,
+      plannedCompletionDate,
+      shift,
+      weather,
+      reportDate,
+    }).some((item) => item.value),
+    attendance,
+    visitors,
+    permits,
+    deliveries,
+    temporaryWorks,
+    workAreas,
+    attendanceRegisterSheets,
+    areas: schedule.areas,
+  })
 
   // The declaration trails the last page the report actually produces.
   // After photo areas it is its own explicit page (never nested in a full
@@ -1547,6 +1789,7 @@ export function DiaryPdfDocument({
       authorRole={authorRole}
       reportDate={reportDate}
       signatureSrc={signatureSrc}
+      number={sectionNumbers.declaration}
     />
   )
   const lastHost = schedule.areas.length ? 'photos' : 'records'
@@ -1572,6 +1815,7 @@ export function DiaryPdfDocument({
         coverPhotoUrl={coverPhotoUrl}
         brandColor={brandColor}
         logoUrl={logoUrl}
+        detailsNumber={sectionNumbers.details}
       />
 
       <ReportContentPage
@@ -1588,7 +1832,21 @@ export function DiaryPdfDocument({
         temporaryWorks={temporaryWorks}
         workAreas={workAreas}
         reportReference={reportReference}
+        projectReference={projectReference}
+        projectName={projectName}
+        sectionNumbers={sectionNumbers}
         trailing={lastHost === 'records' ? declaration : null}
+      />
+
+      <AttendanceRegisterPages
+        sheets={attendanceRegisterSheets}
+        brandColor={brandColor}
+        logoUrl={logoUrl}
+        companyName={companyName}
+        reportReference={reportReference}
+        projectReference={projectReference}
+        projectName={projectName}
+        sectionNumber={sectionNumbers.register}
       />
 
       {schedule.areas.map((area, areaIndex) => (
@@ -1601,6 +1859,9 @@ export function DiaryPdfDocument({
           logoUrl={logoUrl}
           companyName={companyName}
           reportReference={reportReference}
+          projectReference={projectReference}
+          projectName={projectName}
+          sectionNumber={sectionNumbers.photos[areaIndex]}
         />
       ))}
 
@@ -1610,6 +1871,9 @@ export function DiaryPdfDocument({
           logoUrl={logoUrl}
           companyName={companyName}
           reportReference={reportReference}
+          projectReference={projectReference}
+          projectName={projectName}
+          sectionNumber={sectionNumbers.declaration}
           authorName={authorName}
           authorRole={authorRole}
           reportDate={reportDate}

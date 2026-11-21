@@ -32,6 +32,10 @@ import {
   loadSavedDiaryView,
 } from '@/lib/diary-saved-view'
 import { evictSignInSheetSessionEvidence } from '@/lib/diary-sign-in-sheet-session-cache'
+import {
+  attendanceEvidenceFileName,
+  attendanceEvidenceIsImage,
+} from '@/lib/diary-sign-in-sheet-evidence'
 import { bindCoreRowHandoffSession } from '@/lib/diary-edit-core-row-handoff'
 import { loadSiteDiaryWorkbenchSurface } from '@/lib/diary-workbench-module'
 import { mergeSiteDiarySessionSnapshot } from '@/lib/site-diary-session-context'
@@ -1461,7 +1465,8 @@ function SavedDiaryViewer({ openingFrameHeld = false, onOpeningFrame = null }) {
             >
               Attendance Register
             </p>
-            {view.attendanceRegisterPreviewStatus === SAVED_DIARY_MEDIA_READY
+            {attendanceEvidenceIsImage(view.attendanceRegisterPath)
+              && view.attendanceRegisterPreviewStatus === SAVED_DIARY_MEDIA_READY
               && view.attendanceRegisterPreviewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG
                 <img
@@ -1480,10 +1485,25 @@ function SavedDiaryViewer({ openingFrameHeld = false, onOpeningFrame = null }) {
                   }}
                 />
               ) : null}
-            {view.attendanceRegisterPreviewStatus === SAVED_DIARY_MEDIA_LOADING ? (
+            {!attendanceEvidenceIsImage(view.attendanceRegisterPath) ? (
+              <p style={{ margin: '0 0 8px', fontSize: 14, lineHeight: 1.4, color: 'var(--text)' }}>
+                Attached record: {attendanceEvidenceFileName(view.attendanceRegisterPath)}
+                {view.attendanceRegisterPreviewUrl ? (
+                  <>
+                    {' '}
+                    <a href={view.attendanceRegisterPreviewUrl} download={attendanceEvidenceFileName(view.attendanceRegisterPath)}>
+                      Open file
+                    </a>
+                  </>
+                ) : null}
+              </p>
+            ) : null}
+            {attendanceEvidenceIsImage(view.attendanceRegisterPath)
+              && view.attendanceRegisterPreviewStatus === SAVED_DIARY_MEDIA_LOADING ? (
               <EmptySection>Loading Attendance Register…</EmptySection>
             ) : null}
-            {view.attendanceRegisterPreviewStatus === SAVED_DIARY_MEDIA_FAILED ? (
+            {attendanceEvidenceIsImage(view.attendanceRegisterPath)
+              && view.attendanceRegisterPreviewStatus === SAVED_DIARY_MEDIA_FAILED ? (
               <>
                 <p style={{ ...emptyValueStyle, margin: '0 0 10px' }}>
                   {view.attendanceRegisterLoadError

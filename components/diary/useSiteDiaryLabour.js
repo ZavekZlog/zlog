@@ -18,10 +18,13 @@ import {
   clearPersistedSignInSheetEvidence,
   dataUrlToJpegBlob,
   preparedSignInSheetFileFromBlob,
+  replacePersistedAttachedSignInFile,
   replacePersistedSignInSheetEvidence,
   SIGN_IN_SHEET_EVIDENCE_PREVIEW_LOAD_FAIL_MESSAGE,
   SIGN_IN_SHEET_EVIDENCE_REMOVE_FAIL_MESSAGE,
   SIGN_IN_SHEET_EVIDENCE_SAVE_FAIL_MESSAGE,
+  attendanceEvidenceFileName,
+  attendanceEvidenceIsImage,
   signInSheetPathFromReport,
 } from '@/lib/diary-sign-in-sheet-evidence'
 import {
@@ -114,6 +117,7 @@ export function useSiteDiaryLabour({
   const loadedSignInSheetPathRef = useRef(null)
   const signInSheetRemovedRef = useRef(false)
   const [signInSheetPickerKey, setSignInSheetPickerKey] = useState(0)
+  const [attachedAttendanceName, setAttachedAttendanceName] = useState('')
   const scanRequestIdRef = useRef(0)
   const signInEvidenceHydrateGenRef = useRef(0)
   const scanSheetPreviewRef = useRef(scanSheetPreview)
@@ -181,6 +185,13 @@ export function useSiteDiaryLabour({
         setScanSignInPreviewLoadError(SIGN_IN_SHEET_EVIDENCE_PREVIEW_LOAD_FAIL_MESSAGE)
         return { ok: false, cancelled: false }
       }
+      setAttachedAttendanceName(attendanceEvidenceFileName(storagePath))
+      if (!attendanceEvidenceIsImage(storagePath)) {
+        clearScanPreview()
+        setScanLastFile(null)
+        setScanSignInPreviewLoadError('')
+        return { ok: true, cancelled: false }
+      }
       const applied = applyPersistedSignInEvidenceBlob(blob)
       if (!applied) {
         setScanSignInPreviewLoadError(SIGN_IN_SHEET_EVIDENCE_PREVIEW_LOAD_FAIL_MESSAGE)
@@ -197,7 +208,7 @@ export function useSiteDiaryLabour({
         setScanSignInEvidenceLoading(false)
       }
     }
-  }, [applyPersistedSignInEvidenceBlob, signedUrlForPath, supabase])
+  }, [applyPersistedSignInEvidenceBlob, clearScanPreview, signedUrlForPath, supabase])
 
   const retrySignInEvidenceLoad = useCallback(async () => {
     const path = loadedSignInSheetPathRef.current || signInSheetStoragePath
@@ -244,6 +255,7 @@ export function useSiteDiaryLabour({
     clearSignInSheetWorkingState()
     setSignInSheetStoragePath(null)
     loadedSignInSheetPathRef.current = null
+    setAttachedAttendanceName('')
     setScanSignInPreviewLoadError('')
     signInSheetRemovedRef.current = false
     setLabourModeState('manual')
@@ -419,6 +431,62 @@ export function useSiteDiaryLabour({
     projectId,
     reportDate,
     setLabourRows,
+    signInSheetStoragePath,
+    supabase,
+    updateDiarySetupFields,
+  ])
+
+  const handleAttachAttendanceFile = useCallback(async (files) => {
+    if (!shouldReplaceSignInSheet(files)) return
+    const file = files[0]
+    if (!file || !(file instanceof Blob)) return
+    const previousStoragePath = loadedSignInSheetPathRef.current || signInSheetStoragePath
+    if (previousStoragePath) evictSignInSheetSessionEvidence(previousStoragePath)
+    setScanError('')
+    setScanSignInPreviewLoadError('')
+    setScanLastFile(null)
+    setAttachedAttendanceName(file.name || 'Attendance record')
+    if (attendanceEvidenceIsImage(file.name) && typeof URL !== 'undefined') {
+      setScanSheetPreview(URL.createObjectURL(file))
+    } else {
+      clearScanPreview()
+    }
+    const mustPersist = Boolean(editingReportId && projectId)
+    if (!mustPersist) return
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user?.id) {
+        setScanError(SIGN_IN_SHEET_EVIDENCE_SAVE_FAIL_MESSAGE)
+        return
+      }
+      const persistResult = await replacePersistedAttachedSignInFile(
+        supabase,
+        updateDiarySetupFields,
+        {
+          userId: user.id,
+          reportId: editingReportId,
+          projectId,
+          file,
+          previousStoragePath,
+        },
+      )
+      if (!persistResult.ok || !persistResult.storagePath) {
+        setScanError(SIGN_IN_SHEET_EVIDENCE_SAVE_FAIL_MESSAGE)
+        return
+      }
+      loadedSignInSheetPathRef.current = persistResult.storagePath
+      setSignInSheetStoragePath(persistResult.storagePath)
+      setAttachedAttendanceName(attendanceEvidenceFileName(persistResult.storagePath) || file.name)
+      signInSheetRemovedRef.current = false
+      invalidatePreparedSharePdf('committed-diary-change')
+    } catch {
+      setScanError(SIGN_IN_SHEET_EVIDENCE_SAVE_FAIL_MESSAGE)
+    }
+  }, [
+    clearScanPreview,
+    editingReportId,
+    invalidatePreparedSharePdf,
+    projectId,
     signInSheetStoragePath,
     supabase,
     updateDiarySetupFields,
@@ -641,7 +709,7 @@ export function useSiteDiaryLabour({
     clearSignInSheetWorkingState()
     loadedSignInSheetPathRef.current = null
     setSignInSheetStoragePath(null)
-    setScanSignInPreviewLoadError('')
+    setAttachedAttendanceName('')
     signInSheetRemovedRef.current = true
     if (persistedAttendanceCleared) {
       invalidatePreparedSharePdf('committed-diary-change')
@@ -860,12 +928,14 @@ export function useSiteDiaryLabour({
     if (hydratedSignInPath) {
       loadedSignInSheetPathRef.current = hydratedSignInPath
       setSignInSheetStoragePath(hydratedSignInPath)
+      setAttachedAttendanceName(attendanceEvidenceFileName(hydratedSignInPath))
       signInSheetRemovedRef.current = false
       await loadPersistedSignInEvidenceForPath(hydratedSignInPath, isCancelled)
     } else {
       signInEvidenceHydrateGenRef.current += 1
       loadedSignInSheetPathRef.current = null
       setSignInSheetStoragePath(null)
+      setAttachedAttendanceName('')
       setScanSignInPreviewLoadError('')
       setScanSignInEvidenceLoading(false)
     }
@@ -979,6 +1049,8 @@ export function useSiteDiaryLabour({
     signInSheetPickerKey,
     clearSignInSheetWorkingState,
     handleSignInSheetFiles,
+    handleAttachAttendanceFile,
+    attachedAttendanceName,
     applyScanOperativesToLabour,
     saveScanLabourSummary,
     scanSummaryLocked,

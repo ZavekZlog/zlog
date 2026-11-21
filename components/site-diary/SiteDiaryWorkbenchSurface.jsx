@@ -145,6 +145,9 @@ import {
   canShareSiteDiaryPdfViaNativeFile,
   downloadSiteDiaryPdf,
   downloadSiteDiaryPdfViaSignedUrl,
+  isIosStandaloneDisplay,
+  IOS_STANDALONE_PDF_DOWNLOAD_MESSAGE,
+  saveSiteDiaryPdfToDownloads,
   shareSiteDiaryPdfNative,
   snapshotUserActivation,
 } from '@/lib/diary-share'
@@ -732,6 +735,13 @@ export default function SiteDiaryWorkbenchSurface() {
   const projectDetailsAuthorityRef = useRef(null)
   const projectDetailsPersistRef = useRef(null)
   const [, setPdfPreparing] = useState(false)
+  const [savedActionHeld, setSavedActionHeld] = useState(false)
+  const [saveExportPending, setSaveExportPending] = useState(false)
+  const [diarySavedNotice, setDiarySavedNotice] = useState(false)
+  const [pdfDownloading, setPdfDownloading] = useState(false)
+  const [downloadError, setDownloadError] = useState('')
+  const [downloadNotice, setDownloadNotice] = useState('')
+  const diarySavedNoticeTimerRef = useRef(null)
   const [justSaved, setJustSaved] = useState(false)
   const [showSaveBanner, setShowSaveBanner] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(false)
@@ -739,6 +749,23 @@ export default function SiteDiaryWorkbenchSurface() {
   const [loadDiagnostic, setLoadDiagnostic] = useState('')
   const loadGenerationRef = useRef(0)
   const saveNavTimerRef = useRef(null)
+  const clearDiarySavedNotice = () => {
+    if (diarySavedNoticeTimerRef.current) {
+      clearTimeout(diarySavedNoticeTimerRef.current)
+      diarySavedNoticeTimerRef.current = null
+    }
+    setDiarySavedNotice(false)
+  }
+  const markDiarySavedNotice = () => {
+    if (diarySavedNoticeTimerRef.current) {
+      clearTimeout(diarySavedNoticeTimerRef.current)
+    }
+    setDiarySavedNotice(true)
+    diarySavedNoticeTimerRef.current = setTimeout(() => {
+      setDiarySavedNotice(false)
+      diarySavedNoticeTimerRef.current = null
+    }, POST_SAVE_SHARE_DELAY_MS)
+  }
   const saveLockRef = useRef(false)
   const completingRef = useRef(false)
   const shareReadyPdfRef = useRef(null)
@@ -858,6 +885,10 @@ export default function SiteDiaryWorkbenchSurface() {
   // Clear stale locks when opening/switching a report so Save is never silently blocked.
   /* eslint-disable react-hooks/set-state-in-effect -- ESLINT-E3 */
   useEffect(() => {
+    if (diarySavedNoticeTimerRef.current) {
+      clearTimeout(diarySavedNoticeTimerRef.current)
+      diarySavedNoticeTimerRef.current = null
+    }
     saveLockRef.current = false
     completingRef.current = false
     replacementPdfAuthorisationRef.current = null
@@ -866,6 +897,12 @@ export default function SiteDiaryWorkbenchSurface() {
     invalidatePreparedSharePdf('report-edit-reset')
     setSaving(false)
     setPdfPreparing(false)
+    setSavedActionHeld(false)
+    setSaveExportPending(false)
+    setDiarySavedNotice(false)
+    setPdfDownloading(false)
+    setDownloadError('')
+    setDownloadNotice('')
     setJustSaved(false)
     setShareCompletionKind(null)
     setShowSaveBanner(false)
@@ -4002,10 +4039,12 @@ export default function SiteDiaryWorkbenchSurface() {
       completingRef.current = false
       finalSaveInProgressRef.current = false
       releaseReportWriteLock()
+      clearDiarySavedNotice()
       flushSync(() => {
         setReportWriteLocked(false)
         setSaving(false)
         setPdfPreparing(false)
+        setSaveExportPending(false)
         setJustSaved(false)
         setShowSaveBanner(false)
         persistUiErrorRef.current = message
@@ -4025,6 +4064,7 @@ export default function SiteDiaryWorkbenchSurface() {
         setReportWriteLocked(false)
         setSaving(false)
         setPdfPreparing(false)
+        setSaveExportPending(false)
         setJustSaved(true)
         setShowSaveBanner(false)
         persistUiErrorRef.current = userMessage
@@ -4077,6 +4117,7 @@ export default function SiteDiaryWorkbenchSurface() {
         userActivationIsActive: tapUserActivation.isActive,
       })
       saveLockRef.current = true
+      clearDiarySavedNotice()
       flushSync(() => {
         setSaving(true)
         setError('')
@@ -4225,6 +4266,9 @@ export default function SiteDiaryWorkbenchSurface() {
       preparedEntry: shareReadyPdfRef.current,
       reportId: editingReportId,
     })
+    clearDiarySavedNotice()
+    setDownloadError('')
+    setDownloadNotice('')
     flushSync(() => {
       setReportWriteLocked(true)
       setSaving(true)
@@ -4749,6 +4793,9 @@ export default function SiteDiaryWorkbenchSurface() {
       lastPersistedPlantRef.current = plantPayload
       lastPersistedPhotosRef.current = durablePhotosToBaseline(sequenced)
       setReportIsDraft(false)
+      setSavedActionHeld(true)
+      setSaveExportPending(true)
+      markDiarySavedNotice()
       diaryPersistSucceeded = true
       diarySaveLog('success', { reportId: saved.id })
       const startedPrepareGeneration = pdfPrepareGenerationRef.current
@@ -4791,6 +4838,7 @@ export default function SiteDiaryWorkbenchSurface() {
         ) {
           clearPrepareOwnership()
           clearSaveTailCompletionOwner()
+          setSaveExportPending(false)
           return true
         }
         return false
@@ -4854,6 +4902,7 @@ export default function SiteDiaryWorkbenchSurface() {
           flushSync(() => {
             setSaving(false)
             setPdfPreparing(false)
+            setSaveExportPending(false)
             setShareReady(true)
             setError('')
             persistUiErrorRef.current = ''
@@ -5132,6 +5181,7 @@ export default function SiteDiaryWorkbenchSurface() {
       if (!preparedFileMatchesFingerprint(prepared, authoritativeAfterPrepare)) {
         clearSaveTailCompletionOwner()
         clearPrepareOwnership()
+        failPdfAfterSave('We couldn’t finish preparing your report. Tap Save to try again.')
         return
       }
       if (
@@ -5140,6 +5190,8 @@ export default function SiteDiaryWorkbenchSurface() {
         && String(acceptedDurableExportIdRef.current) !== String(prepared.exportId)
       ) {
         clearSaveTailCompletionOwner()
+        clearPrepareOwnership()
+        failPdfAfterSave('We couldn’t finish preparing your report. Tap Save to try again.')
         return
       }
       const preparedFingerprint = authoritativeAfterPrepare
@@ -5179,6 +5231,7 @@ export default function SiteDiaryWorkbenchSurface() {
       flushSync(() => {
         setSaving(false)
         setPdfPreparing(false)
+        setSaveExportPending(false)
         setShareReady(true)
         setError('')
         persistUiErrorRef.current = ''
@@ -5204,6 +5257,7 @@ export default function SiteDiaryWorkbenchSurface() {
     return () => {
       pdfBackgroundPrepareAbortRef.current?.abort()
       pdfBackgroundPrepareAbortRef.current = null
+      if (diarySavedNoticeTimerRef.current) clearTimeout(diarySavedNoticeTimerRef.current)
       // Do not cancel an in-flight handoff to Report Complete (Strict Mode / remount).
       if (completingRef.current) return
       pdfPrepareAbortRef.current?.abort()
@@ -5222,6 +5276,67 @@ export default function SiteDiaryWorkbenchSurface() {
     }
     setError('')
   }, [error])
+
+  const handleDownloadReadyPdf = async () => {
+    const prepared = shareReadyPdfRef.current
+    if (!isWorkbenchSharePrepared(prepared)) {
+      setDownloadNotice('')
+      setDownloadError('The PDF isn’t ready to download. Tap Save to try again.')
+      return
+    }
+    const fileName = prepared.fileName || prepared.file?.name || 'Zlog-Site-Diary.pdf'
+    setPdfDownloading(true)
+    setDownloadError('')
+    setDownloadNotice('')
+    try {
+      if (prepared.blob || prepared.file) {
+        const result = saveSiteDiaryPdfToDownloads({
+          blob: prepared.blob,
+          file: prepared.file,
+          fileName,
+        })
+        if (!result.ok) {
+          setDownloadError(result.message || 'The PDF didn’t download. Try again.')
+          return
+        }
+        setDownloadNotice(result.message || 'PDF downloaded.')
+        return
+      }
+      if (
+        prepared.handoff === SITE_DIARY_PDF_EXPORT_HANDOFF.exportReady
+        && prepared.exportId
+        && prepared.reportId
+      ) {
+        const authorized = await fetchSiteDiaryPdfExportAuthorization(
+          prepared.reportId,
+          prepared.exportId,
+        )
+        if (!authorized.ok) {
+          setDownloadError(userMessageForSiteDiaryPdfExportFailure(authorized) || 'The PDF didn’t download. Try again.')
+          return
+        }
+        const downloaded = downloadSiteDiaryPdfViaSignedUrl({
+          signedUrl: authorized.signedUrl,
+          fileName: authorized.fileName || fileName,
+        })
+        if (!downloaded.ok) {
+          setDownloadError(downloaded.message || 'The PDF didn’t download. Try again.')
+          return
+        }
+        setDownloadNotice(
+          isIosStandaloneDisplay()
+            ? IOS_STANDALONE_PDF_DOWNLOAD_MESSAGE
+            : 'PDF downloaded.',
+        )
+        return
+      }
+      setDownloadError('The PDF didn’t download. Try again.')
+    } catch (err) {
+      setDownloadError(err?.message || 'The PDF didn’t download. Try again.')
+    } finally {
+      setPdfDownloading(false)
+    }
+  }
 
   const visiblePageError = visibleDiaryUnfinishedAreaPageError(
     error,
@@ -5730,7 +5845,6 @@ export default function SiteDiaryWorkbenchSurface() {
         </div>
 
         <GlassSection title="Weather" accent={DIARY_ACCENT}>
-          <label style={labelStyle}>Weather</label>
           <input
             style={{ ...inputStyle, marginBottom: 0 }}
             value={weather}
@@ -5767,6 +5881,8 @@ export default function SiteDiaryWorkbenchSurface() {
           retrySignInEvidenceLoad={labourScan.retrySignInEvidenceLoad}
           signInSheetPickerKey={labourScan.signInSheetPickerKey}
           handleSignInSheetFiles={labourScan.handleSignInSheetFiles}
+          handleAttachAttendanceFile={labourScan.handleAttachAttendanceFile}
+          attachedAttendanceName={labourScan.attachedAttendanceName}
           applyScanOperativesToLabour={labourScan.applyScanOperativesToLabour}
           saveScanLabourSummary={labourScan.saveScanLabourSummary}
           scanSummaryLocked={labourScan.scanSummaryLocked}
@@ -6025,7 +6141,6 @@ export default function SiteDiaryWorkbenchSurface() {
         />
 
         <GlassSection title="Site summary" accent={DIARY_ACCENT}>
-          <label style={labelStyle}>Summary</label>
           <DiaryNarrativeTextarea
             value={siteSummary}
             onInput={handleSiteSummaryInput}
@@ -6041,7 +6156,6 @@ export default function SiteDiaryWorkbenchSurface() {
           style={{ outline: 'none', scrollMarginTop: 16 }}
         >
         <GlassSection title="Signature" accent={DIARY_ACCENT}>
-            <label style={labelStyle}>Signature</label>
             {signature?.preview && signatureMode !== 'draw' ? (
               <div style={{ marginBottom: 0 }}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- ESLINT-PHOTO-001-IMG */}
@@ -6093,7 +6207,7 @@ export default function SiteDiaryWorkbenchSurface() {
         </div>
         </fieldset>
 
-        {isDiaryEditMode ? (
+        {(isDiaryEditMode || savedActionHeld) ? (
         <div
           ref={saveCtaRef}
           className="zlog-diary-save-share-action"
@@ -6161,6 +6275,21 @@ export default function SiteDiaryWorkbenchSurface() {
               {autosaveStatusCopy}
             </p>
           ) : null}
+          {diarySavedNotice && !visiblePageError ? (
+            <p
+              role="status"
+              aria-live="polite"
+              style={{
+                margin: '0 0 10px',
+                fontSize: 14,
+                lineHeight: 1.45,
+                fontWeight: 600,
+                color: '#4ade80',
+              }}
+            >
+              Site Diary saved.
+            </p>
+          ) : null}
           {shareReady && !saving && !visiblePageError ? (
             <p
               role="status"
@@ -6179,9 +6308,9 @@ export default function SiteDiaryWorkbenchSurface() {
           <PrimaryCTA
             type="button"
             surface="workbench"
-            loading={sessionExpired ? false : saving}
+            loading={sessionExpired ? false : saving && !saveExportPending}
             onClick={sessionExpired ? goToSignInForSave : handleSave}
-            disabled={sessionExpired ? false : saving || justSaved}
+            disabled={sessionExpired ? false : visiblePageError ? false : saving || justSaved || (saveExportPending && !shareReady)}
           >
             <span
               style={{
@@ -6193,7 +6322,7 @@ export default function SiteDiaryWorkbenchSurface() {
             >
               {sessionExpired ? (
                 'Sign in to save your work'
-              ) : saving ? (
+              ) : (saving && !saveExportPending) ? (
                 <>
                   <span
                     aria-hidden
@@ -6209,11 +6338,55 @@ export default function SiteDiaryWorkbenchSurface() {
                   />
                   {SAVE_CTA_SAVING_LABEL}
                 </>
+              ) : shareReady ? (
+                SAVE_CTA_SHARE_READY_LABEL
+              ) : saveExportPending ? (
+                <>
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: '50%',
+                      border: '2px solid color-mix(in srgb, var(--text) 30%, transparent)',
+                      borderTopColor: 'var(--text)',
+                      animation: 'zlog-save-spin 0.7s linear infinite',
+                      flexShrink: 0,
+                    }}
+                  />
+                  Preparing your report…
+                </>
               ) : (
-                shareReady ? SAVE_CTA_SHARE_READY_LABEL : SAVE_CTA_IDLE_LABEL
+                SAVE_CTA_IDLE_LABEL
               )}
             </span>
           </PrimaryCTA>
+          {shareReady ? (
+            <div style={{ marginTop: 10 }}>
+              <SecondaryButton
+                type="button"
+                disabled={pdfDownloading}
+                onClick={handleDownloadReadyPdf}
+                style={{ width: '100%' }}
+              >
+                {pdfDownloading ? 'Downloading…' : downloadError ? 'Try again' : 'Download PDF'}
+              </SecondaryButton>
+              <p
+                role={downloadError ? 'alert' : 'status'}
+                aria-live="polite"
+                style={{
+                  margin: '8px 0 0',
+                  fontSize: 13,
+                  lineHeight: 1.45,
+                  color: downloadError ? '#ff6b6b' : 'color-mix(in srgb, var(--text) 72%, var(--text-2))',
+                }}
+              >
+                {downloadError
+                  || downloadNotice
+                  || 'Saves this PDF on this device.'}
+              </p>
+            </div>
+          ) : null}
         </div>
         ) : null}
         <style>{`

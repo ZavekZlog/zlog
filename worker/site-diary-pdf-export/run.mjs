@@ -1,4 +1,4 @@
-import { validateWorkerEnv } from './env.js'
+import { loadWorkerEnvLocal, validateWorkerEnv } from './env.js'
 import { createWorkerSupabaseAdmin } from './supabase-admin.js'
 import { runClaimLoop } from './claim-loop.js'
 import { loadProductionPdfExecutor } from './load-production-pdf-executor.mjs'
@@ -15,6 +15,7 @@ process.on('SIGINT', () => onShutdownSignal('SIGINT'))
 process.on('SIGTERM', () => onShutdownSignal('SIGTERM'))
 
 async function main() {
+  loadWorkerEnvLocal(process.env)
   const config = validateWorkerEnv(process.env)
 
   console.log('[site-diary-pdf-worker] Worker starting.')

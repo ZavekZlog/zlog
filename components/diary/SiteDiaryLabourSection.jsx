@@ -26,6 +26,54 @@ function labourSummaryDateLabel(value) {
   return labourSummaryDateFormat.format(date)
 }
 
+function AttachAttendanceFile({ onFiles, disabled = false }) {
+  return (
+    <div style={{ marginTop: 10 }}>
+      <label
+        className="zlog-secondary-btn"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          minHeight: 40,
+          padding: '8px 12px',
+          borderRadius: 10,
+          border: '1px dashed var(--edge)',
+          background: 'var(--plate)',
+          color: 'var(--text)',
+          fontSize: 13,
+          fontWeight: 600,
+          cursor: disabled ? 'default' : 'pointer',
+          position: 'relative',
+          overflow: 'hidden',
+          opacity: disabled ? 0.5 : 1,
+        }}
+      >
+        <input
+          type="file"
+          accept="image/*,.pdf,.csv,.xls,.xlsx,application/pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          disabled={disabled}
+          onChange={(event) => {
+            const input = event.target
+            const files = Array.from(input.files || []).filter(Boolean)
+            input.value = ''
+            if (files.length && typeof onFiles === 'function') onFiles(files)
+          }}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            opacity: 0,
+            cursor: disabled ? 'default' : 'pointer',
+          }}
+        />
+        Attach digital sign-in
+      </label>
+      <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.4 }}>
+        The file is kept with the diary and is not scanned. Enter the labour figures in Manual Entry.
+      </p>
+    </div>
+  )
+}
+
 function scanSummaryRowHasPerson(row) {
   if (!row || typeof row !== 'object') return false
   const workers = Number(row.headcount)
@@ -60,6 +108,8 @@ export function SiteDiaryLabourSection({
   retrySignInEvidenceLoad,
   signInSheetPickerKey,
   handleSignInSheetFiles,
+  handleAttachAttendanceFile,
+  attachedAttendanceName = '',
   applyScanOperativesToLabour,
   saveScanLabourSummary,
   scanSummaryLocked = false,
@@ -261,6 +311,15 @@ export function SiteDiaryLabourSection({
           Manual Entry
         </button>
       </div>
+      <AttachAttendanceFile
+        disabled={scanLoading}
+        onFiles={handleAttachAttendanceFile}
+      />
+      {attachedAttendanceName && !hasSignInSheetEvidenceOnForm ? (
+        <p style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--text)', lineHeight: 1.4 }}>
+          Attached record: {attachedAttendanceName}
+        </p>
+      ) : null}
 
       {labourMode === 'scan' && (
         <div style={{ marginBottom: 10 }}>
@@ -811,6 +870,11 @@ export function SiteDiaryLabourSection({
               }}
             />
           )}
+          {!scanSheetPreview && attachedAttendanceName ? (
+            <p style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--text)', lineHeight: 1.4 }}>
+              Attached record: {attachedAttendanceName}
+            </p>
+          ) : null}
           {!scanSheetPreview && scanSignInEvidenceLoading && (
             <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text-2)' }}>
               Loading Attendance Register…
@@ -848,6 +912,10 @@ export function SiteDiaryLabourSection({
               cameraLabel="Take new photo"
               galleryLabel="Choose from gallery"
               hint="Take new photo or Choose from gallery replaces this Attendance Register photo and clears its current scan results. Scan register again reads the current photo again. Delete photo removes the photo; the applied Labour Attendance Summary is unchanged."
+            />
+            <AttachAttendanceFile
+              disabled={scanLoading}
+              onFiles={handleAttachAttendanceFile}
             />
           </div>
           <div

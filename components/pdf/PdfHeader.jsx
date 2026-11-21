@@ -1,4 +1,4 @@
-import { View, Text, Image, Link, StyleSheet } from '@react-pdf/renderer'
+import { View, Text, Image, StyleSheet } from '@react-pdf/renderer'
 import {
   PDF_FOOTER_BLOCK_H,
   PDF_FOOTER_TOP,
@@ -7,7 +7,6 @@ import {
   resolvePdfAccent,
 } from '@/lib/diary-pdf-layout'
 
-const ZLOG_URL = 'https://zlog.app'
 const MUTED = '#66707A'
 const RULE = '#D3D8DD'
 
@@ -26,16 +25,22 @@ export const PDF_ACCENT_BANNER_H = PDF_HEADER_BLOCK_H
 export function PdfHeader({
   brandColor = null,
   logoUrl = null,
-  companyName = '',
   reportTitle = '',
+  projectName = '',
+  projectReference = '',
+  edgeBleed = 0,
 }) {
   const color = resolvePdfAccent(brandColor)
   const title = String(reportTitle || 'DAILY SITE DIARY').trim() || 'DAILY SITE DIARY'
+  const name = String(projectName || '').trim()
+  const reference = String(projectReference || '').trim()
+  const bleed = Number(edgeBleed) || 0
 
   const styles = StyleSheet.create({
     headerShell: {
       height: PDF_ACCENT_BANNER_H,
       marginBottom: 18,
+      marginHorizontal: -bleed,
     },
     // Inner fill: backgroundColor on a nested view is more reliable across
     // wrap pages than putting the fill only on the fixed shell.
@@ -58,25 +63,32 @@ export function PdfHeader({
       width: 68,
       height: 32,
     },
-    titleBlock: {
-      flex: 1,
-      paddingLeft: 12,
-      alignItems: 'flex-end',
+    titleCenter: {
+      position: 'absolute',
+      left: 86,
+      right: 124,
+      top: 0,
+      bottom: 0,
+      justifyContent: 'center',
+      alignItems: 'center',
     },
     title: {
       color: '#FFFFFF',
       fontSize: 11,
       fontFamily: 'Helvetica-Bold',
       letterSpacing: 1.4,
-      textAlign: 'right',
+      textAlign: 'center',
     },
-    company: {
+    referenceSlot: {
+      width: 116,
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+    },
+    reference: {
       color: '#FFFFFF',
-      fontSize: 7.5,
+      fontSize: 8,
       fontFamily: 'Helvetica',
-      marginTop: 2,
       textAlign: 'right',
-      opacity: 0.92,
     },
   })
 
@@ -89,9 +101,13 @@ export function PdfHeader({
         ) : (
           <View style={styles.logoSpacer} />
         )}
-        <View style={styles.titleBlock}>
+        <View style={styles.referenceSlot}>
+          {name ? <Text style={styles.reference}>{name}</Text> : null}
+          {reference ? <Text style={styles.reference}>{reference}</Text> : null}
+          {!name && !reference ? <Text style={styles.reference}> </Text> : null}
+        </View>
+        <View style={styles.titleCenter}>
           <Text style={styles.title}>{title}</Text>
-          {companyName ? <Text style={styles.company}>{companyName}</Text> : null}
         </View>
       </View>
     </View>
@@ -99,14 +115,18 @@ export function PdfHeader({
 }
 
 /**
- * Footer for every page — inset to the print margin so the Zlog attribution
- * always sits inside the safe zone and is never clipped by the page edge.
+ * Footer for every page — inset to the print margin.
  *
  * Anchored from the top with an explicit height: a `fixed` box anchored by
  * `bottom` resolves against an unmeasured page in react-pdf and is emitted at
  * an arbitrary offset, which is how stray painted elements reached page edges.
+ * The page number is its own fixed text: a render callback nested inside the
+ * fixed footer is never evaluated.
  */
-export function PdfFooter({ reportReference = '' }) {
+export function PdfFooter({ projectName = '', projectReference = '' }) {
+  const name = String(projectName || '').trim()
+  const reference = String(projectReference || '').trim()
+  const identity = [name, reference].filter(Boolean).join(' · ') || ' '
   const styles = StyleSheet.create({
     footer: {
       position: 'absolute',
@@ -125,12 +145,18 @@ export function PdfFooter({ reportReference = '' }) {
       alignItems: 'center',
       marginTop: 6,
     },
-    brandLink: {
+    identityText: {
       width: '33.33%',
       fontSize: 7,
       color: MUTED,
       fontFamily: 'Helvetica',
-      textDecoration: 'none',
+    },
+    titleText: {
+      width: '33.33%',
+      fontSize: 7,
+      color: MUTED,
+      fontFamily: 'Helvetica',
+      textAlign: 'center',
     },
     pageSlot: { width: '33.33%' },
     pageText: {
@@ -138,13 +164,6 @@ export function PdfFooter({ reportReference = '' }) {
       top: PDF_FOOTER_TOP + 6.6,
       left: PDF_PAGE_PAD_X,
       right: PDF_PAGE_PAD_X,
-      fontSize: 7,
-      color: MUTED,
-      fontFamily: 'Helvetica',
-      textAlign: 'center',
-    },
-    referenceText: {
-      width: '33.33%',
       fontSize: 7,
       color: MUTED,
       fontFamily: 'Helvetica',
@@ -157,13 +176,9 @@ export function PdfFooter({ reportReference = '' }) {
       <View style={styles.footer} fixed>
         <View style={styles.hairRule} />
         <View style={styles.row}>
-          <Link src={ZLOG_URL} style={styles.brandLink}>
-            Produced with Zlog
-          </Link>
+          <Text style={styles.identityText}>{identity}</Text>
+          <Text style={styles.titleText}>Daily Site Diary</Text>
           <Text style={styles.pageSlot}> </Text>
-          <Text style={styles.referenceText}>
-            {reportReference ? `Report reference: ${reportReference}` : ' '}
-          </Text>
         </View>
       </View>
       <Text
