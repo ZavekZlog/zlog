@@ -1,0 +1,15 @@
+diff --git a/node_modules/@react-pdf/layout/lib/index.js b/node_modules/@react-pdf/layout/lib/index.js
+index b7ea5e3..89345ea 100644
+--- a/node_modules/@react-pdf/layout/lib/index.js
++++ b/node_modules/@react-pdf/layout/lib/index.js
+@@ -2177,7 +2177,9 @@ const setAlignItems = setAlign('items');
+  * @returns Node instance wrapper
+  */
+ const setFlexShrink = (value) => (node) => {
+-    return setYogaValue('flexShrink')(value || 1)(node);
++    // `||` treats an explicit 0 as missing and forces the default. `??` keeps
++    // that default at 1, and lets a node opt out with flexShrink: 0.
++    return setYogaValue('flexShrink')(value ?? 1)(node);
+ };
+ 
+ /**
