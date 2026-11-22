@@ -16,14 +16,18 @@ Full width, solid, in the client's brand colour, on every page. Client logo smal
 One shared banner component is used by every report type Zlog issues, including the site diary, weekly progress, an H&S inspection, and any later type. The banner is identical on every page of a report, including the cover: the same title, the same case, and the same position. That title is DAILY SITE DIARY. It is centred on the banner's horizontal centre, measured from the title's text block, not from where the text starts. The logo keeps its present size. No page substitutes its own wording, such as "Site records".
 
 ## 4. Below the banner
-The only element carrying the client's brand colour below the banner is the top highlight rule on each container table. The page frame, section title text, label cell text, photo reference labels, grid lines and footer all take fixed neutral colours. The cover band project name is the exception described in section 6. Where the brand colour is red, the cover name uses the same dark slate as the banner.
+A report's colours are sampled only from the reporting company, the company producing the report, such as CBRE or Milestone. They are never sampled from the end client the work is for.
 
-Superseded: the cover name is not that exception, and it does not switch to dark slate when the brand is red. The cover name is neutral grey. The red rule in section 12 still applies to the banner, the container rules, and the logo.
+The only element carrying that brand colour below the banner is the top highlight rule on each container table, and only when the brand is not red-dominant. The page frame, section title text, label cell text, photo reference labels, grid lines and footer all take fixed neutral colours. The cover name is neutral grey.
+
+Superseded: "the client's brand colour", where that was read as the end client's colour, and "Where the brand colour is red, the cover name uses the same dark slate as the banner." The cover name does not switch to dark slate. Grid lines are not a brand colour. For a red-dominant brand the top rules are not a brand colour either; section 12 states what they use.
 
 ## 5. Container tables
 Each section is built top to bottom as: a fine rule in the brand colour, full width, closer to a hairline than a bar; then a dove grey title bar with the title in neutral ink, bold, uppercase, left aligned with clear left padding, numbered sequentially through the document; then the table body. The only brand-coloured element on the container is that top rule. Inside: full grid lines on every cell and every row with no missing dividers; every row has a complete horizontal rule across the full width; label cells dove grey, data cells white; no alternating row shading; all cell text vertically centred; body text about 9.5pt; clear left padding. A single line of text sits in a compact row with modest padding. Row height is always the content height plus that padding. A row, a section title bar, and a paragraph block size to their content and are never given a fixed height that clips the text. Nothing that follows may overlap them. Rows never stretch to fill a page. A page ending with space below it is correct.
 
-Superseded: "in light neutral grey" and "every cell has a complete border on all four sides" where each cell drew its own four borders. Measured on `reference-mansfield.pdf`, a grid stroke is 0.8pt in `#73807a`. Each shared edge between cells is that one stroke. The previous Zlog rule was 0.9pt on every side of every cell, so a shared edge was two strokes and read about 1.8pt. The new width is 0.8pt, drawn once. The Mansfield header also carries a 2.2pt brand line on top of the title bar; Zlog keeps the hairline already stated above.
+Superseded: "in light neutral grey" and "every cell has a complete border on all four sides" where each cell drew its own four borders. Also superseded: the grid colour `#73807a`, and the older bluish `#C3CFDA`. A grid line between cells is one fixed light neutral grey for every reporting company: `#C6C7C8`. Its red, green and blue values are 198, 199 and 200, within 2 of each other, so it carries no blue tint and no green tint. `#C4C7CA` is the lightness aimed at; it is not the issued colour, because its channels are 6 apart. The stroke weight stays the Mansfield weight, 0.8pt, drawn once per shared edge. The Mansfield header also carries a 2.2pt brand line on top of the title bar; Zlog keeps the hairline already stated above.
+
+The top rule on each table, and each section's top rule, is the reporting company's brand colour. When that brand is red-dominant, section 12 replaces it.
 
 Every container is a header bar plus a bordered body. The body starts on the bar's bottom edge, with no gap. A text-only body — Site Summary, the declaration paragraph, an attendance-register caption, and any similar block — sits inside that same perimeter, with the same left padding as the table cells. Measured on the Mansfield reference, that left padding is 9.7pt. No text sits unbordered under a header.
 
@@ -113,7 +117,15 @@ Superseded: Declaration & signature follows Supporting Documents when that secti
 Every page: one composite string on the left and the page line on the right, with nothing centred. The left string is the project reference, the document title "Daily Site Diary", and the report date, separated by middots. The right string is "Produced with Zlog · Page x of y". "Produced with Zlog" is a link only when ZLOG_LANDING_URL is a real address. While that constant is the placeholder TODO, those words are plain text and are not a link. The line sits above a thin rule.
 
 ## 12. The red exception
-Red means hazard on site. Where the brand colour is red: the banner becomes dark slate, the container top rules become charcoal, and the client's red appears in their logo only. Applied automatically from the brand colour.
+Red means hazard on site. A brand is red-dominant by the existing `isPdfBrandRed` test, and by no other test: the hue sits within 15 degrees of red (0–15 or 345–360), saturation is at least 0.28, and lightness is between 0.12 and 0.72. Orange is outside that band. The test is applied to the reporting company's colour.
+
+The header banner is coloured as it is today. A red-dominant brand still paints that banner in dark slate. This rule does not change the banner.
+
+For a red-dominant brand, red is used only in the header banner area: the banner itself, or the logo inside it. Red must not appear anywhere else in the report. No table rule, title bar, section rule, text, icon, badge or photo label takes red, a red tint, charcoal, or a darker step of red.
+
+The top line on each table, and each section's top rule, carries no brand colour when the brand is red-dominant. Those lines use the existing dove grey already used for shaded cells and title bars, `#E4E2DE`, and nothing else.
+
+Superseded: "the container top rules become charcoal, and the client's red appears in their logo only." Charcoal is not used. Red below the banner is not used.
 
 ## 13. Provenance
 The labour table carries a source line beside its heading, small, italic, grey, right aligned: "Source: site attendance register, scanned" where a register is attached, or "Source: entered manually" where it is not.

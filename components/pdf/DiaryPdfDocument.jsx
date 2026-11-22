@@ -26,6 +26,7 @@ import {
   PDF_PHOTO_FIT,
   PDF_PHOTO_FRAME_BORDER,
   PDF_PHOTO_RULE_W,
+  PDF_DOVE_GREY,
   PDF_AREA_SUBHEADING_FONT,
   PDF_AREA_SUBHEADING_GAP,
   PDF_AREA_SUBHEADING_LINE,
@@ -72,10 +73,10 @@ Font.registerHyphenationCallback((word) => {
  * reference design; every structured schedule in the report draws from these
  * same tokens so no table can drift away from it visually.
  */
-const TABLE_BORDER = '#73807A'
-const TABLE_RULE = '#73807A'
+const TABLE_BORDER = '#C6C7C8'
+const TABLE_RULE = '#C6C7C8'
 /**
- * One gridline, measured on the Mansfield reference: 0.8pt, drawn once.
+ * One gridline: neutral #C6C7C8, Mansfield weight 0.8pt, drawn once.
  * A shared edge is this single stroke, never one stroke from each neighbour.
  */
 const TABLE_BORDER_W = 0.8
@@ -86,7 +87,6 @@ const TABLE_PAD_Y = 4
 const TABLE_PAD_X = 9.7
 const TABLE_LABEL_SIZE = 7.8
 const TABLE_VALUE_SIZE = 9.5
-const PDF_DOVE_GREY = '#E4E2DE'
 const TABLE_TOP_RULE_W = 0.75
 
 /**
