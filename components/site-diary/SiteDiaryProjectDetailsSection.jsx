@@ -118,6 +118,7 @@ export function SiteDiaryProjectDetailsSection(props) {
     showLogoCompanyManualHint,
     logoPreview,
     logoPreviewBackdrop,
+    hasReportingBranding,
     reportingOnBehalfOf,
     author,
     authorRole,
@@ -294,6 +295,16 @@ export function SiteDiaryProjectDetailsSection(props) {
             aria-label="Reporting Company Name"
           />
         </div>
+        {hasReportingBranding ? null : (
+          <div style={{ margin: '-4px 0 12px' }}>
+            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', margin: '0 0 4px', lineHeight: 1.45 }}>
+              No branding selected: default grey applied
+            </p>
+            <p style={{ fontSize: 14, color: 'var(--text-2)', margin: 0, lineHeight: 1.45 }}>
+              Upload your company logo to use your colour.
+            </p>
+          </div>
+        )}
         {namePrefilledFromLogo && reportingCompany ? (
           <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 12px' }}>
             Detected from your logo — edit if needed.
