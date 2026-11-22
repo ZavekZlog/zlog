@@ -72,19 +72,18 @@ Font.registerHyphenationCallback((word) => {
  * reference design; every structured schedule in the report draws from these
  * same tokens so no table can drift away from it visually.
  */
-const TABLE_BORDER = '#9FB1C2'
-const TABLE_RULE = '#C3CFDA'
+const TABLE_BORDER = '#73807A'
+const TABLE_RULE = '#73807A'
 /**
- * One gridline system for every schedule and boxed group. The perimeter is
- * fractionally stronger than the internal rules — enough to read as hierarchy
- * in print and after photocopying, never enough to look like a spreadsheet.
+ * One gridline, measured on the Mansfield reference: 0.8pt, drawn once.
+ * A shared edge is this single stroke, never one stroke from each neighbour.
  */
-const TABLE_BORDER_W = 1.1
-const TABLE_RULE_W = 0.9
+const TABLE_BORDER_W = 0.8
+const TABLE_RULE_W = 0.8
 const TABLE_LABEL_BG = '#EFF2F4'
 const TABLE_LABEL_INK = '#3D464E'
 const TABLE_PAD_Y = 4
-const TABLE_PAD_X = 8
+const TABLE_PAD_X = 9.7
 const TABLE_LABEL_SIZE = 7.8
 const TABLE_VALUE_SIZE = 9.5
 const PDF_DOVE_GREY = '#E4E2DE'
@@ -315,6 +314,9 @@ const styles = StyleSheet.create({
   // 20% / 30% / 20% / 30% of the content width, so A4 width is used properly.
   scheduleGrid: {
     width: '100%',
+    borderWidth: TABLE_RULE_W,
+    borderStyle: 'solid',
+    borderColor: TABLE_RULE,
   },
   scheduleGridRow: {
     flexDirection: 'row',
@@ -326,20 +328,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
   },
-  scheduleGridPairDivider: {
-    borderLeftWidth: TABLE_RULE_W,
-    borderLeftStyle: 'solid',
-    borderLeftColor: TABLE_RULE,
-  },
   scheduleGridLabelCell: {
     width: '40%',
     justifyContent: 'center',
     paddingVertical: PAGE1_GRID_PAD_Y,
     paddingHorizontal: TABLE_PAD_X,
     backgroundColor: PDF_DOVE_GREY,
-    borderWidth: TABLE_RULE_W,
     borderStyle: 'solid',
     borderColor: TABLE_RULE,
+    borderRightWidth: TABLE_RULE_W,
+    borderBottomWidth: TABLE_RULE_W,
   },
   scheduleGridLabel: {
     color: TABLE_LABEL_INK,
@@ -354,9 +352,10 @@ const styles = StyleSheet.create({
     paddingVertical: PAGE1_GRID_PAD_Y,
     paddingHorizontal: TABLE_PAD_X,
     backgroundColor: '#FFFFFF',
-    borderWidth: TABLE_RULE_W,
     borderStyle: 'solid',
     borderColor: TABLE_RULE,
+    borderRightWidth: TABLE_RULE_W,
+    borderBottomWidth: TABLE_RULE_W,
   },
   scheduleGridValue: {
     color: INK,
@@ -480,6 +479,31 @@ const styles = StyleSheet.create({
     lineHeight: 1.45,
     color: BODY,
   },
+  // Text under a header. The perimeter is the same single grid stroke as a table.
+  textBody: {
+    width: '100%',
+    borderWidth: TABLE_RULE_W,
+    borderStyle: 'solid',
+    borderColor: TABLE_RULE,
+    paddingVertical: TABLE_PAD_Y,
+    paddingHorizontal: TABLE_PAD_X,
+  },
+  // A paragraph that opens a table, so the table's perimeter is the border
+  // and this row draws only the line beneath itself.
+  textBodyRow: {
+    width: '100%',
+    borderBottomWidth: TABLE_RULE_W,
+    borderBottomStyle: 'solid',
+    borderBottomColor: TABLE_RULE,
+    paddingVertical: TABLE_PAD_Y,
+    paddingHorizontal: TABLE_PAD_X,
+  },
+  textBodyCopy: {
+    fontSize: TABLE_VALUE_SIZE,
+    lineHeight: 1.45,
+    color: BODY,
+    fontFamily: 'Helvetica',
+  },
 
   // ---- Photographic plates ------------------------------------------------
   // ---- Photographic record: fixed cells in the same family as the tables ---
@@ -551,12 +575,14 @@ const styles = StyleSheet.create({
   // ---- Shared structured-record table (same family as the Page 1 grid) ----
   dataTable: {
     width: '100%',
+    borderWidth: TABLE_RULE_W,
     borderStyle: 'solid',
     borderColor: TABLE_RULE,
     flexShrink: 0,
   },
-  // The row itself draws no rule. Each cell draws its own four sides, so a
-  // horizontal line cannot stop halfway across a row.
+  // The container draws the perimeter once. A cell draws only its right and
+  // bottom edges, and the last column and last row draw neither, so a shared
+  // line is one stroke.
   // flexShrink 0 keeps the measured row height. The default is 1, and an
   // overfull page would otherwise compress the row onto the text below it.
   dataHeaderRow: {
@@ -585,12 +611,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: TABLE_PAD_Y,
     paddingHorizontal: TABLE_PAD_X,
-    borderWidth: TABLE_RULE_W,
     borderStyle: 'solid',
     borderColor: TABLE_RULE,
+    borderRightWidth: TABLE_RULE_W,
+    borderBottomWidth: TABLE_RULE_W,
     flexShrink: 0,
   },
-  dataCellLast: { borderRightWidth: TABLE_RULE_W },
+  dataCellLast: { borderRightWidth: 0 },
   dataLabelCell: { backgroundColor: PDF_DOVE_GREY },
   dataHeaderText: {
     color: TABLE_LABEL_INK,
@@ -699,6 +726,29 @@ function cleanPdfValue(value) {
 }
 
 /**
+ * Right and bottom edges only. The container owns the perimeter, and the last
+ * column and last row leave those edges to it, so a shared line is drawn once.
+ */
+function sharedGridEdge(lastColumn, lastRow) {
+  return {
+    borderRightWidth: lastColumn ? 0 : TABLE_RULE_W,
+    borderBottomWidth: lastRow ? 0 : TABLE_RULE_W,
+  }
+}
+
+/**
+ * Text that belongs under a header. `row` sits inside a table perimeter and
+ * draws only the line under the paragraph. `box` is the whole body.
+ */
+function TextBody({ children, edge = 'box' }) {
+  return (
+    <View style={edge === 'row' ? styles.textBodyRow : styles.textBody}>
+      <Text style={styles.textBodyCopy}>{children}</Text>
+    </View>
+  )
+}
+
+/**
  * Four-column information schedule: two label/value pairs per row. Rows without
  * a value are dropped rather than rendered empty, so nothing on Page 1 is
  * fabricated and the grid never shows a hole.
@@ -729,43 +779,52 @@ function ScheduleGrid({ rows }) {
     <View style={styles.scheduleGrid}>
       {gridRows.map((pair, rowIndex) => {
         const full = pair[0].span === 'full'
+        const lastRow = rowIndex === gridRows.length - 1
         return (
-          <View
-            key={pair[0].label}
-            style={[
-              styles.scheduleGridRow,
-              rowIndex === gridRows.length - 1 ? { borderBottomWidth: 0 } : null,
-            ]}
-            wrap={false}
-          >
+          <View key={pair[0].label} style={styles.scheduleGridRow} wrap={false}>
             {full ? (
               <View style={[styles.scheduleGridPair, { width: '100%' }]}>
-                <View style={[styles.scheduleGridLabelCell, { width: '20%' }]}>
+                <View
+                  style={[
+                    styles.scheduleGridLabelCell,
+                    { width: '20%' },
+                    sharedGridEdge(false, lastRow),
+                  ]}
+                >
                   <Text style={styles.scheduleGridLabel}>{pair[0].label}</Text>
                 </View>
-                <View style={[styles.scheduleGridValueCell, { width: '80%' }]}>
+                <View
+                  style={[
+                    styles.scheduleGridValueCell,
+                    { width: '80%' },
+                    sharedGridEdge(true, lastRow),
+                  ]}
+                >
                   <Text style={styles.scheduleGridValue}>{pair[0].value}</Text>
                 </View>
               </View>
             ) : (
               <>
                 {pair.map((item, pairIndex) => (
-                  <View
-                    key={item.label}
-                    style={[
-                      styles.scheduleGridPair,
-                      pairIndex === 1 ? styles.scheduleGridPairDivider : null,
-                    ]}
-                  >
-                    <View style={styles.scheduleGridLabelCell}>
+                  <View key={item.label} style={styles.scheduleGridPair}>
+                    <View
+                      style={[styles.scheduleGridLabelCell, sharedGridEdge(false, lastRow)]}
+                    >
                       <Text style={styles.scheduleGridLabel}>{item.label}</Text>
                     </View>
-                    <View style={styles.scheduleGridValueCell}>
+                    <View
+                      style={[
+                        styles.scheduleGridValueCell,
+                        sharedGridEdge(pairIndex === pair.length - 1 && pair.length > 1, lastRow),
+                      ]}
+                    >
                       <Text style={styles.scheduleGridValue}>{item.value}</Text>
                     </View>
                   </View>
                 ))}
-                {pair.length === 1 ? <View style={styles.scheduleGridPair} /> : null}
+                {pair.length === 1 ? (
+                  <View style={[styles.scheduleGridPair, sharedGridEdge(true, lastRow)]} />
+                ) : null}
               </>
             )}
           </View>
@@ -829,7 +888,7 @@ function SectionHeading({ children, accent, number = null }) {
 function DataTable({ columns, rows, totals = null }) {
   const lastIndex = columns.length - 1
 
-  const renderCells = (record, role) =>
+  const renderCells = (record, role, lastRow) =>
     columns.map((column, index) => {
       const textStyle =
         role === 'header'
@@ -846,7 +905,7 @@ function DataTable({ columns, rows, totals = null }) {
               width: column.width,
               backgroundColor: '#FFFFFF',
             },
-            index === lastIndex ? styles.dataCellLast : null,
+            sharedGridEdge(index === lastIndex, lastRow),
           ]}
         >
           <Text style={[textStyle, role !== 'header' && column.numeric ? styles.numeric : null]}>
@@ -871,25 +930,19 @@ function DataTable({ columns, rows, totals = null }) {
         {renderCells(
           Object.fromEntries(columns.map((column) => [column.key, column.header])),
           'header',
+          rows.length === 0 && !totals,
         )}
       </View>
 
       {rows.map((record, rowIndex) => (
-        <View
-          key={`row-${rowIndex}`}
-          style={[
-            styles.dataRow,
-            rowIndex === rows.length - 1 && !totals ? { borderBottomWidth: 0 } : null,
-          ]}
-          wrap={false}
-        >
-          {renderCells(record, 'body')}
+        <View key={`row-${rowIndex}`} style={styles.dataRow} wrap={false}>
+          {renderCells(record, 'body', rowIndex === rows.length - 1 && !totals)}
         </View>
       ))}
 
       {totals ? (
         <View style={styles.dataTotalsRow} wrap={false}>
-          {renderCells(totals, 'total')}
+          {renderCells(totals, 'total', true)}
         </View>
       ) : null}
     </View>
@@ -906,23 +959,26 @@ function ScheduleList({ rows, labelWidth = '30%' }) {
 
   return (
     <View style={styles.dataTable}>
-      {visible.map((item, index) => (
-        <View
-          key={item.label}
-          style={[
-            styles.dataRow,
-            index === visible.length - 1 ? { borderBottomWidth: 0 } : null,
-          ]}
-          wrap={false}
-        >
-          <View style={[styles.dataCell, styles.dataLabelCell, { width: labelWidth }]}>
-            <Text style={styles.dataHeaderText}>{item.label}</Text>
+      {visible.map((item, index) => {
+        const lastRow = index === visible.length - 1
+        return (
+          <View key={item.label} style={styles.dataRow} wrap={false}>
+            <View
+              style={[
+                styles.dataCell,
+                styles.dataLabelCell,
+                { width: labelWidth },
+                sharedGridEdge(false, lastRow),
+              ]}
+            >
+              <Text style={styles.dataHeaderText}>{item.label}</Text>
+            </View>
+            <View style={[styles.dataCell, { flex: 1 }, sharedGridEdge(true, lastRow)]}>
+              <Text style={styles.dataValueText}>{item.value}</Text>
+            </View>
           </View>
-          <View style={[styles.dataCell, styles.dataCellLast, { flex: 1 }]}>
-            <Text style={styles.dataValueText}>{item.value}</Text>
-          </View>
-        </View>
-      ))}
+        )
+      })}
     </View>
   )
 }
@@ -1665,7 +1721,7 @@ function ReportContentPage({
       {String(siteSummary || '').trim() ? (
         <>
           <SectionBanner accent={accent} number={sectionNumbers.summary}>Site summary</SectionBanner>
-          <Text style={styles.body}>{siteSummary}</Text>
+          <TextBody>{siteSummary}</TextBody>
         </>
       ) : null}
       <LabourTable items={labour}
@@ -1743,6 +1799,7 @@ function DeclarationBlock({
     { label: 'Author Name', value: authorName?.trim() || '—' },
     { label: 'Position / Role', value: authorRole?.trim() || '—' },
     { label: 'Date', value: reportDate || '—' },
+    { label: 'Signature', signature: true },
   ]
 
   return (
@@ -1750,31 +1807,44 @@ function DeclarationBlock({
       <SectionBanner accent={accent} presenceAhead={presenceAhead} number={number}>
         Declaration &amp; signature
       </SectionBanner>
-      <Text style={[styles.signDeclaration, styles.body]}>{DECLARATION}</Text>
       <View style={styles.dataTable}>
-        {rows.map((item) => (
-          <View key={item.label} style={styles.dataRow} wrap={false}>
-            <View style={[styles.dataCell, styles.dataLabelCell, { width: '32%' }]}>
-              <Text style={styles.dataHeaderText}>{item.label}</Text>
+        <TextBody edge="row">{DECLARATION}</TextBody>
+        {rows.map((item, index) => {
+          const lastRow = index === rows.length - 1
+          return (
+            <View key={item.label} style={styles.dataRow} wrap={false}>
+              <View
+                style={[
+                  styles.dataCell,
+                  styles.dataLabelCell,
+                  { width: '32%' },
+                  sharedGridEdge(false, lastRow),
+                ]}
+              >
+                <Text style={styles.dataHeaderText}>{item.label}</Text>
+              </View>
+              <View
+                style={[
+                  styles.dataCell,
+                  { flex: 1 },
+                  item.signature ? styles.signValueCell : null,
+                  sharedGridEdge(true, lastRow),
+                ]}
+              >
+                {item.signature ? (
+                  signatureSrc ? (
+                    // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image
+                    <Image src={signatureSrc} style={styles.signImage} />
+                  ) : (
+                    <Text style={styles.dataValueText}>No signature captured</Text>
+                  )
+                ) : (
+                  <Text style={styles.dataValueText}>{item.value}</Text>
+                )}
+              </View>
             </View>
-            <View style={[styles.dataCell, styles.dataCellLast, { flex: 1 }]}>
-              <Text style={styles.dataValueText}>{item.value}</Text>
-            </View>
-          </View>
-        ))}
-        <View style={[styles.dataRow, { borderBottomWidth: 0 }]} wrap={false}>
-          <View style={[styles.dataCell, styles.dataLabelCell, { width: '32%' }]}>
-            <Text style={styles.dataHeaderText}>Signature</Text>
-          </View>
-          <View style={[styles.dataCell, styles.dataCellLast, styles.signValueCell]}>
-            {signatureSrc ? (
-              // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image
-              <Image src={signatureSrc} style={styles.signImage} />
-            ) : (
-              <Text style={styles.dataValueText}>No signature captured</Text>
-            )}
-          </View>
-        </View>
+          )
+        })}
       </View>
     </View>
   )
@@ -1796,7 +1866,7 @@ function attendanceRegisterPageGroups(sheets) {
 // boxes. The image gets whatever height is left in the content box. The group
 // then equals one printable page and cannot compress the sections above it.
 const ATTENDANCE_BANNER_H = 14 + TABLE_TOP_RULE_W + 10 + 8.5 * 1.4
-const ATTENDANCE_NOTE_H = 4 + 6 + 9.5 * 1.45
+const ATTENDANCE_NOTE_H = TABLE_RULE_W * 2 + TABLE_PAD_Y * 2 + 9.5 * 1.45
 
 function attendanceRegisterFrameHeight(withHeading) {
   const reserved = withHeading ? ATTENDANCE_BANNER_H + ATTENDANCE_NOTE_H : 0
@@ -1835,7 +1905,7 @@ function AttendanceRegisterPages({
                 >
                   Attendance Register
                 </SectionBanner>
-                <Text style={styles.evidenceNote}>Legal document - reproduced untouched.</Text>
+                <TextBody>Legal document - reproduced untouched.</TextBody>
               </>
             ) : null}
             {group.map((sheet, sheetIndex) => (
@@ -1861,7 +1931,7 @@ function AttendanceRegisterPages({
                     }}
                   />
                 ) : (
-                  <Text style={styles.body}>Attached record: {sheet.fileName}</Text>
+                  <TextBody>Attached record: {sheet.fileName}</TextBody>
                 )}
               </View>
             ))}
