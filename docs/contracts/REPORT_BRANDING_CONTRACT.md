@@ -1,11 +1,11 @@
 # Report Branding Contract
 
 **Layer:** C — Feature  
-**Version:** 1.1.0  
-**Date Updated:** 2026-09-06  
-**Reason Updated:** Site Diary audit — reporting-company brand_color / logo remain authoritative for redesigned app/PDF  
-**User Decision:** APPROVED — do not replace company branding with diary violet or Zlog orange  
-**Previous Version:** 1.0.0  
+**Version:** 1.2.0  
+**Date Updated:** 2026-11-22  
+**Reason Updated:** Issued PDF banner and top lines follow the locked design rules; the resolvePdfAccent rewrite is no longer the PDF rule  
+**User Decision:** APPROVED — do not replace company branding with diary violet or Zlog orange. APPROVED — the issued PDF follows docs/ZLOG_PDF_DESIGN_RULES.md sections 4 and 12  
+**Previous Version:** 1.1.0  
 
 **Status:** Binding for implemented Site Diary branding  
 
@@ -43,9 +43,15 @@ Setup exposes **Reporting Organisation** name and logo (upload / replace / remov
 
 ## Colour authority (2026-09-06)
 
-Reporting-company colour comes from `company_brandings.brand_color` snapshotted onto `daily_reports.brand_color` (with `brand_logo_url` / `branding_id`). PDF uses `resolvePdfReportBrandColor` then `resolvePdfAccent`.
+Reporting-company colour comes from `company_brandings.brand_color` snapshotted onto `daily_reports.brand_color` (with `brand_logo_url` / `branding_id`). On the issued PDF, `docs/ZLOG_PDF_DESIGN_RULES.md` sections 4 and 12 apply:
 
-That company colour remains **authoritative** for the redesigned app compact IA and PDF chrome.
+- The banner uses the reporting company's sampled brand colour exactly, on every page, whatever the hue (red, white, silver and pink included).
+- If no branding exists at all, the banner uses the default neutral grey `#6E6E6E`.
+- Table top lines and section top rules use the sampled brand colour exactly, with no rewriting or clamping. Pigeon grey `#E4E2DE` is used only for a red-dominant brand, a brand lighter than luminance 0.30, and no branding.
+- Branding is sampled only from the reporting company, never the end client.
+- Red may appear only in the header banner area (banner or logo), nowhere below it.
+
+That company colour remains **authoritative** for the redesigned app compact IA. On the PDF it colours the banner, and the table and section top lines where the rules above allow it. It does not colour the page frame, section titles, labels, grid, footer, or cover name.
 
 Do **not**:
 
