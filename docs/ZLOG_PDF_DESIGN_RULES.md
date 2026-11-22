@@ -11,14 +11,18 @@ Superseded: the project name in the cover band is not a brand-colour exception. 
 A thin rule forms a closed rectangle around every page, including table pages, appendix pages and photo pages. It is a fixed neutral ink colour and never takes the client's brand colour. No table, box or image edge overprints it.
 
 ## 3. Header banner
-Full width, solid, in the client's brand colour, on every page. Client logo small, top left, faithful to their own artwork; never add or alter taglines or company-form text. Page title centred, semi-bold, not heavy black. Project name and reference in the right-hand slot. Banner depth fixed and identical for every client; the logo scales inside it. No accent bar beneath the banner.
+Full width, solid, on every page. The fill is the reporting company's brand colour exactly as sampled, including when that colour is red. A red brand gets a red banner. The dark-slate substitute for a red banner is superseded.
+
+The logo stays the company's own artwork. It is not altered, recoloured, or given anything extra. It sits small, top left, and scales inside the fixed banner depth. If the company has supplied a light or white logo, that is the logo used on a red banner. A light logo is not invented. Page title centred, semi-bold, not heavy black. Project name and reference in the right-hand slot. Banner depth fixed and identical for every company. No accent bar beneath the banner.
 
 One shared banner component is used by every report type Zlog issues, including the site diary, weekly progress, an H&S inspection, and any later type. The banner is identical on every page of a report, including the cover: the same title, the same case, and the same position. That title is DAILY SITE DIARY. It is centred on the banner's horizontal centre, measured from the title's text block, not from where the text starts. The logo keeps its present size. No page substitutes its own wording, such as "Site records".
+
+Superseded: "in the client's brand colour", where that meant the end client or a dark-slate stand-in for red.
 
 ## 4. Below the banner
 A report's colours are sampled only from the reporting company, the company producing the report, such as CBRE or Milestone. They are never sampled from the end client the work is for.
 
-The only element carrying that brand colour below the banner is the top highlight rule on each container table, and only when the brand is not red-dominant. The page frame, section title text, label cell text, photo reference labels, grid lines and footer all take fixed neutral colours. The cover name is neutral grey.
+The only element that may carry the reporting company's brand colour below the banner is the top highlight rule on each container table, and only when the brand is not red-dominant. A red banner does not licence red below it. The page frame, section title text, label cell text, photo reference labels, grid lines and footer all take fixed neutral colours. The cover name is neutral grey.
 
 Superseded: "the client's brand colour", where that was read as the end client's colour, and "Where the brand colour is red, the cover name uses the same dark slate as the banner." The cover name does not switch to dark slate. Grid lines are not a brand colour. For a red-dominant brand the top rules are not a brand colour either; section 12 states what they use.
 
@@ -119,13 +123,11 @@ Every page: one composite string on the left and the page line on the right, wit
 ## 12. The red exception
 Red means hazard on site. A brand is red-dominant by the existing `isPdfBrandRed` test, and by no other test: the hue sits within 15 degrees of red (0–15 or 345–360), saturation is at least 0.28, and lightness is between 0.12 and 0.72. Orange is outside that band. The test is applied to the reporting company's colour.
 
-The header banner is coloured as it is today. A red-dominant brand still paints that banner in dark slate. This rule does not change the banner.
+The header banner uses that colour exactly as sampled, including when it is red. The dark-slate banner override is removed. Brands that are not red are unchanged.
 
-For a red-dominant brand, red is used only in the header banner area: the banner itself, or the logo inside it. Red must not appear anywhere else in the report. No table rule, title bar, section rule, text, icon, badge or photo label takes red, a red tint, charcoal, or a darker step of red.
+Below the banner, a red-dominant brand never colours a table top line, a section rule, a title bar, or text. Those top lines stay the existing dove grey, `#E4E2DE`. Red appears only in the header banner area: the banner fill, and the logo inside it. Nowhere else in the report. No table rule, title bar, section rule, text, icon, badge or photo label takes red, a red tint, charcoal, or a darker step of red.
 
-The top line on each table, and each section's top rule, carries no brand colour when the brand is red-dominant. Those lines use the existing dove grey already used for shaded cells and title bars, `#E4E2DE`, and nothing else.
-
-Superseded: "the container top rules become charcoal, and the client's red appears in their logo only." Charcoal is not used. Red below the banner is not used.
+Superseded: "The header banner is coloured as it is today. A red-dominant brand still paints that banner in dark slate." Superseded: "the container top rules become charcoal, and the client's red appears in their logo only." Charcoal is not used. Red below the banner is not used.
 
 ## 13. Provenance
 The labour table carries a source line beside its heading, small, italic, grey, right aligned: "Source: site attendance register, scanned" where a register is attached, or "Source: entered manually" where it is not.
