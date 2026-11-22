@@ -3,8 +3,9 @@ import {
   PDF_FOOTER_BLOCK_H,
   PDF_FOOTER_TOP,
   PDF_HEADER_BLOCK_H,
+  PDF_PAGE_MARGIN_TOP,
   PDF_PAGE_PAD_X,
-  resolvePdfAccent,
+  resolvePdfBannerColor,
 } from '@/lib/diary-pdf-layout'
 
 const MUTED = '#66707A'
@@ -14,11 +15,9 @@ const RULE = '#D3D8DD'
 export const PDF_ACCENT_BANNER_H = PDF_HEADER_BLOCK_H
 
 /**
- * Coloured masthead banner for every page.
- *
- * In-flow on each explicit `<Page>` — react-pdf only paints `fixed` + `absolute`
- * chrome reliably on page 1; sibling pages need a deterministic in-flow header
- * with reserved space via page padding + header height.
+ * Coloured masthead banner for every page, including pages created by overflow.
+ * Fixed and out of flow, so a wrapping page repeats it. Page padding reserves
+ * the space it occupies.
  *
  * Never full-bleed — sits inside PDF_PAGE_PAD_X via page horizontal padding.
  */
@@ -30,7 +29,7 @@ export function PdfHeader({
   projectReference = '',
   edgeBleed = 0,
 }) {
-  const color = resolvePdfAccent(brandColor)
+  const color = resolvePdfBannerColor(brandColor)
   const title = String(reportTitle || 'DAILY SITE DIARY').trim() || 'DAILY SITE DIARY'
   const name = String(projectName || '').trim()
   const reference = String(projectReference || '').trim()
@@ -38,9 +37,11 @@ export function PdfHeader({
 
   const styles = StyleSheet.create({
     headerShell: {
+      position: 'absolute',
+      top: PDF_PAGE_MARGIN_TOP,
+      left: PDF_PAGE_PAD_X - bleed,
+      right: PDF_PAGE_PAD_X - bleed,
       height: PDF_ACCENT_BANNER_H,
-      marginBottom: 18,
-      marginHorizontal: -bleed,
     },
     // Inner fill: backgroundColor on a nested view is more reliable across
     // wrap pages than putting the fill only on the fixed shell.
@@ -93,7 +94,7 @@ export function PdfHeader({
   })
 
   return (
-    <View style={styles.headerShell}>
+    <View style={styles.headerShell} fixed>
       <View style={styles.headerFill}>
         {logoUrl ? (
           // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image
@@ -123,10 +124,11 @@ export function PdfHeader({
  * The page number is its own fixed text: a render callback nested inside the
  * fixed footer is never evaluated.
  */
-export function PdfFooter({ projectName = '', projectReference = '' }) {
-  const name = String(projectName || '').trim()
+export function PdfFooter({ projectReference = '', reportDate = '' }) {
   const reference = String(projectReference || '').trim()
-  const identity = [name, reference].filter(Boolean).join(' · ') || ' '
+  const title = 'Daily Site Diary'
+  const date = String(reportDate || '').trim()
+  const left = [reference, title, date].filter(Boolean).join(' · ') || ' '
   const styles = StyleSheet.create({
     footer: {
       position: 'absolute',
@@ -143,25 +145,18 @@ export function PdfFooter({ projectName = '', projectReference = '' }) {
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginTop: 6,
+      marginBottom: 4,
     },
     identityText: {
-      width: '33.33%',
+      width: '82%',
       fontSize: 7,
       color: MUTED,
       fontFamily: 'Helvetica',
+      textAlign: 'left',
     },
-    titleText: {
-      width: '33.33%',
-      fontSize: 7,
-      color: MUTED,
-      fontFamily: 'Helvetica',
-      textAlign: 'center',
-    },
-    pageSlot: { width: '33.33%' },
     pageText: {
       position: 'absolute',
-      top: PDF_FOOTER_TOP + 6.6,
+      top: PDF_FOOTER_TOP,
       left: PDF_PAGE_PAD_X,
       right: PDF_PAGE_PAD_X,
       fontSize: 7,
@@ -174,12 +169,10 @@ export function PdfFooter({ projectName = '', projectReference = '' }) {
   return (
     <>
       <View style={styles.footer} fixed>
-        <View style={styles.hairRule} />
         <View style={styles.row}>
-          <Text style={styles.identityText}>{identity}</Text>
-          <Text style={styles.titleText}>Daily Site Diary</Text>
-          <Text style={styles.pageSlot}> </Text>
+          <Text style={styles.identityText}>{left}</Text>
         </View>
+        <View style={styles.hairRule} />
       </View>
       <Text
         style={styles.pageText}

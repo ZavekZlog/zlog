@@ -11,15 +11,18 @@ import {
 import {
   PDF_CONTENT_BOTTOM,
   PDF_CONTENT_H,
-  PDF_GRID_GAP,
+  PDF_PHOTO_GUTTER,
   PDF_PAGE_H,
   PDF_CONTENT_TOP,
+  PDF_HEADER_OFFSET,
   PDF_PAGE_MARGIN_TOP,
+  PDF_PAGE_INNER_W,
   PDF_PAGE_PAD_X,
   PDF_PAGE_W,
   PDF_PHOTO_BAND_PAD_X,
   PDF_PHOTO_BAND_PAD_Y,
   PDF_PHOTO_CAPTION_SIZE,
+  PDF_PHOTO_CAPTION_SLOT_H,
   PDF_PHOTO_FIT,
   PDF_PHOTO_FRAME_BORDER,
   PDF_PHOTO_RULE_W,
@@ -27,8 +30,8 @@ import {
   paginatePdfPhotos,
   photoGridForTier,
   photoPageGridContentHeight,
-  photoRowBandHeight,
-  resolvePdfAccent,
+  resolvePdfBannerColor,
+  resolvePdfTableRuleColor,
 } from '@/lib/diary-pdf-layout'
 
 const CONTENT_H = PDF_CONTENT_H
@@ -72,12 +75,12 @@ const TABLE_BORDER_W = 1.1
 const TABLE_RULE_W = 0.9
 const TABLE_LABEL_BG = '#EFF2F4'
 const TABLE_LABEL_INK = '#3D464E'
-const TABLE_PAD_Y = 5.5
-const TABLE_PAD_X = 10
+const TABLE_PAD_Y = 4
+const TABLE_PAD_X = 8
 const TABLE_LABEL_SIZE = 7.8
 const TABLE_VALUE_SIZE = 9.5
 const PDF_DOVE_GREY = '#E4E2DE'
-const TABLE_TOP_RULE_W = 2
+const TABLE_TOP_RULE_W = 0.75
 
 /**
  * Space a section must have after its banner before it may open on a page:
@@ -116,7 +119,7 @@ const PAGE1_COVER_H = 384
  * photograph, so page 1 stays balanced and the schedule — not the photograph —
  * carries the page.
  */
-const PAGE1_GRID_PAD_Y = TABLE_PAD_Y + 1.5
+const PAGE1_GRID_PAD_Y = TABLE_PAD_Y
 
 /**
  * Column structures per section. The number and width of columns follow the
@@ -187,7 +190,7 @@ const DECLARATION =
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: PDF_PAGE_MARGIN_TOP,
+    paddingTop: PDF_CONTENT_TOP,
     paddingHorizontal: PDF_PAGE_PAD_X,
     paddingBottom: PDF_CONTENT_BOTTOM,
     fontSize: 9.5,
@@ -209,7 +212,7 @@ const styles = StyleSheet.create({
   pageOne: {
     minHeight: PDF_PAGE_H,
     maxHeight: PDF_PAGE_H,
-    paddingTop: PDF_PAGE_MARGIN_TOP,
+    paddingTop: PDF_HEADER_OFFSET,
     paddingLeft: PAGE1_GUTTER,
     paddingRight: PAGE1_GUTTER,
     paddingBottom: PDF_PAGE_H - PAGE1_FOOTER_TOP + 12,
@@ -226,6 +229,7 @@ const styles = StyleSheet.create({
     bottom: PDF_FRAME_BOTTOM,
     borderWidth: 0.9,
     borderStyle: 'solid',
+    borderColor: INK,
   },
   // Shallow banner: company identity, then a restrained report title. The
   // banner must not out-weigh the project name or the cover photograph.
@@ -250,14 +254,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Helvetica-Bold',
     letterSpacing: 1.6,
-    textAlign: 'right',
+    textAlign: 'left',
   },
 
   // ---- Project identity: document masthead, not a table -------------------
   identityBlock: {
-    width: '100%',
-    marginTop: -18,
-    marginHorizontal: -PDF_FRAME_BLEED,
+    width: PAGE1_INNER_W + PDF_FRAME_BLEED * 2,
+    marginTop: 0,
+    marginLeft: -PDF_FRAME_BLEED,
+    marginRight: -PDF_FRAME_BLEED,
     backgroundColor: PDF_DOVE_GREY,
     paddingTop: 10,
     paddingBottom: 8,
@@ -265,18 +270,23 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.6,
     borderBottomStyle: 'solid',
     borderBottomColor: '#C5C3BF',
+    alignItems: 'center',
   },
   identityName: {
+    width: '100%',
     color: INK,
     fontSize: 15,
     fontFamily: 'Helvetica-Bold',
     lineHeight: 1.2,
+    textAlign: 'center',
   },
   identityAddress: {
+    width: '100%',
     marginTop: 3,
     color: BODY,
     fontSize: 9.5,
     lineHeight: 1.35,
+    textAlign: 'center',
   },
 
   coverPhotoBlock: {
@@ -287,10 +297,7 @@ const styles = StyleSheet.create({
   coverPhotoFrame: {
     width: PAGE1_COVER_W,
     height: PAGE1_COVER_H,
-    borderWidth: 0.5,
-    borderStyle: 'solid',
-    borderColor: '#D2D7DC',
-    backgroundColor: '#FBFCFD',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
@@ -300,16 +307,11 @@ const styles = StyleSheet.create({
   // 20% / 30% / 20% / 30% of the content width, so A4 width is used properly.
   scheduleGrid: {
     width: '100%',
-    borderWidth: TABLE_BORDER_W,
-    borderStyle: 'solid',
-    borderColor: TABLE_RULE,
   },
   scheduleGridRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    borderBottomWidth: TABLE_RULE_W,
-    borderBottomStyle: 'solid',
-    borderBottomColor: TABLE_RULE,
+    width: '100%',
   },
   scheduleGridPair: {
     width: '50%',
@@ -327,29 +329,32 @@ const styles = StyleSheet.create({
     paddingVertical: PAGE1_GRID_PAD_Y,
     paddingHorizontal: TABLE_PAD_X,
     backgroundColor: PDF_DOVE_GREY,
-    borderRightWidth: TABLE_RULE_W,
-    borderRightStyle: 'solid',
-    borderRightColor: TABLE_RULE,
+    borderWidth: TABLE_RULE_W,
+    borderStyle: 'solid',
+    borderColor: TABLE_RULE,
   },
   scheduleGridLabel: {
     color: TABLE_LABEL_INK,
     fontSize: TABLE_VALUE_SIZE,
     fontFamily: 'Helvetica-Bold',
     letterSpacing: 0.35,
-    lineHeight: 1.2,
+    lineHeight: 1.4,
   },
   scheduleGridValueCell: {
-    flex: 1,
+    width: '60%',
     justifyContent: 'center',
     paddingVertical: PAGE1_GRID_PAD_Y,
     paddingHorizontal: TABLE_PAD_X,
     backgroundColor: '#FFFFFF',
+    borderWidth: TABLE_RULE_W,
+    borderStyle: 'solid',
+    borderColor: TABLE_RULE,
   },
   scheduleGridValue: {
     color: INK,
     fontSize: TABLE_VALUE_SIZE,
     fontFamily: 'Helvetica',
-    lineHeight: 1.3,
+    lineHeight: 1.4,
   },
 
   // Single shared section-heading treatment for the whole report (Page 1 is
@@ -378,24 +383,19 @@ const styles = StyleSheet.create({
     borderTopColor: '#D0D5DA',
     flexDirection: 'row',
     alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
   pageOneFooterLeft: {
-    width: '33.33%',
+    width: '82%',
     color: MUTED,
     fontSize: 7.5,
     lineHeight: 1.2,
     textAlign: 'left',
     textDecoration: 'none',
-  },
-  pageOneFooterCentre: {
-    width: '33.33%',
-    color: MUTED,
-    fontSize: 7.5,
-    lineHeight: 1.2,
-    textAlign: 'center',
+    paddingRight: 12,
   },
   pageOneFooterRight: {
-    width: '33.33%',
+    width: 78,
     color: MUTED,
     fontSize: 7.5,
     lineHeight: 1.2,
@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
   },
   sectionBanner: {
     width: '100%',
-    paddingVertical: 4.5,
+    paddingVertical: 5,
     paddingHorizontal: TABLE_PAD_X,
     flexDirection: 'row',
     alignItems: 'center',
@@ -429,15 +429,17 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: 0,
     marginBottom: 8,
-    paddingVertical: 4.5,
+    paddingVertical: 5,
     paddingHorizontal: TABLE_PAD_X,
     justifyContent: 'center',
     backgroundColor: PDF_DOVE_GREY,
   },
   sectionBannerText: {
+    color: INK,
     fontSize: 8.5,
     fontFamily: 'Helvetica-Bold',
     letterSpacing: 1,
+    lineHeight: 1.4,
     textAlign: 'left',
   },
   sectionBannerAside: {
@@ -455,7 +457,13 @@ const styles = StyleSheet.create({
     color: MUTED,
   },
 
-  body: { marginTop: 6, fontSize: 9.5, lineHeight: 1.5, color: BODY },
+  body: {
+    marginTop: 6,
+    marginBottom: 8,
+    fontSize: 9.5,
+    lineHeight: 1.45,
+    color: BODY,
+  },
 
   // ---- Photographic plates ------------------------------------------------
   // ---- Photographic record: fixed cells in the same family as the tables ---
@@ -477,6 +485,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   photoViewport: {
+    position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
@@ -488,16 +497,18 @@ const styles = StyleSheet.create({
     height: '100%',
     ...PDF_PHOTO_FIT,
   },
-  photoInfoBand: {
+  photoCaptionSlot: {
+    height: PDF_PHOTO_CAPTION_SLOT_H,
+    backgroundColor: '#FFFFFF',
     borderTopWidth: PDF_PHOTO_RULE_W,
     borderTopStyle: 'solid',
-    borderTopColor: TABLE_RULE,
-    backgroundColor: TABLE_LABEL_BG,
+    borderTopColor: TABLE_BORDER,
     paddingVertical: PDF_PHOTO_BAND_PAD_Y,
     paddingHorizontal: PDF_PHOTO_BAND_PAD_X,
     overflow: 'hidden',
   },
   photoRef: {
+    color: INK,
     fontSize: 7,
     fontFamily: 'Helvetica-Bold',
     textTransform: 'uppercase',
@@ -524,64 +535,65 @@ const styles = StyleSheet.create({
   // ---- Shared structured-record table (same family as the Page 1 grid) ----
   dataTable: {
     width: '100%',
-    borderWidth: TABLE_BORDER_W,
     borderStyle: 'solid',
     borderColor: TABLE_RULE,
+    flexShrink: 0,
   },
-  // Header and totals are separated by the perimeter colour at the internal
-  // weight: read as structure without becoming a heavy rule mid-table.
+  // The row itself draws no rule. Each cell draws its own four sides, so a
+  // horizontal line cannot stop halfway across a row.
+  // flexShrink 0 keeps the measured row height. The default is 1, and an
+  // overfull page would otherwise compress the row onto the text below it.
   dataHeaderRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
+    width: '100%',
     backgroundColor: '#FFFFFF',
-    borderBottomWidth: TABLE_RULE_W,
-    borderBottomStyle: 'solid',
-    borderBottomColor: TABLE_RULE,
+    flexShrink: 0,
   },
   dataRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
+    width: '100%',
     backgroundColor: '#FFFFFF',
-    borderBottomWidth: TABLE_RULE_W,
-    borderBottomStyle: 'solid',
-    borderBottomColor: TABLE_RULE,
+    flexShrink: 0,
   },
   dataTotalsRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
+    width: '100%',
     backgroundColor: '#FFFFFF',
-    borderTopWidth: TABLE_RULE_W,
-    borderTopStyle: 'solid',
-    borderTopColor: TABLE_RULE,
+    flexShrink: 0,
   },
   dataCell: {
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     paddingVertical: TABLE_PAD_Y,
     paddingHorizontal: TABLE_PAD_X,
-    borderRightWidth: TABLE_RULE_W,
-    borderRightStyle: 'solid',
-    borderRightColor: TABLE_RULE,
+    borderWidth: TABLE_RULE_W,
+    borderStyle: 'solid',
+    borderColor: TABLE_RULE,
+    flexShrink: 0,
   },
-  dataCellLast: { borderRightWidth: 0 },
+  dataCellLast: { borderRightWidth: TABLE_RULE_W },
   dataLabelCell: { backgroundColor: PDF_DOVE_GREY },
   dataHeaderText: {
     color: TABLE_LABEL_INK,
     fontSize: TABLE_VALUE_SIZE,
     fontFamily: 'Helvetica-Bold',
     letterSpacing: 0.35,
-    lineHeight: 1.2,
+    lineHeight: 1.4,
   },
   dataValueText: {
     color: INK,
     fontSize: TABLE_VALUE_SIZE,
     fontFamily: 'Helvetica',
-    lineHeight: 1.3,
+    lineHeight: 1.4,
   },
   dataTotalText: {
     color: INK,
     fontSize: TABLE_VALUE_SIZE,
     fontFamily: 'Helvetica-Bold',
-    lineHeight: 1.3,
+    lineHeight: 1.4,
   },
   numeric: { textAlign: 'right' },
   emptyState: {
@@ -622,9 +634,13 @@ const styles = StyleSheet.create({
     borderBottomStyle: 'solid',
     borderBottomColor: INK,
   },
+  signValueCell: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
   signImage: {
-    width: 188,
-    height: 84,
+    width: 160,
+    height: 40,
     objectFit: 'contain',
   },
   signPlaceholder: {
@@ -646,6 +662,7 @@ function PageChrome({
   reportTitle,
   projectReference = '',
   projectName = '',
+  reportDate = '',
 }) {
   return (
     <>
@@ -657,11 +674,8 @@ function PageChrome({
         projectReference={projectReference}
         edgeBleed={PDF_FRAME_BLEED}
       />
-      <PdfFooter projectName={projectName} projectReference={projectReference} />
-      <View
-        style={[styles.pageOneFrame, { borderColor: resolvePdfAccent(brandColor) }]}
-        fixed
-      />
+      <PdfFooter projectReference={projectReference} reportDate={reportDate} />
+      <View style={styles.pageOneFrame} fixed />
     </>
   )
 }
@@ -675,10 +689,10 @@ function cleanPdfValue(value) {
  * a value are dropped rather than rendered empty, so nothing on Page 1 is
  * fabricated and the grid never shows a hole.
  */
-function ScheduleGrid({ rows, accent = null }) {
-  const labelColor = resolvePdfAccent(accent)
-  const visible = rows.filter((item) => item.value)
-  if (!visible.length) return null
+function ScheduleGrid({ rows }) {
+  const spanning = rows.filter((item) => item.value && item.span === 'full')
+  const visible = rows.filter((item) => item.value && item.span !== 'full')
+  if (!spanning.length && !visible.length) return null
 
   const gridRows = []
   for (let index = 0; index < visible.length; index += 2) {
@@ -687,6 +701,27 @@ function ScheduleGrid({ rows, accent = null }) {
 
   return (
     <View style={styles.scheduleGrid}>
+      {spanning.map((item, index) => (
+        <View
+          key={item.label}
+          style={[
+            styles.scheduleGridRow,
+            gridRows.length === 0 && index === spanning.length - 1
+              ? { borderBottomWidth: 0 }
+              : null,
+          ]}
+          wrap={false}
+        >
+          <View style={[styles.scheduleGridPair, { width: '100%' }]}>
+            <View style={[styles.scheduleGridLabelCell, { width: '20%' }]}>
+              <Text style={styles.scheduleGridLabel}>{item.label}</Text>
+            </View>
+            <View style={[styles.scheduleGridValueCell, { width: '80%' }]}>
+              <Text style={styles.scheduleGridValue}>{item.value}</Text>
+            </View>
+          </View>
+        </View>
+      ))}
       {gridRows.map((pair, rowIndex) => (
         <View
           key={pair[0].label}
@@ -694,6 +729,7 @@ function ScheduleGrid({ rows, accent = null }) {
             styles.scheduleGridRow,
             rowIndex === gridRows.length - 1 ? { borderBottomWidth: 0 } : null,
           ]}
+          wrap={false}
         >
           {pair.map((item, pairIndex) => (
             <View
@@ -704,7 +740,7 @@ function ScheduleGrid({ rows, accent = null }) {
               ]}
             >
               <View style={styles.scheduleGridLabelCell}>
-                <Text style={[styles.scheduleGridLabel, { color: labelColor }]}>{item.label}</Text>
+                <Text style={styles.scheduleGridLabel}>{item.label}</Text>
               </View>
               <View style={styles.scheduleGridValueCell}>
                 <Text style={styles.scheduleGridValue}>{item.value}</Text>
@@ -719,20 +755,22 @@ function ScheduleGrid({ rows, accent = null }) {
 }
 
 /**
- * Cover identity: site name and address in one dove-grey band flush under the
- * banner. The report date stays in that same band. The project reference lives
- * in the banner, not here.
+ * Cover identity: project name and address, centred, in one dove-grey band
+ * flush under the banner. The name takes the resolved brand colour. The
+ * report date is a cover-table row, not a third line in this band.
  */
-function ProjectIdentity({ projectName, projectAddress, reportDate }) {
-  if (!projectName && !projectAddress && !reportDate) return null
+function ProjectIdentity({ projectName, projectAddress, brandColor }) {
+  if (!projectName && !projectAddress) return null
+  const nameColor = resolvePdfBannerColor(brandColor)
 
   return (
     <View style={styles.identityBlock}>
-      {projectName ? <Text style={styles.identityName}>{projectName}</Text> : null}
+      {projectName ? (
+        <Text style={[styles.identityName, { color: nameColor }]}>{projectName}</Text>
+      ) : null}
       {projectAddress ? (
         <Text style={styles.identityAddress}>{projectAddress}</Text>
       ) : null}
-      {reportDate ? <Text style={styles.identityAddress}>{reportDate}</Text> : null}
     </View>
   )
 }
@@ -749,12 +787,12 @@ function numberedSectionLabel(number, children) {
 }
 
 function SectionHeading({ children, accent, number = null }) {
-  const color = resolvePdfAccent(accent)
+  const color = resolvePdfTableRuleColor(accent)
   return (
     <View minPresenceAhead={SECTION_PRESENCE_AHEAD} style={styles.sectionBannerWrap}>
       <View style={[styles.tableTopRule, { backgroundColor: color }]} />
       <View style={styles.sectionBanner}>
-        <Text style={[styles.sectionBannerText, { color }]}>
+        <Text style={styles.sectionBannerText}>
           {numberedSectionLabel(number, children)}
         </Text>
       </View>
@@ -768,17 +806,14 @@ function SectionHeading({ children, accent, number = null }) {
  *
  * columns: [{ key, header, width, numeric? }]
  */
-function DataTable({ columns, rows, totals = null, accent = null }) {
-  const labelColor = resolvePdfAccent(accent)
+function DataTable({ columns, rows, totals = null }) {
   const lastIndex = columns.length - 1
 
   const renderCells = (record, role) =>
     columns.map((column, index) => {
-      const isLabel = index === 0
-      const textStyle = isLabel
-        ? [styles.dataHeaderText, { color: labelColor }]
-        : role === 'header'
-          ? [styles.dataHeaderText, { color: INK }]
+      const textStyle =
+        role === 'header'
+          ? styles.dataHeaderText
           : role === 'total'
             ? styles.dataTotalText
             : styles.dataValueText
@@ -789,12 +824,12 @@ function DataTable({ columns, rows, totals = null, accent = null }) {
             styles.dataCell,
             {
               width: column.width,
-              backgroundColor: isLabel ? PDF_DOVE_GREY : '#FFFFFF',
+              backgroundColor: '#FFFFFF',
             },
             index === lastIndex ? styles.dataCellLast : null,
           ]}
         >
-          <Text style={[textStyle, !isLabel && column.numeric ? styles.numeric : null]}>
+          <Text style={[textStyle, role !== 'header' && column.numeric ? styles.numeric : null]}>
             {record[column.key] ?? ''}
           </Text>
         </View>
@@ -845,8 +880,7 @@ function DataTable({ columns, rows, totals = null, accent = null }) {
  * Label/value schedule in the shared table family, one pair per row. Used where
  * a full column table would be the wrong shape for the data.
  */
-function ScheduleList({ rows, labelWidth = '30%', accent = null }) {
-  const labelColor = resolvePdfAccent(accent)
+function ScheduleList({ rows, labelWidth = '30%' }) {
   const visible = rows.filter((item) => item.value)
   if (!visible.length) return null
 
@@ -862,7 +896,7 @@ function ScheduleList({ rows, labelWidth = '30%', accent = null }) {
           wrap={false}
         >
           <View style={[styles.dataCell, styles.dataLabelCell, { width: labelWidth }]}>
-            <Text style={[styles.dataHeaderText, { color: labelColor }]}>{item.label}</Text>
+            <Text style={styles.dataHeaderText}>{item.label}</Text>
           </View>
           <View style={[styles.dataCell, styles.dataCellLast, { flex: 1 }]}>
             <Text style={styles.dataValueText}>{item.value}</Text>
@@ -873,14 +907,14 @@ function ScheduleList({ rows, labelWidth = '30%', accent = null }) {
   )
 }
 
-function PageOneFooter({ projectName = '', projectReference = '' }) {
-  const name = String(projectName || '').trim()
+function PageOneFooter({ projectReference = '', reportDate = '' }) {
   const reference = String(projectReference || '').trim()
-  const identity = [name, reference].filter(Boolean).join(' · ') || ' '
+  const title = 'Daily Site Diary'
+  const date = String(reportDate || '').trim()
+  const left = [reference, title, date].filter(Boolean).join(' · ') || ' '
   return (
     <View style={styles.pageOneFooter}>
-      <Text style={styles.pageOneFooterLeft}>{identity}</Text>
-      <Text style={styles.pageOneFooterCentre}>Daily Site Diary</Text>
+      <Text style={styles.pageOneFooterLeft}>{left}</Text>
       <Text
         style={styles.pageOneFooterRight}
         render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`}
@@ -916,11 +950,13 @@ function coverScheduleRows({
     cleanPdfValue(value) ? formatProjectDateDisplay(value) : ''
 
   // Ordered so the grid pairs up as Client/Project Manager, Reporting
-  // Organisation/Report Author, and so on. Project name, address, reference and
-  // report date live in the masthead above and are not repeated here.
+  // Organisation/Report Author, and so on. Project name and address stay in
+  // the band. The reference stays in the banner. The report date is its own
+  // full-width row so those pairs are not reshuffled.
   // No Site Manager field exists in the report payload; the author is recorded
   // as the author, not inferred to be the Site Manager.
   return [
+    { label: 'Report Date', value: displayDate(reportDate), span: 'full' },
     { label: 'Client', value: cleanPdfValue(clientName) },
     { label: 'Project Manager', value: cleanPdfValue(projectManager) },
     { label: 'Reporting Organisation', value: cleanPdfValue(companyName) },
@@ -957,7 +993,7 @@ function PageOne({
   logoUrl,
   detailsNumber = null,
 }) {
-  const accent = resolvePdfAccent(brandColor)
+  const accent = brandColor
   const displayDate = (value) =>
     cleanPdfValue(value) ? formatProjectDateDisplay(value) : ''
   const scheduleRows = coverScheduleRows({
@@ -985,12 +1021,13 @@ function PageOne({
         reportReference={cleanPdfValue(reportReference)}
         projectReference={cleanPdfValue(projectReference)}
         projectName={cleanPdfValue(projectName)}
+        reportDate={displayDate(reportDate)}
       />
 
       <ProjectIdentity
         projectName={cleanPdfValue(projectName)}
         projectAddress={cleanPdfValue(projectAddress)}
-        reportDate={displayDate(reportDate)}
+        brandColor={brandColor}
       />
 
       {coverPhotoUrl ? (
@@ -1005,7 +1042,7 @@ function PageOne({
       {hasScheduleRows ? (
         <SectionHeading accent={accent} number={detailsNumber}>PROJECT / REPORT DETAILS</SectionHeading>
       ) : null}
-      <ScheduleGrid rows={scheduleRows} accent={accent} />
+      <ScheduleGrid rows={scheduleRows} />
     </Page>
   )
 }
@@ -1014,9 +1051,11 @@ function PageOne({
  * One photographic record as a fixed report cell:
  * - the outer frame is sized by the grid, never by the photograph
  * - the image viewport contains the photograph (no crop / stretch / distortion)
- * - "PHOTO N" and the caption sit in a band inside the frame, not below it
- * A taller caption takes room from the viewport, so the frame never grows.
- * Rotation must be baked into `src` by the export pipeline when non-zero.
+ * - the caption slot sits beneath the frame at a fixed height
+ * Rotation already stored on the photograph is baked into `src` so it displays
+ * the right way up. A landscape photograph is turned 90 degrees in that bake
+ * so it fills this portrait frame. The viewport only contains the result,
+ * so nothing is cropped.
  */
 function FramedPhoto({
   src,
@@ -1024,41 +1063,32 @@ function FramedPhoto({
   assignedToLine,
   frameWidth,
   frameHeight,
-  bandHeight,
   gapRight = 0,
   photoNumber,
-  accent,
 }) {
   if (!src) return null
   const refLabel = photoReferenceLabel(photoNumber)
   const captionText = typeof caption === 'string' ? caption.trim() : ''
   const assignedLine = typeof assignedToLine === 'string' ? assignedToLine.trim() : ''
-  const viewportHeight = Math.max(
-    40,
-    frameHeight - bandHeight - PDF_PHOTO_FRAME_BORDER * 2,
-  )
+
+  const innerW = frameWidth - PDF_PHOTO_FRAME_BORDER * 2
 
   return (
-    <View
-      style={[
-        styles.photoFrame,
-        { width: frameWidth, height: frameHeight, marginRight: gapRight },
-      ]}
-    >
-      <View style={[styles.photoViewport, { height: viewportHeight }]}>
-        {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
-        <Image src={src} style={styles.imageContain} />
-      </View>
-      <View style={[styles.photoInfoBand, { height: bandHeight }]}>
-        <Text style={[styles.photoRef, { color: resolvePdfAccent(accent) }]}>{refLabel}</Text>
-        <Text style={styles.caption} maxLines={1}>
-          {captionText}
-        </Text>
-        {assignedLine ? (
+    <View style={{ width: frameWidth, marginRight: gapRight }} wrap={false}>
+      <View style={[styles.photoFrame, { width: frameWidth }]} wrap={false}>
+        <View style={[styles.photoViewport, { width: innerW, height: frameHeight }]}>
+          {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
+          <Image src={src} style={styles.imageContain} />
+        </View>
+        <View style={styles.photoCaptionSlot}>
+          <Text style={styles.photoRef}>{refLabel}</Text>
+          <Text style={styles.caption} maxLines={1}>
+            {captionText}
+          </Text>
           <Text style={styles.assignedTo} maxLines={1}>
             {assignedLine}
           </Text>
-        ) : null}
+        </View>
       </View>
     </View>
   )
@@ -1073,7 +1103,7 @@ function photoSrc(photo) {
  * column count, so a short page keeps the same cells and simply leaves the
  * trailing ones empty.
  */
-function PhotoGrid({ photos, cols, rows, brandColor, contentH = PDF_CONTENT_H }) {
+function PhotoGrid({ photos, cols, rows, contentH = PDF_CONTENT_H }) {
   const { frameW, frameH } = computePhotoFrameGeometry({ cols, rows, contentH })
   const chunks = []
   for (let index = 0; index < photos.length; index += cols) {
@@ -1081,24 +1111,16 @@ function PhotoGrid({ photos, cols, rows, brandColor, contentH = PDF_CONTENT_H })
   }
 
   return (
-    <View style={styles.photoGrid}>
+    <View style={styles.photoGrid} wrap={false}>
       {chunks.map((row, rowIndex) => {
-        const bandHeight = photoRowBandHeight(
-          row.map((photo) => ({
-            // One caption line on every frame. Length must not change the band,
-            // or an empty caption would shift the grid.
-            caption: '',
-            assignedToLine: photoTileAssignedToLine(photo),
-          })),
-          frameW,
-        )
         return (
           <View
             key={`photo-row-${rowIndex}`}
             style={[
               styles.photoGridRow,
-              { marginBottom: rowIndex === chunks.length - 1 ? 0 : PDF_GRID_GAP },
+              rowIndex === chunks.length - 1 ? null : { marginBottom: PDF_PHOTO_GUTTER },
             ]}
+            wrap={false}
           >
             {row.map((photo, columnIndex) => (
               <FramedPhoto
@@ -1108,10 +1130,8 @@ function PhotoGrid({ photos, cols, rows, brandColor, contentH = PDF_CONTENT_H })
                 assignedToLine={photoTileAssignedToLine(photo)}
                 frameWidth={frameW}
                 frameHeight={frameH}
-                bandHeight={bandHeight}
-                gapRight={columnIndex === cols - 1 ? 0 : PDF_GRID_GAP}
+                gapRight={columnIndex === cols - 1 ? 0 : PDF_PHOTO_GUTTER}
                 photoNumber={photo.reportPhotoNumber}
-                accent={brandColor}
               />
             ))}
           </View>
@@ -1127,21 +1147,24 @@ function PhotoGrid({ photos, cols, rows, brandColor, contentH = PDF_CONTENT_H })
  * Never use record-stream minPresenceAhead, and never wrap={false}: both can
  * leave an explicit photo page empty while React-PDF advances again.
  */
-function AreaPhotoSectionBanner({ children, accent, number = null }) {
-  const color = resolvePdfAccent(accent)
+function AreaPhotoSectionBanner({ children, number = null, accent = null }) {
+  const color = resolvePdfTableRuleColor(accent)
   return (
-    <View style={styles.areaPhotoSectionBanner}>
-      <Text style={[styles.sectionBannerText, { color }]}>
-        {numberedSectionLabel(number, children)}
-      </Text>
+    <View>
+      <View style={[styles.tableTopRule, { backgroundColor: color }]} />
+      <View style={styles.areaPhotoSectionBanner}>
+        <Text style={styles.sectionBannerText}>
+          {numberedSectionLabel(number, children)}
+        </Text>
+      </View>
     </View>
   )
 }
 
 /**
  * One named work-photo area: visible area heading, then only that area's photos
- * at the area's own 1 / 4 / 6 layout. Chrome title is the area name.
- * One scheduled chunk → one physical page (grid height always leaves slack).
+ * at the area's own 1 / 4 / 6 layout. Chunks stay in the diary flow, so the
+ * next section starts on this page when it fits.
  */
 function AreaPhotographicSection({
   areaName,
@@ -1164,36 +1187,30 @@ function AreaPhotographicSection({
 
   return pages.map((pagePhotos, pageIndex) => {
     const isFirst = pageIndex === 0
-    const contentH = photoPageGridContentHeight({ isAreaStart: isFirst })
-    return (
-      <Page
-        key={`area-${heading}-${pageIndex}`}
-        size="A4"
-        style={styles.page}
+    // Size every cell from the heading-inclusive budget so a heading and its
+    // first group of four fit together, and every frame stays the same size.
+    const contentH = photoPageGridContentHeight({ isAreaStart: true })
+    const groups = []
+    for (let index = 0; index < pagePhotos.length; index += 4) {
+      groups.push(pagePhotos.slice(index, index + 4))
+    }
+    return groups.map((group, groupIndex) => (
+      <View
+        key={`area-${heading}-${pageIndex}-${groupIndex}`}
+        style={styles.photoStage}
+        wrap={false}
       >
-        <PageChrome
-          brandColor={brandColor}
-          logoUrl={logoUrl}
-          companyName={companyName}
-          reportTitle={heading}
-          reportReference={reportReference}
-          projectReference={projectReference}
-          projectName={projectName}
-        />
-        {isFirst ? (
+        {isFirst && groupIndex === 0 ? (
           <AreaPhotoSectionBanner accent={brandColor} number={sectionNumber}>{heading}</AreaPhotoSectionBanner>
         ) : null}
-        <View style={styles.photoStage}>
-          <PhotoGrid
-            photos={pagePhotos}
-            cols={cols}
-            rows={rows}
-            brandColor={brandColor}
-            contentH={contentH}
-          />
-        </View>
-      </Page>
-    )
+        <PhotoGrid
+          photos={group}
+          cols={cols}
+          rows={rows}
+          contentH={contentH}
+        />
+      </View>
+    ))
   })
 }
 
@@ -1242,7 +1259,7 @@ function GridPages({
 }
 
 function LabourTable({ items = [], brandColor = null, number = null, registerAttached = false }) {
-  const accent = resolvePdfAccent(brandColor)
+  const accent = brandColor
   const rows = Array.isArray(items)
     ? items.filter(
         (i) =>
@@ -1264,6 +1281,8 @@ function LabourTable({ items = [], brandColor = null, number = null, registerAtt
     if (Number.isFinite(h)) hours += h
   }
 
+  if (!rows.length) return null
+
   return (
     <>
       <SectionBanner
@@ -1277,10 +1296,7 @@ function LabourTable({ items = [], brandColor = null, number = null, registerAtt
       >
         Labour
       </SectionBanner>
-      {rows.length === 0 ? (
-        <Text style={styles.emptyState}>No labour recorded.</Text>
-      ) : (
-        <DataTable
+      <DataTable
           accent={accent}
           columns={LABOUR_COLUMNS}
           rows={rows.map((item) => ({
@@ -1301,13 +1317,12 @@ function LabourTable({ items = [], brandColor = null, number = null, registerAtt
             hours: String(Math.round(hours * 100) / 100),
           }}
         />
-      )}
     </>
   )
 }
 
 function EquipmentHireTable({ items = [], brandColor = null, number = null }) {
-  const accent = resolvePdfAccent(brandColor)
+  const accent = brandColor
   const rows = Array.isArray(items)
     ? items.filter(
         (i) =>
@@ -1319,13 +1334,12 @@ function EquipmentHireTable({ items = [], brandColor = null, number = null }) {
       )
     : []
 
+  if (!rows.length) return null
+
   return (
     <>
       <SectionBanner accent={accent} number={number}>Equipment on hire</SectionBanner>
-      {rows.length === 0 ? (
-        <Text style={styles.emptyState}>No equipment on hire recorded.</Text>
-      ) : (
-        <DataTable
+      <DataTable
           accent={accent}
           columns={EQUIPMENT_COLUMNS}
           rows={rows.map((item) => ({
@@ -1336,7 +1350,6 @@ function EquipmentHireTable({ items = [], brandColor = null, number = null }) {
             status: item.status || '—',
           }))}
         />
-      )}
     </>
   )
 }
@@ -1351,7 +1364,7 @@ function EquipmentHireTable({ items = [], brandColor = null, number = null }) {
  * space after the banner and forces an empty auto-continuation.
  */
 function SectionBanner({ children, accent, presenceAhead = true, number = null, aside = null }) {
-  const color = resolvePdfAccent(accent)
+  const color = resolvePdfTableRuleColor(accent)
   return (
     <View
       style={styles.sectionBannerWrap}
@@ -1360,7 +1373,7 @@ function SectionBanner({ children, accent, presenceAhead = true, number = null, 
     >
       <View style={[styles.tableTopRule, { backgroundColor: color }]} />
       <View style={styles.sectionBanner}>
-        <Text style={[styles.sectionBannerText, { color }]}>
+        <Text style={styles.sectionBannerText}>
           {numberedSectionLabel(number, children)}
         </Text>
         {aside ? <Text style={styles.sectionBannerAside}>{aside}</Text> : null}
@@ -1429,10 +1442,13 @@ function ReportContentPage({
   reportReference = '',
   projectReference = '',
   projectName = '',
+  reportDate = '',
   sectionNumbers = {},
-  trailing = null,
+  children = null,
 }) {
-  const accent = resolvePdfAccent(brandColor)
+  const accent = brandColor
+  const displayDate = (value) =>
+    cleanPdfValue(value) ? formatProjectDateDisplay(value) : ''
 
   // One continuous content stream. Every section is a sibling in the same
   // flow, so a section starts immediately below the previous one and only
@@ -1447,9 +1463,14 @@ function ReportContentPage({
         reportReference={reportReference}
         projectReference={projectReference}
         projectName={projectName}
+        reportDate={displayDate(reportDate)}
       />
-      <SectionBanner accent={accent} number={sectionNumbers.summary}>Site summary</SectionBanner>
-      <Text style={styles.body}>{siteSummary || '—'}</Text>
+      {String(siteSummary || '').trim() ? (
+        <>
+          <SectionBanner accent={accent} number={sectionNumbers.summary}>Site summary</SectionBanner>
+          <Text style={styles.body}>{siteSummary}</Text>
+        </>
+      ) : null}
       <LabourTable items={labour}
         brandColor={accent}
         number={sectionNumbers.labour}
@@ -1498,7 +1519,7 @@ function ReportContentPage({
         accent={accent}
         number={sectionNumbers.workAreas}
       />
-      {trailing}
+      {children}
     </Page>
   )
 }
@@ -1519,157 +1540,139 @@ function DeclarationBlock({
   presenceAhead = true,
   number = null,
 }) {
-  const accent = resolvePdfAccent(brandColor)
+  const accent = brandColor
+
+  const rows = [
+    { label: 'Author Name', value: authorName?.trim() || '—' },
+    { label: 'Position / Role', value: authorRole?.trim() || '—' },
+    { label: 'Date', value: reportDate || '—' },
+  ]
 
   return (
-    <View wrap={presenceAhead ? false : undefined}>
+    <View wrap={false}>
       <SectionBanner accent={accent} presenceAhead={presenceAhead} number={number}>
         Declaration &amp; signature
       </SectionBanner>
       <Text style={[styles.signDeclaration, styles.body]}>{DECLARATION}</Text>
-      <View style={styles.signRow} wrap={false}>
-        <View style={styles.signMeta}>
-          <ScheduleList
-            labelWidth="38%"
-            accent={accent}
-            rows={[
-              { label: 'Author Name', value: authorName?.trim() || '—' },
-              { label: 'Position / Role', value: authorRole?.trim() || '—' },
-              { label: 'Date', value: reportDate || '—' },
-            ]}
-          />
-        </View>
-        <View>
-          <Text style={styles.signFieldLabel}>Signature</Text>
-          <View style={styles.signField}>
+      <View style={styles.dataTable}>
+        {rows.map((item) => (
+          <View key={item.label} style={styles.dataRow} wrap={false}>
+            <View style={[styles.dataCell, styles.dataLabelCell, { width: '32%' }]}>
+              <Text style={styles.dataHeaderText}>{item.label}</Text>
+            </View>
+            <View style={[styles.dataCell, styles.dataCellLast, { flex: 1 }]}>
+              <Text style={styles.dataValueText}>{item.value}</Text>
+            </View>
+          </View>
+        ))}
+        <View style={[styles.dataRow, { borderBottomWidth: 0 }]} wrap={false}>
+          <View style={[styles.dataCell, styles.dataLabelCell, { width: '32%' }]}>
+            <Text style={styles.dataHeaderText}>Signature</Text>
+          </View>
+          <View style={[styles.dataCell, styles.dataCellLast, styles.signValueCell]}>
             {signatureSrc ? (
               // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image
               <Image src={signatureSrc} style={styles.signImage} />
             ) : (
-              <Text style={styles.signPlaceholder}>No signature captured</Text>
+              <Text style={styles.dataValueText}>No signature captured</Text>
             )}
           </View>
         </View>
       </View>
-      <Text style={styles.signFootnote}>
-        This declaration forms part of the Site Diary for the date stated above.
-      </Text>
     </View>
   )
 }
-
-/**
- * Declaration on its own explicit page after the final photo page — never
- * nested inside a full photo grid page (that nesting produced blank pages).
- */
-function DeclarationPage({
-  brandColor,
-  logoUrl,
-  companyName,
-  reportReference = '',
-  projectReference = '',
-  projectName = '',
-  authorName,
-  authorRole,
-  reportDate,
-  signatureSrc,
-  sectionNumber = null,
-}) {
-  return (
-    <Page size="A4" style={styles.page}>
-      <PageChrome
-        brandColor={brandColor}
-        logoUrl={logoUrl}
-        companyName={companyName}
-        reportTitle="Declaration & signature"
-        reportReference={reportReference}
-        projectReference={projectReference}
-        projectName={projectName}
-      />
-      <DeclarationBlock
-        brandColor={brandColor}
-        authorName={authorName}
-        authorRole={authorRole}
-        reportDate={reportDate}
-        signatureSrc={signatureSrc}
-        presenceAhead={false}
-        number={sectionNumber}
-      />
-    </Page>
-  )
-}
-
-const ATTENDANCE_SHEET_GAP = PDF_GRID_GAP
 
 function attendanceRegisterPageGroups(sheets) {
   const list = (Array.isArray(sheets) ? sheets : []).filter(
     (sheet) => sheet && (sheet.imageSrc || sheet.fileName),
   )
   const groups = []
-  for (let index = 0; index < list.length; index += 2) {
-    groups.push(list.slice(index, index + 2))
+  for (let index = 0; index < list.length; index += 1) {
+    groups.push(list.slice(index, index + 1))
   }
   return groups
 }
 
+// Heading and legal line, as Yoga measures them. The note sets no lineHeight,
+// so its box is the page line (9.5 × 1.45), and the margins sit outside the
+// boxes. The image gets whatever height is left in the content box. The group
+// then equals one printable page and cannot compress the sections above it.
+const ATTENDANCE_BANNER_H = 14 + TABLE_TOP_RULE_W + 10 + 8.5 * 1.4
+const ATTENDANCE_NOTE_H = 4 + 6 + 9.5 * 1.45
+
+function attendanceRegisterFrameHeight(withHeading) {
+  const reserved = withHeading ? ATTENDANCE_BANNER_H + ATTENDANCE_NOTE_H : 0
+  // Stay a hair under the content box. The same subtraction in floating
+  // point lands just past the page, and that is enough to overflow it.
+  return PDF_CONTENT_H - reserved - 0.5
+}
+
 /**
- * Attendance evidence on its own page, after the site records (labour table)
- * and before the work photographs. One sheet fills the top half of the page.
- * Two sheets share the page. The image src is the original file; this frame
- * only sets the display size.
+ * Attendance evidence after the site records and before the work photographs.
+ * Each sheet is one page. The image keeps its own aspect ratio and is scaled
+ * to the printable area — width or height, whichever binds first. The first
+ * page shares that area with the heading and the legal line. The file itself
+ * is unchanged; only this frame sets the display size.
  */
 function AttendanceRegisterPages({
   sheets,
   brandColor,
-  logoUrl,
-  companyName,
-  reportReference = '',
-  projectReference = '',
-  projectName = '',
   sectionNumber = null,
 }) {
   const groups = attendanceRegisterPageGroups(sheets)
   if (!groups.length) return null
-  const sheetHeight = (photoPageGridContentHeight() - ATTENDANCE_SHEET_GAP) / 2
-  return groups.map((group, pageIndex) => {
-    const frameHeight = group.length === 1 ? PDF_PAGE_H / 2 : sheetHeight
-    return (
-    <Page key={`attendance-register-${pageIndex}`} size="A4" style={styles.page}>
-      <PageChrome
-        brandColor={brandColor}
-        logoUrl={logoUrl}
-        companyName={companyName}
-        reportTitle="Attendance Register"
-        reportReference={reportReference}
-        projectReference={projectReference}
-        projectName={projectName}
-      />
-      {pageIndex === 0 ? (
-        <SectionBanner accent={brandColor} presenceAhead={false} number={sectionNumber}>
-          Attendance Register
-        </SectionBanner>
-      ) : null}
-      <Text style={styles.evidenceNote}>Legal document - reproduced untouched.</Text>
-      {group.map((sheet, sheetIndex) => (
-        <View
-          key={`attendance-sheet-${pageIndex}-${sheetIndex}`}
-          style={{
-            height: frameHeight,
-            justifyContent: 'flex-start',
-            marginBottom: sheetIndex === 0 && group.length > 1 ? ATTENDANCE_SHEET_GAP : 0,
-          }}
-        >
-          {sheet.imageSrc ? (
-            // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image
-            <Image src={sheet.imageSrc} style={styles.imageContain} />
-          ) : (
-            <Text style={styles.body}>Attached record: {sheet.fileName}</Text>
-          )}
-        </View>
-      ))}
-    </Page>
-    )
-  })
+  return (
+    <>
+      {groups.map((group, pageIndex) => {
+        const withHeading = pageIndex === 0
+        const frameHeight = attendanceRegisterFrameHeight(withHeading)
+        return (
+          <View key={`attendance-group-${pageIndex}`} wrap={false}>
+            {withHeading ? (
+              <>
+                <SectionBanner
+                  accent={brandColor}
+                  number={sectionNumber}
+                  presenceAhead={false}
+                >
+                  Attendance Register
+                </SectionBanner>
+                <Text style={styles.evidenceNote}>Legal document - reproduced untouched.</Text>
+              </>
+            ) : null}
+            {group.map((sheet, sheetIndex) => (
+              <View
+                key={`attendance-sheet-${pageIndex}-${sheetIndex}`}
+                style={{
+                  width: PDF_PAGE_INNER_W,
+                  height: frameHeight,
+                  justifyContent: 'flex-start',
+                  marginBottom: 0,
+                }}
+              >
+                {sheet.imageSrc ? (
+                  // The box is the printable remainder. Contain-fit scales the
+                  // original to whichever of width or height binds first.
+                  // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image
+                  <Image
+                    src={sheet.imageSrc}
+                    style={{
+                      width: PDF_PAGE_INNER_W,
+                      height: frameHeight,
+                      ...PDF_PHOTO_FIT,
+                    }}
+                  />
+                ) : (
+                  <Text style={styles.body}>Attached record: {sheet.fileName}</Text>
+                )}
+              </View>
+            ))}
+          </View>
+        )
+      })}
+    </>
+  )
 }
 
 /**
@@ -1687,8 +1690,34 @@ function AttendanceRegisterPages({
  * labour: [{ trade, company, headcount|count, hours }]
  * equipmentHire: [{ description, supplier, quantity, status }]
  */
+function hasLabourRows(items) {
+  return Array.isArray(items) && items.some(
+    (i) =>
+      i &&
+      (String(i.trade || '').trim() ||
+        String(i.company || '').trim() ||
+        (i.headcount != null && i.headcount !== '') ||
+        (i.count != null && i.count !== '') ||
+        (i.hours != null && i.hours !== '')),
+  )
+}
+
+function hasEquipmentRows(items) {
+  return Array.isArray(items) && items.some(
+    (i) =>
+      i &&
+      (String(i.description || '').trim() ||
+        String(i.supplier || '').trim() ||
+        (i.quantity != null && i.quantity !== '') ||
+        (i.status && i.status !== 'Active')),
+  )
+}
+
 function diarySectionNumbers({
   coverDetails,
+  siteSummary,
+  labour,
+  equipmentHire,
   attendance,
   visitors,
   permits,
@@ -1705,9 +1734,9 @@ function diarySectionNumbers({
     return next
   }
   numbers.details = coverDetails ? take() : null
-  numbers.summary = take()
-  numbers.labour = take()
-  numbers.equipment = take()
+  numbers.summary = String(siteSummary || '').trim() ? take() : null
+  numbers.labour = hasLabourRows(labour) ? take() : null
+  numbers.equipment = hasEquipmentRows(equipmentHire) ? take() : null
   numbers.attendance = toRecordRows(attendance, ATTENDANCE_COLUMNS).length ? take() : null
   numbers.visitors = toRecordRows(visitors, VISITOR_COLUMNS).length ? take() : null
   numbers.permits = toRecordRows(permits, PERMIT_COLUMNS).length ? take() : null
@@ -1769,6 +1798,9 @@ export function DiaryPdfDocument({
       weather,
       reportDate,
     }).some((item) => item.value),
+    siteSummary,
+    labour,
+    equipmentHire,
     attendance,
     visitors,
     permits,
@@ -1778,21 +1810,6 @@ export function DiaryPdfDocument({
     attendanceRegisterSheets,
     areas: schedule.areas,
   })
-
-  // The declaration trails the last page the report actually produces.
-  // After photo areas it is its own explicit page (never nested in a full
-  // photo grid page — that nesting left blank auto-continuations).
-  const declaration = (
-    <DeclarationBlock
-      brandColor={brandColor}
-      authorName={authorName}
-      authorRole={authorRole}
-      reportDate={reportDate}
-      signatureSrc={signatureSrc}
-      number={sectionNumbers.declaration}
-    />
-  )
-  const lastHost = schedule.areas.length ? 'photos' : 'records'
 
   return (
     <Document>
@@ -1834,52 +1851,40 @@ export function DiaryPdfDocument({
         reportReference={reportReference}
         projectReference={projectReference}
         projectName={projectName}
+        reportDate={reportDate}
         sectionNumbers={sectionNumbers}
-        trailing={lastHost === 'records' ? declaration : null}
-      />
-
-      <AttendanceRegisterPages
-        sheets={attendanceRegisterSheets}
-        brandColor={brandColor}
-        logoUrl={logoUrl}
-        companyName={companyName}
-        reportReference={reportReference}
-        projectReference={projectReference}
-        projectName={projectName}
-        sectionNumber={sectionNumbers.register}
-      />
-
-      {schedule.areas.map((area, areaIndex) => (
-        <AreaPhotographicSection
-          key={`area-${areaIndex}-${area.areaName}`}
-          areaName={area.areaName}
-          photos={area.photos}
-          layout={area.layout || 'grid4'}
+      >
+        <AttendanceRegisterPages
+          sheets={attendanceRegisterSheets}
           brandColor={brandColor}
-          logoUrl={logoUrl}
-          companyName={companyName}
-          reportReference={reportReference}
-          projectReference={projectReference}
-          projectName={projectName}
-          sectionNumber={sectionNumbers.photos[areaIndex]}
+          sectionNumber={sectionNumbers.register}
         />
-      ))}
 
-      {lastHost === 'photos' ? (
-        <DeclarationPage
+        {schedule.areas.map((area, areaIndex) => (
+          <AreaPhotographicSection
+            key={`area-${areaIndex}-${area.areaName}`}
+            areaName={area.areaName}
+            photos={area.photos}
+            layout={area.layout || 'grid4'}
+            brandColor={brandColor}
+            logoUrl={logoUrl}
+            companyName={companyName}
+            reportReference={reportReference}
+            projectReference={projectReference}
+            projectName={projectName}
+            sectionNumber={sectionNumbers.photos[areaIndex]}
+          />
+        ))}
+
+        <DeclarationBlock
           brandColor={brandColor}
-          logoUrl={logoUrl}
-          companyName={companyName}
-          reportReference={reportReference}
-          projectReference={projectReference}
-          projectName={projectName}
-          sectionNumber={sectionNumbers.declaration}
           authorName={authorName}
           authorRole={authorRole}
           reportDate={reportDate}
           signatureSrc={signatureSrc}
+          number={sectionNumbers.declaration}
         />
-      ) : null}
+      </ReportContentPage>
     </Document>
   )
 }
