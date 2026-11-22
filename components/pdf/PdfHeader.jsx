@@ -7,6 +7,7 @@ import {
   PDF_PAGE_PAD_X,
   ZLOG_LANDING_URL,
   resolvePdfBannerColor,
+  resolvePdfBannerTextColor,
   zlogFooterHref,
 } from '@/lib/diary-pdf-layout'
 
@@ -37,6 +38,7 @@ export function PdfHeader({
   edgeBleed = 0,
 }) {
   const color = resolvePdfBannerColor(brandColor)
+  const textColor = resolvePdfBannerTextColor(brandColor)
   const title = PDF_BANNER_TITLE
   const name = String(projectName || '').trim()
   const reference = String(projectReference || '').trim()
@@ -55,7 +57,7 @@ export function PdfHeader({
     headerFill: {
       width: '100%',
       height: '100%',
-      backgroundColor: color,
+      backgroundColor: color || undefined,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
@@ -83,7 +85,7 @@ export function PdfHeader({
       alignItems: 'center',
     },
     title: {
-      color: '#FFFFFF',
+      color: textColor,
       fontSize: 11,
       fontFamily: 'Helvetica-Bold',
       letterSpacing: 1.4,
@@ -95,7 +97,7 @@ export function PdfHeader({
       justifyContent: 'center',
     },
     reference: {
-      color: '#FFFFFF',
+      color: textColor,
       fontSize: 8,
       fontFamily: 'Helvetica',
       textAlign: 'right',
