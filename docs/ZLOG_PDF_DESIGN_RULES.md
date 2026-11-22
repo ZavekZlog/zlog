@@ -85,6 +85,16 @@ The photo grid is top-aligned at the normal content start. It is never centred v
 
 The section heading is "Work Photographs", as section 7 requires. Area sub-headings follow it, and areas flow on without each area starting a new page.
 
+The Work Photographs heading stays the same height and style as every other section bar: 36.65pt. It is not a separate photo heading.
+
+The area sub-heading is one slim style of about 20pt, used for every area. It does not change with where the area sits on the page. The sub-heading spans the full width, and that area's photographs start on the next row. A part-filled row stays part-filled. The sub-heading stays with at least the first row of its photographs and is never left alone at the foot of a page.
+
+Photo numbering continues across areas.
+
+All frames of one photos-per-page setting are one uniform size on every page. The size is derived from the content height so that the Work Photographs bar, one area sub-heading, and two full rows fit on one page. The clearance is the existing 14pt photo-page slack: a 2pt remainder drops the second row onto the next page. The image and frame figures are not hard-coded.
+
+Supporting Documents use that same frame size, the same grid, and the same snug outline. Numbering restarts at 1 in that section. Each caption is the document name followed by ": hard copy in site file".
+
 ## 9. Appendices and attendance register
 Appendices come before the work photographs. The register shows the full top of the sheet with all names, never cropped to one day's rows. It is embedded at source resolution and fills a full page. Its heading, caption and image stay together on one page; if they do not fit, the whole block moves to the next page. Appended scans carry the caption "Legal document - reproduced untouched."
 

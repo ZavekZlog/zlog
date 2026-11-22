@@ -27,6 +27,8 @@ The agreed solution is to rotate landscape photos to fill the portrait frame, an
 
 Superseded: "the numbered box top-left." The photo number, and every reference text, sits in the caption bar beneath the photograph. The outline sits snug around the photograph, with no white inside it, and the photograph is shown whole. The photo grid is top-aligned and is never centred vertically. Where "identical frame" would leave white inside the outline, the snug-outline rule in `ZLOG_PDF_DESIGN_RULES.md` section 8 wins.
 
+Work Photographs is one section bar, the same 36.65pt bar as every other section. Each area is a slim sub-heading of about 20pt, in one style wherever it falls. Areas flow on in the page stream and do not each start a new page. The sub-heading spans the full width, the area's photographs start on the next row, and a part-filled row stays part-filled. The sub-heading stays with at least the first row of its photographs. Photo numbers continue across areas. Every frame of one photos-per-page setting is one size on every page, derived so the section bar, one area sub-heading, and two full rows fit. The clearance is the existing 14pt photo-page slack, because a 2pt remainder drops the second row onto the next page.
+
 ## Data model
 
 Each photo carries `options = { rot: boolean, tag: string | null }`.
@@ -36,7 +38,7 @@ Each photo carries `options = { rot: boolean, tag: string | null }`.
 
 ## Supporting Documents
 
-Permits to work, toolbox talks, and MEWP or other inspection sheets do **not** sit among the work photos. They go in their own **Supporting Documents** section, placed after the work photos, using the same frame size and grid. Numbering restarts at 1 within that section. Captions read "<document name>: hard copy in site file". Their purpose in the diary is only to evidence that the check was carried out; the hard copies are held in the site file.
+Permits to work, toolbox talks, and MEWP or other inspection sheets do **not** sit among the work photos. They go in their own **Supporting Documents** section, placed after the work photos. They use the same frame size, the same grid, and the same snug outline as the work photographs. Numbering restarts at 1 within that section. Captions read "<document name>: hard copy in site file". Their purpose in the diary is only to evidence that the check was carried out; the hard copies are held in the site file. An empty Supporting Documents section is omitted, and that omission is not printed as "none".
 
 ## Verification
 

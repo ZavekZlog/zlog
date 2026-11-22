@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, Image, Font, StyleSheet } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, Font, StyleSheet, Svg, Path, Polygon } from '@react-pdf/renderer'
 import { PdfHeader, PdfFooter } from '@/components/pdf/PdfHeader'
 import { computeProjectDay, formatProjectDateDisplay } from '@/lib/project-day'
 import {
@@ -26,13 +26,21 @@ import {
   PDF_PHOTO_FIT,
   PDF_PHOTO_FRAME_BORDER,
   PDF_PHOTO_RULE_W,
+  PDF_AREA_SUBHEADING_FONT,
+  PDF_AREA_SUBHEADING_GAP,
+  PDF_AREA_SUBHEADING_LINE,
+  PDF_AREA_SUBHEADING_PAD_Y,
   computePhotoFrameGeometry,
-  paginatePdfPhotos,
+  jpegPixelSize,
+  photoFlowGridBudget,
+  snugPhotoBox,
+  supportingDocumentCaption,
   photoGridForTier,
-  photoPageGridContentHeight,
+  scaledCaptionMetrics,
   resolvePdfBannerColor,
   resolvePdfTableRuleColor,
 } from '@/lib/diary-pdf-layout'
+import { frameMarksForImage } from '@/lib/pdf-photo-frame-rotation'
 
 const CONTENT_H = PDF_CONTENT_H
 
@@ -274,7 +282,7 @@ const styles = StyleSheet.create({
   },
   identityName: {
     width: '100%',
-    color: INK,
+    color: MUTED,
     fontSize: 15,
     fontFamily: 'Helvetica-Bold',
     lineHeight: 1.2,
@@ -428,11 +436,19 @@ const styles = StyleSheet.create({
   areaPhotoSectionBanner: {
     width: '100%',
     marginTop: 0,
-    marginBottom: 8,
-    paddingVertical: 5,
+    marginBottom: PDF_AREA_SUBHEADING_GAP,
+    paddingVertical: PDF_AREA_SUBHEADING_PAD_Y,
     paddingHorizontal: TABLE_PAD_X,
     justifyContent: 'center',
     backgroundColor: PDF_DOVE_GREY,
+  },
+  areaSubheadingText: {
+    color: INK,
+    fontSize: PDF_AREA_SUBHEADING_FONT,
+    fontFamily: 'Helvetica-Bold',
+    letterSpacing: 1,
+    lineHeight: PDF_AREA_SUBHEADING_LINE,
+    textAlign: 'left',
   },
   sectionBannerText: {
     color: INK,
@@ -688,83 +704,89 @@ function cleanPdfValue(value) {
  * fabricated and the grid never shows a hole.
  */
 function ScheduleGrid({ rows }) {
-  const spanning = rows.filter((item) => item.value && item.span === 'full')
-  const visible = rows.filter((item) => item.value && item.span !== 'full')
-  if (!spanning.length && !visible.length) return null
+  const items = rows.filter((item) => item.value)
+  if (!items.length) return null
 
   const gridRows = []
-  for (let index = 0; index < visible.length; index += 2) {
-    gridRows.push(visible.slice(index, index + 2))
+  for (let index = 0; index < items.length; ) {
+    const item = items[index]
+    if (item.span === 'full') {
+      gridRows.push([item])
+      index += 1
+      continue
+    }
+    const next = items[index + 1]
+    if (next && next.span !== 'full') {
+      gridRows.push([item, next])
+      index += 2
+    } else {
+      gridRows.push([item])
+      index += 1
+    }
   }
 
   return (
     <View style={styles.scheduleGrid}>
-      {spanning.map((item, index) => (
-        <View
-          key={item.label}
-          style={[
-            styles.scheduleGridRow,
-            gridRows.length === 0 && index === spanning.length - 1
-              ? { borderBottomWidth: 0 }
-              : null,
-          ]}
-          wrap={false}
-        >
-          <View style={[styles.scheduleGridPair, { width: '100%' }]}>
-            <View style={[styles.scheduleGridLabelCell, { width: '20%' }]}>
-              <Text style={styles.scheduleGridLabel}>{item.label}</Text>
-            </View>
-            <View style={[styles.scheduleGridValueCell, { width: '80%' }]}>
-              <Text style={styles.scheduleGridValue}>{item.value}</Text>
-            </View>
+      {gridRows.map((pair, rowIndex) => {
+        const full = pair[0].span === 'full'
+        return (
+          <View
+            key={pair[0].label}
+            style={[
+              styles.scheduleGridRow,
+              rowIndex === gridRows.length - 1 ? { borderBottomWidth: 0 } : null,
+            ]}
+            wrap={false}
+          >
+            {full ? (
+              <View style={[styles.scheduleGridPair, { width: '100%' }]}>
+                <View style={[styles.scheduleGridLabelCell, { width: '20%' }]}>
+                  <Text style={styles.scheduleGridLabel}>{pair[0].label}</Text>
+                </View>
+                <View style={[styles.scheduleGridValueCell, { width: '80%' }]}>
+                  <Text style={styles.scheduleGridValue}>{pair[0].value}</Text>
+                </View>
+              </View>
+            ) : (
+              <>
+                {pair.map((item, pairIndex) => (
+                  <View
+                    key={item.label}
+                    style={[
+                      styles.scheduleGridPair,
+                      pairIndex === 1 ? styles.scheduleGridPairDivider : null,
+                    ]}
+                  >
+                    <View style={styles.scheduleGridLabelCell}>
+                      <Text style={styles.scheduleGridLabel}>{item.label}</Text>
+                    </View>
+                    <View style={styles.scheduleGridValueCell}>
+                      <Text style={styles.scheduleGridValue}>{item.value}</Text>
+                    </View>
+                  </View>
+                ))}
+                {pair.length === 1 ? <View style={styles.scheduleGridPair} /> : null}
+              </>
+            )}
           </View>
-        </View>
-      ))}
-      {gridRows.map((pair, rowIndex) => (
-        <View
-          key={pair[0].label}
-          style={[
-            styles.scheduleGridRow,
-            rowIndex === gridRows.length - 1 ? { borderBottomWidth: 0 } : null,
-          ]}
-          wrap={false}
-        >
-          {pair.map((item, pairIndex) => (
-            <View
-              key={item.label}
-              style={[
-                styles.scheduleGridPair,
-                pairIndex === 1 ? styles.scheduleGridPairDivider : null,
-              ]}
-            >
-              <View style={styles.scheduleGridLabelCell}>
-                <Text style={styles.scheduleGridLabel}>{item.label}</Text>
-              </View>
-              <View style={styles.scheduleGridValueCell}>
-                <Text style={styles.scheduleGridValue}>{item.value}</Text>
-              </View>
-            </View>
-          ))}
-          {pair.length === 1 ? <View style={styles.scheduleGridPair} /> : null}
-        </View>
-      ))}
+        )
+      })}
     </View>
   )
 }
 
 /**
  * Cover identity: project name and address, centred, in one dove-grey band
- * flush under the banner. The name takes the resolved brand colour. The
- * report date is a cover-table row, not a third line in this band.
+ * flush under the banner. The name is neutral grey. The report date is a
+ * cover-table row, not a third line in this band.
  */
-function ProjectIdentity({ projectName, projectAddress, brandColor }) {
+function ProjectIdentity({ projectName, projectAddress }) {
   if (!projectName && !projectAddress) return null
-  const nameColor = resolvePdfBannerColor(brandColor)
 
   return (
     <View style={styles.identityBlock}>
       {projectName ? (
-        <Text style={[styles.identityName, { color: nameColor }]}>{projectName}</Text>
+        <Text style={styles.identityName}>{projectName}</Text>
       ) : null}
       {projectAddress ? (
         <Text style={styles.identityAddress}>{projectAddress}</Text>
@@ -966,7 +988,7 @@ function coverScheduleRows({
     { label: 'Planned Completion Date', value: displayDate(plannedCompletionDate) },
     { label: 'Weather', value: cleanPdfValue(weather) },
     { label: 'Project Day', value: projectDay },
-    { label: 'Project Week', value: projectWeek },
+    { label: 'Project Week', value: projectWeek, span: 'full' },
   ]
 }
 
@@ -1024,7 +1046,6 @@ function PageOne({
       <ProjectIdentity
         projectName={cleanPdfValue(projectName)}
         projectAddress={cleanPdfValue(projectAddress)}
-        brandColor={brandColor}
       />
 
       {coverPhotoUrl ? (
@@ -1045,44 +1066,130 @@ function PageOne({
 }
 
 /**
+ * Dark square, white border, white circular arrow pointing clockwise.
+ * Sits in the top-right of the frame. The arrow means: turn the page
+ * clockwise to see the photograph as it was taken.
+ */
+function RotationBadge({ marks }) {
+  const icon = marks.badge - marks.border * 2 - 3
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        top: marks.inset,
+        right: marks.inset,
+        width: marks.badge,
+        height: marks.badge,
+        backgroundColor: '#1C2126',
+        borderWidth: marks.border,
+        borderStyle: 'solid',
+        borderColor: '#FFFFFF',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Svg width={icon} height={icon} viewBox="0 0 24 24">
+        <Path
+          d="M8 16.5 A 7 7 0 1 1 12 5"
+          stroke="#FFFFFF"
+          strokeWidth={2.2}
+          fill="none"
+        />
+        <Polygon points="10.2,2.2 16.4,5 10.6,8" fill="#FFFFFF" />
+      </Svg>
+    </View>
+  )
+}
+
+/** Optional area label, bottom-left inside the photograph, above the caption bar. */
+function AreaTag({ text, marks }) {
+  if (!text) return null
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        left: marks.inset,
+        bottom: marks.inset,
+        backgroundColor: '#1C2126',
+        paddingHorizontal: 4 * marks.scale,
+        paddingVertical: 2 * marks.scale,
+        maxWidth: '68%',
+      }}
+    >
+      <Text
+        style={{
+          color: '#FFFFFF',
+          fontFamily: 'Helvetica-Bold',
+          fontSize: marks.tagSize,
+          lineHeight: 1.1,
+        }}
+      >
+        {text}
+      </Text>
+    </View>
+  )
+}
+
+/**
  * One photographic record as a fixed report cell:
  * - the outer frame is sized by the grid, never by the photograph
  * - the image viewport contains the photograph (no crop / stretch / distortion)
- * - the caption slot sits beneath the frame at a fixed height
- * Rotation already stored on the photograph is baked into `src` so it displays
- * the right way up. A landscape photograph is turned 90 degrees in that bake
- * so it fills this portrait frame. The viewport only contains the result,
- * so nothing is cropped.
+ * - the caption slot sits beneath the image and scales with the frame
+ * Stored orientation is baked into `src`. A landscape photograph that is not
+ * already 3:4 is turned anticlockwise in that bake and marked with a badge.
+ * The viewport is 3:4 and only contains the result, so nothing is cropped.
  */
 function FramedPhoto({
   src,
   caption,
   assignedToLine,
   frameWidth,
-  frameHeight,
+  imageH,
+  captionH,
+  marks,
   gapRight = 0,
   photoNumber,
+  rot = false,
+  tag = null,
 }) {
   if (!src) return null
   const refLabel = photoReferenceLabel(photoNumber)
   const captionText = typeof caption === 'string' ? caption.trim() : ''
   const assignedLine = typeof assignedToLine === 'string' ? assignedToLine.trim() : ''
+  const tagText = typeof tag === 'string' ? tag.trim() : ''
+  const captionMetrics = scaledCaptionMetrics(captionH)
 
-  const innerW = frameWidth - PDF_PHOTO_FRAME_BORDER * 2
+  const maxImageW = frameWidth - PDF_PHOTO_FRAME_BORDER * 2
+  const pixels = jpegPixelSize(src)
+  const fitted = snugPhotoBox(pixels?.width, pixels?.height, maxImageW, imageH)
+  const snugFrameW = fitted.width + PDF_PHOTO_FRAME_BORDER * 2
 
   return (
     <View style={{ width: frameWidth, marginRight: gapRight }} wrap={false}>
-      <View style={[styles.photoFrame, { width: frameWidth }]} wrap={false}>
-        <View style={[styles.photoViewport, { width: innerW, height: frameHeight }]}>
+      <View style={[styles.photoFrame, { width: snugFrameW }]} wrap={false}>
+        <View style={[styles.photoViewport, { width: fitted.width, height: fitted.height }]}>
           {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
           <Image src={src} style={styles.imageContain} />
+          {rot ? <RotationBadge marks={marks} /> : null}
+          {tagText ? <AreaTag text={tagText} marks={marks} /> : null}
         </View>
-        <View style={styles.photoCaptionSlot}>
-          <Text style={styles.photoRef}>{refLabel}</Text>
-          <Text style={styles.caption} maxLines={1}>
+        <View
+          style={[
+            styles.photoCaptionSlot,
+            {
+              height: captionMetrics.height,
+              paddingVertical: captionMetrics.padY,
+              paddingHorizontal: captionMetrics.padX,
+            },
+          ]}
+        >
+          <Text style={[styles.photoRef, { fontSize: captionMetrics.refSize, letterSpacing: 0.9 * (captionMetrics.height / PDF_PHOTO_CAPTION_SLOT_H) }]}>
+            {refLabel}
+          </Text>
+          <Text style={[styles.caption, { fontSize: captionMetrics.captionSize }]} maxLines={1}>
             {captionText}
           </Text>
-          <Text style={styles.assignedTo} maxLines={1}>
+          <Text style={[styles.assignedTo, { fontSize: captionMetrics.assignedSize }]} maxLines={1}>
             {assignedLine}
           </Text>
         </View>
@@ -1100,15 +1207,39 @@ function photoSrc(photo) {
  * column count, so a short page keeps the same cells and simply leaves the
  * trailing ones empty.
  */
-function PhotoGrid({ photos, cols, rows, contentH = PDF_CONTENT_H }) {
-  const { frameW, frameH } = computePhotoFrameGeometry({ cols, rows, contentH })
+function PhotoGrid({
+  photos,
+  count = 4,
+  cols: requestedCols = null,
+  rows = null,
+  contentH = PDF_CONTENT_H,
+  pageContentH = null,
+}) {
+  const geometry = computePhotoFrameGeometry({
+    count,
+    cols: requestedCols,
+    rows,
+    contentH,
+    pageContentH,
+  })
+  const cols = geometry.cols
+  const marks = frameMarksForImage(geometry.imageW)
   const chunks = []
   for (let index = 0; index < photos.length; index += cols) {
     chunks.push(photos.slice(index, index + cols))
   }
-
   return (
-    <View style={styles.photoGrid} wrap={false}>
+    <View
+      style={[
+        styles.photoGrid,
+        {
+          width: geometry.gridW,
+          marginLeft: geometry.offsetX,
+          marginTop: 0,
+        },
+      ]}
+      wrap={false}
+    >
       {chunks.map((row, rowIndex) => {
         return (
           <View
@@ -1125,10 +1256,14 @@ function PhotoGrid({ photos, cols, rows, contentH = PDF_CONTENT_H }) {
                 src={photoSrc(photo)}
                 caption={photoTileCaption(photo)}
                 assignedToLine={photoTileAssignedToLine(photo)}
-                frameWidth={frameW}
-                frameHeight={frameH}
+                frameWidth={geometry.frameW}
+                imageH={geometry.imageH}
+                captionH={geometry.captionH}
+                marks={marks}
                 gapRight={columnIndex === cols - 1 ? 0 : PDF_PHOTO_GUTTER}
                 photoNumber={photo.reportPhotoNumber}
+                rot={photo.options?.rot === true}
+                tag={photo.options?.tag || null}
               />
             ))}
           </View>
@@ -1150,7 +1285,7 @@ function AreaPhotoSectionBanner({ children, number = null, accent = null }) {
     <View>
       <View style={[styles.tableTopRule, { backgroundColor: color }]} />
       <View style={styles.areaPhotoSectionBanner}>
-        <Text style={styles.sectionBannerText}>
+        <Text style={styles.areaSubheadingText}>
           {numberedSectionLabel(number, children)}
         </Text>
       </View>
@@ -1158,57 +1293,123 @@ function AreaPhotoSectionBanner({ children, number = null, accent = null }) {
   )
 }
 
+function photosPerPageForLayout(layout) {
+  if (layout === 'full') return 1
+  if (layout === 'grid6') return 6
+  if (layout === 'grid2') return 2
+  return 4
+}
+
 /**
- * One named work-photo area: visible area heading, then only that area's photos
- * at the area's own 1 / 4 / 6 layout. Chunks stay in the diary flow, so the
- * next section starts on this page when it fits.
+ * One work-photo area inside the shared flow. The area sub-heading is glued
+ * to that area's first row. Later rows follow, and a short last row stays short.
  */
 function AreaPhotographicSection({
   areaName,
   photos,
   layout = 'grid4',
   brandColor,
-  logoUrl,
-  companyName,
-  reportReference = '',
-  projectReference = '',
-  projectName = '',
-  sectionNumber = null,
+  sectionHeading = null,
 }) {
-  const perPage = layout === 'full' ? 1 : layout === 'grid6' ? 6 : 4
+  const list = Array.isArray(photos) ? photos.filter(Boolean) : []
+  if (!list.length) return null
+  const perPage = photosPerPageForLayout(layout)
   const { cols, rows } = photoGridForTier(perPage)
-  const pages = paginatePdfPhotos(photos, perPage).filter(
-    (chunk) => Array.isArray(chunk) && chunk.length > 0,
-  )
+  const contentH = photoFlowGridBudget()
   const heading = photographicRecordAreaTitle(areaName)
-
-  return pages.map((pagePhotos, pageIndex) => {
-    const isFirst = pageIndex === 0
-    // Size every cell from the heading-inclusive budget so a heading and its
-    // first group of four fit together, and every frame stays the same size.
-    const contentH = photoPageGridContentHeight({ isAreaStart: true })
-    const groups = []
-    for (let index = 0; index < pagePhotos.length; index += 4) {
-      groups.push(pagePhotos.slice(index, index + 4))
-    }
-    return groups.map((group, groupIndex) => (
+  const blocks = []
+  for (let index = 0; index < list.length; index += cols) {
+    const row = list.slice(index, index + cols)
+    const firstRow = index === 0
+    const lastRow = index + cols >= list.length
+    blocks.push(
       <View
-        key={`area-${heading}-${pageIndex}-${groupIndex}`}
-        style={styles.photoStage}
+        key={`${heading}-${index}`}
         wrap={false}
+        style={lastRow ? null : { marginBottom: PDF_PHOTO_GUTTER }}
       >
-        {isFirst && groupIndex === 0 ? (
-          <AreaPhotoSectionBanner accent={brandColor} number={sectionNumber}>{heading}</AreaPhotoSectionBanner>
+        {firstRow ? sectionHeading : null}
+        {firstRow ? (
+          <AreaPhotoSectionBanner accent={brandColor}>{heading}</AreaPhotoSectionBanner>
         ) : null}
         <PhotoGrid
-          photos={group}
+          photos={row}
+          count={perPage}
           cols={cols}
           rows={rows}
           contentH={contentH}
         />
-      </View>
-    ))
-  })
+      </View>,
+    )
+  }
+  return blocks
+}
+
+function WorkPhotographs({ areas = [], brandColor, sectionNumber = null }) {
+  const list = areas.filter((area) => Array.isArray(area?.photos) && area.photos.length)
+  if (!list.length) return null
+  return list.map((area, areaIndex) => (
+    <AreaPhotographicSection
+      key={`area-${areaIndex}-${area.areaName}`}
+      areaName={area.areaName}
+      photos={area.photos}
+      layout={area.layout || 'grid4'}
+      brandColor={brandColor}
+      sectionHeading={
+        areaIndex === 0 ? (
+          <SectionBanner accent={brandColor} presenceAhead={false} number={sectionNumber}>
+            Work Photographs
+          </SectionBanner>
+        ) : null
+      }
+    />
+  ))
+}
+
+function SupportingDocuments({
+  documents = [],
+  brandColor,
+  sectionNumber = null,
+  layout = 'grid4',
+}) {
+  const photos = (Array.isArray(documents) ? documents : [])
+    .filter((doc) => doc && photoSrc(doc))
+    .map((doc, index) => ({
+      ...doc,
+      reportPhotoNumber: index + 1,
+      caption: supportingDocumentCaption(doc.name || doc.title || doc.caption),
+      assignedTo: '',
+    }))
+  if (!photos.length) return null
+  const perPage = photosPerPageForLayout(layout)
+  const { cols, rows } = photoGridForTier(perPage)
+  const contentH = photoFlowGridBudget()
+  const blocks = []
+  for (let index = 0; index < photos.length; index += cols) {
+    const row = photos.slice(index, index + cols)
+    const lastRow = index + cols >= photos.length
+    blocks.push(
+      <View
+        key={`supporting-${index}`}
+        wrap={false}
+        style={lastRow ? null : { marginBottom: PDF_PHOTO_GUTTER }}
+      >
+        {index === 0 ? (
+          <SectionBanner accent={brandColor} presenceAhead={false} number={sectionNumber}>
+            Supporting Documents
+          </SectionBanner>
+        ) : null}
+        <PhotoGrid
+          photos={row}
+          count={perPage}
+          cols={cols}
+          rows={rows}
+          contentH={contentH}
+        />
+      </View>,
+    )
+  }
+  return blocks
 }
 
 function FullPagePhotos({
@@ -1722,6 +1923,7 @@ function diarySectionNumbers({
   workAreas,
   attendanceRegisterSheets,
   areas,
+  supportingDocuments = [],
 }) {
   const numbers = { photos: [] }
   let next = 0
@@ -1740,10 +1942,12 @@ function diarySectionNumbers({
   numbers.temporaryWorks = toRecordRows(temporaryWorks, TEMPORARY_WORKS_COLUMNS).length ? take() : null
   numbers.workAreas = toRecordRows(workAreas, WORK_AREA_COLUMNS).length ? take() : null
   const hasPhotos = areas.length > 0
-  if (!hasPhotos) numbers.declaration = take()
+  const hasSupporting = supportingDocuments.some((doc) => doc && (doc.src || doc.preview || doc.url))
+  if (!hasPhotos && !hasSupporting) numbers.declaration = take()
   numbers.register = attendanceRegisterPageGroups(attendanceRegisterSheets).length ? take() : null
-  numbers.photos = areas.map(() => take())
-  if (hasPhotos) numbers.declaration = take()
+  if (hasPhotos) numbers.photos = take()
+  if (hasSupporting) numbers.supporting = take()
+  if (hasPhotos || hasSupporting) numbers.declaration = take()
   return numbers
 }
 
@@ -1778,6 +1982,7 @@ export function DiaryPdfDocument({
   authorRole = '',
   signatureSrc = null,
   attendanceRegisterSheets = [],
+  supportingDocuments = [],
 }) {
   const schedule = buildPhotoAreaSchedule(photos)
   const sectionNumbers = diarySectionNumbers({
@@ -1805,6 +2010,7 @@ export function DiaryPdfDocument({
     workAreas,
     attendanceRegisterSheets,
     areas: schedule.areas,
+    supportingDocuments,
   })
 
   return (
@@ -1856,21 +2062,17 @@ export function DiaryPdfDocument({
           sectionNumber={sectionNumbers.register}
         />
 
-        {schedule.areas.map((area, areaIndex) => (
-          <AreaPhotographicSection
-            key={`area-${areaIndex}-${area.areaName}`}
-            areaName={area.areaName}
-            photos={area.photos}
-            layout={area.layout || 'grid4'}
-            brandColor={brandColor}
-            logoUrl={logoUrl}
-            companyName={companyName}
-            reportReference={reportReference}
-            projectReference={projectReference}
-            projectName={projectName}
-            sectionNumber={sectionNumbers.photos[areaIndex]}
-          />
-        ))}
+        <WorkPhotographs
+          areas={schedule.areas}
+          brandColor={brandColor}
+          sectionNumber={sectionNumbers.photos}
+        />
+        <SupportingDocuments
+          documents={supportingDocuments}
+          brandColor={brandColor}
+          sectionNumber={sectionNumbers.supporting}
+          layout={schedule.areas[0]?.layout || 'grid4'}
+        />
 
         <DeclarationBlock
           brandColor={brandColor}
