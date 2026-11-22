@@ -659,7 +659,6 @@ const styles = StyleSheet.create({
 function PageChrome({
   brandColor,
   logoUrl,
-  reportTitle,
   projectReference = '',
   projectName = '',
   reportDate = '',
@@ -669,7 +668,6 @@ function PageChrome({
       <PdfHeader
         brandColor={brandColor}
         logoUrl={logoUrl}
-        reportTitle={reportTitle}
         projectName={projectName}
         projectReference={projectReference}
         edgeBleed={PDF_FRAME_BLEED}
@@ -1017,7 +1015,6 @@ function PageOne({
       <PageChrome
         brandColor={brandColor}
         logoUrl={logoUrl}
-        reportTitle="DAILY SITE DIARY"
         reportReference={cleanPdfValue(reportReference)}
         projectReference={cleanPdfValue(projectReference)}
         projectName={cleanPdfValue(projectName)}
@@ -1459,7 +1456,6 @@ function ReportContentPage({
         brandColor={brandColor}
         logoUrl={logoUrl}
         companyName={companyName}
-        reportTitle="Site Diary — Site records"
         reportReference={reportReference}
         projectReference={projectReference}
         projectName={projectName}

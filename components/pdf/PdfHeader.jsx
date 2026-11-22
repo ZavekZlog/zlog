@@ -1,11 +1,13 @@
-import { View, Text, Image, StyleSheet } from '@react-pdf/renderer'
+import { View, Text, Link, Image, StyleSheet } from '@react-pdf/renderer'
 import {
   PDF_FOOTER_BLOCK_H,
   PDF_FOOTER_TOP,
   PDF_HEADER_BLOCK_H,
   PDF_PAGE_MARGIN_TOP,
   PDF_PAGE_PAD_X,
+  ZLOG_LANDING_URL,
   resolvePdfBannerColor,
+  zlogFooterHref,
 } from '@/lib/diary-pdf-layout'
 
 const MUTED = '#66707A'
@@ -13,6 +15,12 @@ const RULE = '#D3D8DD'
 
 /** Same coloured banner height as page-1 DAILY SITE DIARY chrome. */
 export const PDF_ACCENT_BANNER_H = PDF_HEADER_BLOCK_H
+
+/**
+ * Banner title for every page of every issued report. It does not change
+ * from page to page.
+ */
+export const PDF_BANNER_TITLE = 'DAILY SITE DIARY'
 
 /**
  * Coloured masthead banner for every page, including pages created by overflow.
@@ -24,13 +32,12 @@ export const PDF_ACCENT_BANNER_H = PDF_HEADER_BLOCK_H
 export function PdfHeader({
   brandColor = null,
   logoUrl = null,
-  reportTitle = '',
   projectName = '',
   projectReference = '',
   edgeBleed = 0,
 }) {
   const color = resolvePdfBannerColor(brandColor)
-  const title = String(reportTitle || 'DAILY SITE DIARY').trim() || 'DAILY SITE DIARY'
+  const title = PDF_BANNER_TITLE
   const name = String(projectName || '').trim()
   const reference = String(projectReference || '').trim()
   const bleed = Number(edgeBleed) || 0
@@ -64,10 +71,12 @@ export function PdfHeader({
       width: 68,
       height: 32,
     },
+    // Full banner width, so the title block centres on the banner itself
+    // rather than in the gap between the logo and the reference.
     titleCenter: {
       position: 'absolute',
-      left: 86,
-      right: 124,
+      left: 0,
+      right: 0,
       top: 0,
       bottom: 0,
       justifyContent: 'center',
@@ -129,6 +138,7 @@ export function PdfFooter({ projectReference = '', reportDate = '' }) {
   const title = 'Daily Site Diary'
   const date = String(reportDate || '').trim()
   const left = [reference, title, date].filter(Boolean).join(' · ') || ' '
+  const landingHref = zlogFooterHref(ZLOG_LANDING_URL)
   const styles = StyleSheet.create({
     footer: {
       position: 'absolute',
@@ -164,6 +174,12 @@ export function PdfFooter({ projectReference = '', reportDate = '' }) {
       fontFamily: 'Helvetica',
       textAlign: 'right',
     },
+    footerLink: {
+      color: MUTED,
+      fontSize: 7,
+      fontFamily: 'Helvetica',
+      textDecoration: 'none',
+    },
   })
 
   return (
@@ -177,7 +193,18 @@ export function PdfFooter({ projectReference = '', reportDate = '' }) {
       <Text
         style={styles.pageText}
         fixed
-        render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`}
+        render={({ pageNumber, totalPages }) => (
+          <Text>
+            {landingHref ? (
+              <Link src={landingHref} style={styles.footerLink}>
+                Produced with Zlog
+              </Link>
+            ) : (
+              'Produced with Zlog'
+            )}
+            {` · Page ${pageNumber} of ${totalPages}`}
+          </Text>
+        )}
       />
     </>
   )
