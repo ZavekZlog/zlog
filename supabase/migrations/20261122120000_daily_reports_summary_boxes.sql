@@ -14,25 +14,18 @@ COMMENT ON COLUMN public.daily_reports.summary_deliveries IS
 COMMENT ON COLUMN public.daily_reports.summary_welfare IS
   'Summary box: Welfare. Null or blank means the box is omitted.';
 
-CREATE OR REPLACE FUNCTION public.finalize_site_diary_save(
-  p_report_id uuid,
-  p_project_id uuid,
-  p_report_patch jsonb,
-  p_labour jsonb,
-  p_plant jsonb,
-  p_photos jsonb,
-  p_expected_report jsonb DEFAULT NULL
-)
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = pg_catalog, public
-AS $$
+CREATE OR REPLACE FUNCTION public.finalize_site_diary_save(p_report_id uuid, p_project_id uuid, p_report_patch jsonb, p_labour jsonb, p_plant jsonb, p_photos jsonb, p_expected_report jsonb DEFAULT NULL::jsonb, p_attendance jsonb DEFAULT NULL::jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'public'
+AS $function$
 DECLARE
   v_user_id uuid := auth.uid();
   v_dr public.daily_reports%ROWTYPE;
   v_jobs jsonb := '[]'::jsonb;
   v_labour_count integer := 0;
+  v_attendance_count integer := 0;
   v_plant_count integer := 0;
   v_photo_count integer := 0;
   v_elem jsonb;
@@ -84,7 +77,7 @@ BEGIN
 
     IF p_report_patch ? 'report_number' AND (
       NOT (p_expected_report ? 'report_number')
-      OR (p_expected_report->>'report_number') IS DISTINCT FROM v_dr.report_number
+      OR NULLIF(p_expected_report->>'report_number', '')::integer IS DISTINCT FROM v_dr.report_number
     ) THEN
       v_report_stale := true;
     END IF;
@@ -273,7 +266,7 @@ BEGIN
     UPDATE public.daily_reports dr
     SET
       report_number = CASE
-        WHEN p_report_patch ? 'report_number' THEN p_report_patch->>'report_number'
+        WHEN p_report_patch ? 'report_number' THEN NULLIF(p_report_patch->>'report_number', '')::integer
         ELSE dr.report_number
       END,
       report_date = CASE
@@ -414,7 +407,8 @@ BEGIN
         count,
         hours,
         notes,
-        sequence
+        sequence,
+        provenance
       ) VALUES (
         v_user_id,
         p_report_id,
@@ -423,9 +417,67 @@ BEGIN
         NULLIF(v_elem->>'count', '')::numeric,
         NULLIF(v_elem->>'hours', '')::numeric,
         NULLIF(v_elem->>'notes', ''),
-        COALESCE(NULLIF(v_elem->>'sequence', '')::integer, 0)
+        COALESCE(NULLIF(v_elem->>'sequence', '')::integer, 0),
+        CASE
+          WHEN v_elem->'provenance' IS NULL THEN NULL
+          WHEN jsonb_typeof(v_elem->'provenance') = 'object' THEN v_elem->'provenance'
+          ELSE NULL
+        END
       );
       v_labour_count := v_labour_count + 1;
+    END LOOP;
+  END IF;
+
+  IF p_attendance IS NOT NULL THEN
+    IF jsonb_typeof(p_attendance) <> 'array' THEN
+      RAISE EXCEPTION 'Attendance payload must be a JSON array';
+    END IF;
+
+    DELETE FROM public.report_attendance WHERE report_id = p_report_id;
+
+    FOR v_elem IN SELECT value FROM jsonb_array_elements(p_attendance) AS value
+    LOOP
+      INSERT INTO public.report_attendance (
+        owner_id,
+        report_id,
+        source,
+        report_date,
+        person_name,
+        company,
+        trade,
+        time_in,
+        time_out,
+        hours,
+        hours_source,
+        source_row,
+        evidence_path,
+        sequence
+      ) VALUES (
+        v_user_id,
+        p_report_id,
+        COALESCE(NULLIF(v_elem->>'source', ''), 'attendance_register'),
+        COALESCE(NULLIF(v_elem->>'report_date', '')::date, v_dr.report_date),
+        CASE
+          WHEN lower(btrim(COALESCE(v_elem->>'person_name', ''))) IN ('', 'illegible', 'unreadable', 'unknown', 'n/a', 'na', 'not readable', 'needs review', 'illegible / needs review') THEN NULL
+          ELSE btrim(v_elem->>'person_name')
+        END,
+        CASE
+          WHEN lower(btrim(COALESCE(v_elem->>'company', ''))) IN ('', 'illegible', 'unreadable', 'unknown', 'n/a', 'na', 'not readable', 'needs review', 'illegible / needs review') THEN NULL
+          ELSE btrim(v_elem->>'company')
+        END,
+        CASE
+          WHEN lower(btrim(COALESCE(v_elem->>'trade', ''))) IN ('', 'illegible', 'unreadable', 'unknown', 'n/a', 'na', 'not readable', 'needs review', 'illegible / needs review') THEN NULL
+          ELSE btrim(v_elem->>'trade')
+        END,
+        NULLIF(v_elem->>'time_in', '')::time,
+        NULLIF(v_elem->>'time_out', '')::time,
+        NULLIF(v_elem->>'hours', '')::numeric,
+        NULLIF(v_elem->>'hours_source', ''),
+        NULLIF(v_elem->>'source_row', '')::integer,
+        NULLIF(v_elem->>'evidence_path', ''),
+        COALESCE(NULLIF(v_elem->>'sequence', '')::integer, 0)
+      );
+      v_attendance_count := v_attendance_count + 1;
     END LOOP;
   END IF;
 
@@ -722,15 +774,15 @@ BEGIN
     'project_id', p_project_id,
     'report', to_jsonb(v_dr),
     'labour_count', v_labour_count,
+    'attendance_count', v_attendance_count,
     'plant_count', v_plant_count,
     'photo_count', v_photo_count,
     'cleanupJobs', v_jobs
   );
 END;
-$$;
+$function$
+REVOKE ALL ON FUNCTION public.finalize_site_diary_save(uuid, uuid, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.finalize_site_diary_save(uuid, uuid, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb) TO authenticated;
 
-REVOKE ALL ON FUNCTION public.finalize_site_diary_save(uuid, uuid, jsonb, jsonb, jsonb, jsonb, jsonb) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.finalize_site_diary_save(uuid, uuid, jsonb, jsonb, jsonb, jsonb, jsonb) TO authenticated;
-
-COMMENT ON FUNCTION public.finalize_site_diary_save(uuid, uuid, jsonb, jsonb, jsonb, jsonb, jsonb) IS
+COMMENT ON FUNCTION public.finalize_site_diary_save(uuid, uuid, jsonb, jsonb, jsonb, jsonb, jsonb, jsonb) IS
   'Ownership-checked atomic Site Diary final save. Optional p_expected_report is compared to the locked daily_reports row before any report, labour, plant, or photo write. Queues report-photo Storage cleanup jobs inside the same transaction; client removes Storage after commit.';
