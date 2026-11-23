@@ -40,6 +40,7 @@ import {
   scaledCaptionMetrics,
   resolvePdfBannerColor,
   resolvePdfTableRuleColor,
+  buildSummaryPdfBoxes,
 } from '@/lib/diary-pdf-layout'
 import { frameMarksForImage } from '@/lib/pdf-photo-frame-rotation'
 
@@ -503,6 +504,15 @@ const styles = StyleSheet.create({
     lineHeight: 1.45,
     color: BODY,
     fontFamily: 'Helvetica',
+  },
+  summaryPair: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
+  },
+  summaryHalf: {
+    width: '49%',
   },
 
   // ---- Photographic plates ------------------------------------------------
@@ -1662,6 +1672,48 @@ function toRecordRows(items, columns) {
  * records renders nothing at all, so a report that never captured it does not
  * gain an empty heading.
  */
+function SummaryBox({ title, text, accent, number }) {
+  return (
+    <>
+      <SectionBanner accent={accent} number={number}>{title}</SectionBanner>
+      <TextBody>{text}</TextBody>
+    </>
+  )
+}
+
+function SummaryBoxes({ boxes = [], accent, numbers = [] }) {
+  const nodes = []
+  for (let index = 0; index < boxes.length; ) {
+    const box = boxes[index]
+    const next = boxes[index + 1]
+    if (box.span === 'half' && next?.span === 'half') {
+      nodes.push(
+        <View key={`summary-pair-${index}`} style={styles.summaryPair} wrap={false}>
+          <View style={styles.summaryHalf}>
+            <SummaryBox title={box.title} text={box.text} accent={accent} number={numbers[index]} />
+          </View>
+          <View style={styles.summaryHalf}>
+            <SummaryBox title={next.title} text={next.text} accent={accent} number={numbers[index + 1]} />
+          </View>
+        </View>,
+      )
+      index += 2
+      continue
+    }
+    nodes.push(
+      <SummaryBox
+        key={`summary-${index}`}
+        title={box.title}
+        text={box.text}
+        accent={accent}
+        number={numbers[index]}
+      />,
+    )
+    index += 1
+  }
+  return <>{nodes}</>
+}
+
 function RecordSection({ title, columns, items, accent, number = null }) {
   const rows = toRecordRows(items, columns)
   if (!rows.length) return null
@@ -1684,7 +1736,7 @@ function ReportContentPage({
   brandColor,
   logoUrl,
   companyName,
-  siteSummary,
+  summaryBoxes = [],
   labour,
   equipmentHire,
   attendance,
@@ -1718,12 +1770,11 @@ function ReportContentPage({
         projectName={projectName}
         reportDate={displayDate(reportDate)}
       />
-      {String(siteSummary || '').trim() ? (
-        <>
-          <SectionBanner accent={accent} number={sectionNumbers.summary}>Site summary</SectionBanner>
-          <TextBody>{siteSummary}</TextBody>
-        </>
-      ) : null}
+      <SummaryBoxes
+        boxes={summaryBoxes}
+        accent={accent}
+        numbers={sectionNumbers.summaryBoxes}
+      />
       <LabourTable items={labour}
         brandColor={accent}
         number={sectionNumbers.labour}
@@ -1982,7 +2033,7 @@ function hasEquipmentRows(items) {
 
 function diarySectionNumbers({
   coverDetails,
-  siteSummary,
+  summaryBoxes = [],
   labour,
   equipmentHire,
   attendance,
@@ -2002,7 +2053,7 @@ function diarySectionNumbers({
     return next
   }
   numbers.details = coverDetails ? take() : null
-  numbers.summary = String(siteSummary || '').trim() ? take() : null
+  numbers.summaryBoxes = summaryBoxes.map(() => take())
   numbers.labour = hasLabourRows(labour) ? take() : null
   numbers.equipment = hasEquipmentRows(equipmentHire) ? take() : null
   numbers.attendance = toRecordRows(attendance, ATTENDANCE_COLUMNS).length ? take() : null
@@ -2035,6 +2086,10 @@ export function DiaryPdfDocument({
   shift = '',
   weather = '',
   siteSummary = '',
+  summaryWorksAchieved = '',
+  summaryDeliveries = '',
+  delaysIssues = '',
+  summaryWelfare = '',
   brandColor,
   logoUrl,
   companyName,
@@ -2055,6 +2110,13 @@ export function DiaryPdfDocument({
   supportingDocuments = [],
 }) {
   const schedule = buildPhotoAreaSchedule(photos)
+  const summaryBoxes = buildSummaryPdfBoxes({
+    siteSummary,
+    summaryWorksAchieved,
+    summaryDeliveries,
+    delaysIssues,
+    summaryWelfare,
+  })
   const sectionNumbers = diarySectionNumbers({
     coverDetails: coverScheduleRows({
       clientName,
@@ -2069,7 +2131,7 @@ export function DiaryPdfDocument({
       weather,
       reportDate,
     }).some((item) => item.value),
-    siteSummary,
+    summaryBoxes,
     labour,
     equipmentHire,
     attendance,
@@ -2111,7 +2173,7 @@ export function DiaryPdfDocument({
         brandColor={brandColor}
         logoUrl={logoUrl}
         companyName={companyName}
-        siteSummary={siteSummary}
+        summaryBoxes={summaryBoxes}
         labour={labour}
         equipmentHire={equipmentHire}
         attendance={attendance}

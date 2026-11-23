@@ -35,7 +35,9 @@ Superseded: "in light neutral grey" and "every cell has a complete border on all
 
 The top rule on each table, and each section's top rule, is the reporting company's brand colour. When section 12 withholds that colour, the line is dove grey.
 
-Every container is a header bar plus a bordered body. The body starts on the bar's bottom edge, with no gap. A text-only body — Site Summary, the declaration paragraph, an attendance-register caption, and any similar block — sits inside that same perimeter, with the same left padding as the table cells. Measured on the Mansfield reference, that left padding is 9.7pt. No text sits unbordered under a header.
+Every container is a header bar plus a bordered body. The body starts on the bar's bottom edge, with no gap. A text-only body — the declaration paragraph, an attendance-register caption, and any similar block — sits inside that same perimeter, with the same left padding as the table cells. Measured on the Mansfield reference, that left padding is 9.7pt. No text sits unbordered under a header.
+
+Superseded: "A text-only body — Site Summary", where Site Summary meant one prose block under one header. Site Summary is the subject boxes in the Summary section. Each of those boxes is still a header bar plus a bordered body, with that same 9.7pt left padding.
 
 ## 6. Cover page
 Project name and address in one dove grey band directly beneath the banner, centred, no white gap, a subtle hairline along its bottom edge, the page frame running unbroken down its sides. The name is brand-coloured bold; the address beneath it is neutral. Where the brand colour is red, the name uses the same dark slate as the banner. The report date is a row in the cover table, not in the band. No second grey band beneath it. The cover photograph sits on the page with no frame or outline. The cover table follows the same design as every other table.
@@ -60,19 +62,22 @@ After the cover page, the issued PDF uses this order. A section appears only whe
 
 No Document Control block.
 
-Superseded: the numbered list above, the sentence that a section appears only when it has content, and the sentence that an empty section is omitted. The issued order after the cover page is fixed:
+Superseded: the numbered list above, the sentence that a section appears only when it has content, and the sentence that an empty section is omitted. The issued order after the cover page is fixed. Summary is first, which is where the issued PDF places it. The other sections keep this order:
 
-1. Attendance
-2. Visitors
-3. Works
-4. Hazards
-5. Permits
-6. Attendance register
-7. Daily Site Checks
-8. Site Records
-9. Work Photographs
-10. Supporting Documents
-11. Declaration & Signature
+1. Summary
+2. Attendance
+3. Visitors
+4. Works
+5. Hazards
+6. Permits
+7. Attendance register
+8. Daily Site Checks
+9. Site Records
+10. Work Photographs
+11. Supporting Documents
+12. Declaration & Signature
+
+Superseded: the issued order that began at Attendance and had no Summary line.
 
 Daily Site Checks and Site Records are not conditional. Both are present in every diary. A blank answer is never printed as "No" or "none".
 
@@ -85,6 +90,16 @@ Work Photographs is one section. Each work area is a sub-heading under it. Areas
 Supporting Documents follows Work Photographs. Permits to work, toolbox talks, and MEWP or other inspection sheets sit there, not among the work photographs. The rotation spec states that section's frame, numbering, and caption. Supporting Documents is omitted when it has nothing to show. That omission is not inferred as "none".
 
 Declaration & Signature is last.
+
+## Summary
+The Summary is not one block of prose. It is structured subject boxes. Each box is a grey label header bar, the same style as every other container, over a bordered body. The body has the same 9.7pt left padding. The body is brief description text only.
+
+1. "Site works achieved today" is a full-width lead box, and it is always first when that text exists.
+2. The next boxes sit two across the page: "Deliveries", then "Delays and issues". If a third box is present, "Welfare" goes full width below them. An odd box out is always full width. `daily_reports.delays_issues` feeds the "Delays and issues" box.
+3. A box with no content is omitted from the PDF entirely. A blank box is never printed as "None", "No", or "N/A". Nothing is inferred from a blank.
+4. A legacy diary is one where the three subject fields are empty. Prose in `site_summary` then renders as a single full-width box titled "Summary". When that prose and `delays_issues` both have text, the PDF prints a full-width "Summary" box, then a full-width "Delays and issues" box. When any of the three subject fields has text, those subject boxes are used and the legacy prose box is not printed.
+5. The grid line weight and colours, the banner, the footer, and the brand colour rules are the same as the rest of the document. No new colours. Red stays in the banner only.
+6. Summary stays in the fixed page order above. No other section moves.
 
 ## 8. Photographs
 Work photographs are documentary evidence and the most important content in the report. Four per page in a two by two grid, all frames identical, frames portrait. The grid fills the page with minimal margins and no wide gutters. Correcting a photograph's stored orientation so it displays the right way up is required. A landscape photograph is then rotated 90 degrees to fill its portrait frame. Photographs are never cropped. All frames stay identical in size. Each photo has a caption area of fixed height beneath it so frames stay identical with or without a caption. Only the last photo page may end short.

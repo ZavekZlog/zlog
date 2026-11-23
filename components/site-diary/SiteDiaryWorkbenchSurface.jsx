@@ -1023,6 +1023,9 @@ export default function SiteDiaryWorkbenchSurface() {
   const [weather, setWeather] = useState('')
   const [shiftType, setShiftType] = useState('Day')
   const [siteSummary, setSiteSummary] = useState('')
+  const [summaryWorksAchieved, setSummaryWorksAchieved] = useState('')
+  const [summaryDeliveries, setSummaryDeliveries] = useState('')
+  const [summaryWelfare, setSummaryWelfare] = useState('')
   const handleWeatherInput = (event) => {
     markLocalAutosaveMutation()
     handlePdfVisibleTextInput(invalidatePreparedSharePdf, setWeather, event)
@@ -1898,6 +1901,9 @@ export default function SiteDiaryWorkbenchSurface() {
         setWeather(existing.weather || '')
         setShiftType(existing.shift || existing.shift_type || 'Day')
         setSiteSummary(existing.site_summary || '')
+        setSummaryWorksAchieved(existing.summary_works_achieved || '')
+        setSummaryDeliveries(existing.summary_deliveries || '')
+        setSummaryWelfare(existing.summary_welfare || '')
         setVisitors(existing.visitors || '')
         setVisitorsRegisterProvenance(
           normalizeVisitorsRegisterProvenance(existing.visitors_register_provenance),
@@ -2380,6 +2386,9 @@ export default function SiteDiaryWorkbenchSurface() {
   const autosavePayload = useMemo(() => buildDiaryAutosavePayload({
     weather,
     siteSummary,
+    summaryWorksAchieved,
+    summaryDeliveries,
+    summaryWelfare,
     visitors,
     visitorsRegisterProvenance,
     delaysIssues,
@@ -2398,6 +2407,9 @@ export default function SiteDiaryWorkbenchSurface() {
   }), [
     weather,
     siteSummary,
+    summaryWorksAchieved,
+    summaryDeliveries,
+    summaryWelfare,
     visitors,
     visitorsRegisterProvenance,
     delaysIssues,
@@ -2416,6 +2428,15 @@ export default function SiteDiaryWorkbenchSurface() {
     if (!snapshot) return
     setWeather(snapshot.weather || '')
     setSiteSummary(snapshot.site_summary || '')
+    if (Object.prototype.hasOwnProperty.call(snapshot, 'summary_works_achieved')) {
+      setSummaryWorksAchieved(snapshot.summary_works_achieved || '')
+    }
+    if (Object.prototype.hasOwnProperty.call(snapshot, 'summary_deliveries')) {
+      setSummaryDeliveries(snapshot.summary_deliveries || '')
+    }
+    if (Object.prototype.hasOwnProperty.call(snapshot, 'summary_welfare')) {
+      setSummaryWelfare(snapshot.summary_welfare || '')
+    }
     setVisitors(snapshot.visitors || '')
     setVisitorsRegisterProvenance(
       normalizeVisitorsRegisterProvenance(snapshot.visitors_register_provenance),
@@ -4537,6 +4558,15 @@ export default function SiteDiaryWorkbenchSurface() {
             weather: autosaveSource ? autosaveSource.weather : (weather.trim() || null),
             shift: shiftType || null,
             site_summary: autosaveSource ? (autosaveSource.site_summary || '') : siteSummary.trim(),
+            summary_works_achieved: autosaveSource
+              ? (autosaveSource.summary_works_achieved || '')
+              : summaryWorksAchieved.trim(),
+            summary_deliveries: autosaveSource
+              ? (autosaveSource.summary_deliveries || '')
+              : summaryDeliveries.trim(),
+            summary_welfare: autosaveSource
+              ? (autosaveSource.summary_welfare || '')
+              : summaryWelfare.trim(),
             visitors: autosaveSource ? autosaveSource.visitors : (visitors.trim() || null),
             visitors_register_provenance: normalizeVisitorsRegisterProvenance(
               autosaveSource ? autosaveSource.visitors_register_provenance : visitorsRegisterProvenance,
@@ -6095,24 +6125,6 @@ export default function SiteDiaryWorkbenchSurface() {
 
 
 
-        <GlassSection title="Delays & issues" accent={DIARY_ACCENT}>
-          <div style={carriedDelaysIssues ? carriedFieldWrapStyle : undefined}>
-            {carriedDelaysIssues && (
-              <p style={carriedFieldNoteStyle}>Carried from last report — edit or clear</p>
-            )}
-            <DiaryNarrativeTextarea
-              value={delaysIssues}
-              onChange={(e) => {
-                markLocalAutosaveMutation()
-                invalidatePreparedSharePdf('committed-diary-change')
-                setDelaysIssues(e.target.value)
-                setCarriedDelaysIssues(false)
-              }}
-              placeholder="Weather delays, material shortages, access issues…"
-            />
-          </div>
-        </GlassSection>
-
         <GlassSection title="Actions required" accent={DIARY_ACCENT}>
           <DiaryNarrativeTextarea
             value={actionsRequired}
@@ -6139,6 +6151,60 @@ export default function SiteDiaryWorkbenchSurface() {
           onAreaNameValidationResolved={handleAreaNameValidationResolved}
           onDraftDirtyChange={handlePhotoWorkspaceDraftDirtyChange}
         />
+
+        <GlassSection title="Site works achieved today" accent={DIARY_ACCENT}>
+          <DiaryNarrativeTextarea
+            value={summaryWorksAchieved}
+            onChange={(e) => {
+              markLocalAutosaveMutation()
+              invalidatePreparedSharePdf('committed-diary-change')
+              setSummaryWorksAchieved(e.target.value)
+            }}
+            placeholder="What was done on site today…"
+          />
+        </GlassSection>
+
+        <GlassSection title="Deliveries" accent={DIARY_ACCENT}>
+          <DiaryNarrativeTextarea
+            value={summaryDeliveries}
+            onChange={(e) => {
+              markLocalAutosaveMutation()
+              invalidatePreparedSharePdf('committed-diary-change')
+              setSummaryDeliveries(e.target.value)
+            }}
+            placeholder="What arrived today…"
+          />
+        </GlassSection>
+
+        <GlassSection title="Delays and issues" accent={DIARY_ACCENT}>
+          <div style={carriedDelaysIssues ? carriedFieldWrapStyle : undefined}>
+            {carriedDelaysIssues && (
+              <p style={carriedFieldNoteStyle}>Carried from last report — edit or clear</p>
+            )}
+            <DiaryNarrativeTextarea
+              value={delaysIssues}
+              onChange={(e) => {
+                markLocalAutosaveMutation()
+                invalidatePreparedSharePdf('committed-diary-change')
+                setDelaysIssues(e.target.value)
+                setCarriedDelaysIssues(false)
+              }}
+              placeholder="Weather delays, material shortages, access issues…"
+            />
+          </div>
+        </GlassSection>
+
+        <GlassSection title="Welfare" accent={DIARY_ACCENT}>
+          <DiaryNarrativeTextarea
+            value={summaryWelfare}
+            onChange={(e) => {
+              markLocalAutosaveMutation()
+              invalidatePreparedSharePdf('committed-diary-change')
+              setSummaryWelfare(e.target.value)
+            }}
+            placeholder="Welfare on site today…"
+          />
+        </GlassSection>
 
         <GlassSection title="Site summary" accent={DIARY_ACCENT}>
           <DiaryNarrativeTextarea
