@@ -19,6 +19,8 @@ The words on the banner — DAILY SITE DIARY, the project name, and the referenc
 
 One shared banner component is used by every report type Zlog issues, including the site diary, weekly progress, an H&S inspection, and any later type. The banner is identical on every page of a report, including the cover: the same title, the same case, and the same position. That title is DAILY SITE DIARY. It is centred on the banner's horizontal centre, measured from the title's text block, not from where the text starts. The logo keeps its present size. No page substitutes its own wording, such as "Site records".
 
+When a reporting company colour has been sampled, that sampled colour is the banner fill on every page. That includes supporting-document pages, attendance-register pages, and photograph pages. Those pages do not drop the sampled colour or paint a different one.
+
 Superseded: "There is no default banner colour and no fallback banner colour. Grey is used only when the company's own branding is grey." A default grey now exists, and only for the case where no branding has been chosen. A sampled grey is still used as sampled. Superseded: "in the client's brand colour", where that meant the end client or a dark-slate stand-in for red. Superseded: a dark-slate banner, a restrained accent rewrite of a sampled colour, and the blue-grey `#4B5563` painted in place of a sampled white, silver, or pale colour. Superseded: "If the company has supplied a light or white logo, that is the logo used on a red banner." A second logo is not invented.
 
 ## 4. Below the banner
@@ -77,7 +79,24 @@ Superseded: the numbered list above, the sentence that a section appears only wh
 11. Supporting Documents
 12. Declaration & Signature
 
-Superseded: the issued order that began at Attendance and had no Summary line.
+Superseded: the numbered list above, and the sentence that the other sections keep that order. That list placed Work Photographs before Supporting Documents. Superseded: the issued order that began at Attendance and had no Summary line.
+
+After the cover page, the issued order is:
+
+1. Summary
+2. Attendance
+3. Visitors
+4. Works
+5. Hazards
+6. Permits (the table of permit rows)
+7. Attendance Register
+8. Daily Site Checks
+9. Site Records
+10. Supporting Documents
+11. Site Evidence Photos
+12. Declaration & Signature
+
+The attendance register and Supporting Documents both come before the photographs. Declaration & Signature stays last.
 
 Daily Site Checks and Site Records are not conditional. Both are present in every diary. A blank answer is never printed as "No" or "none".
 
@@ -85,9 +104,11 @@ Daily Site Checks are always ticked, and the five lines are always these: final 
 
 Site Records always shows the yes/no selectors: Variations, Plant on site, Temporary works, Delays or issues, Actions required. Plant on site and Temporary works open a detail table only when the stored answer is Yes. RFIs list only those newly raised that day.
 
-Work Photographs is one section. Each work area is a sub-heading under it. Areas flow on in the page stream. Starting an area does not start a new page.
+Site Evidence Photos is one section. It holds only actual site work photographs. Each work area is a sub-heading under it. Areas flow on in the page stream. Starting an area does not start a new page.
 
-Supporting Documents follows Work Photographs. Permits to work, toolbox talks, and MEWP or other inspection sheets sit there, not among the work photographs. The rotation spec states that section's frame, numbering, and caption. Supporting Documents is omitted when it has nothing to show. That omission is not inferred as "none".
+Supporting Documents comes before Site Evidence Photos. Permit to work photographs, toolbox talks, and MEWP or other inspection sheets all live there, never in the site evidence photos. The section is omitted when it has nothing to show. That omission is not inferred as "none". The user chooses 1, 2, 4 or 6 documents on a page, set once for the diary. The default is 4. Section 8 states the frame and the caption.
+
+Superseded: "Work Photographs is one section." The issued name is "Site Evidence Photos". Superseded: "Supporting Documents follows Work Photographs."
 
 Declaration & Signature is last.
 
@@ -101,34 +122,40 @@ The Summary is not one block of prose. It is structured subject boxes. Each box 
 5. The grid line weight and colours, the banner, the footer, and the brand colour rules are the same as the rest of the document. No new colours. Red stays in the banner only.
 6. Summary stays in the fixed page order above. No other section moves.
 
-## 8. Photographs
-Work photographs are documentary evidence and the most important content in the report. Four per page in a two by two grid, all frames identical, frames portrait. The grid fills the page with minimal margins and no wide gutters. Correcting a photograph's stored orientation so it displays the right way up is required. A landscape photograph is then rotated 90 degrees to fill its portrait frame. Photographs are never cropped. All frames stay identical in size. Each photo has a caption area of fixed height beneath it so frames stay identical with or without a caption. Only the last photo page may end short.
+## 8. Site Evidence Photos
+Site evidence photos are documentary evidence and the most important content in the report. This section holds only actual site work photographs. Permit to work photographs, toolbox talks, and MEWP or other inspection sheets do not sit here.
 
-Superseded where it conflicts with the following:
+The count is chosen for each work area: 1, 2, 4 or 6 photographs on a page. The default is 4. The stored values are full for 1, grid2 for 2, grid4 for 4, and grid6 for 6.
 
-The outline sits snug around the photograph. There is no white inside the outline. The photograph is shown whole and is never cropped. An older rule that kept one fixed frame and left white beside the photograph is superseded.
+The photo box is portrait, three wide by four high. The issued sizes, in points, are: 1 per page (full) 403.18 by 537.57; 2 per page (grid2) 251.44 by 335.25; 4 per page (grid4) 199.52 by 266.03; 6 per page (grid6) 165.56 by 220.75. Every photograph that uses a given count uses that box. The grid fills the page with minimal margins and no wide gutters. Correcting a photograph's stored orientation so it displays the right way up is required. A landscape photograph is turned to stand in the portrait box. The photograph is shown whole. Nothing is ever cropped. Each photo has a caption area of fixed height beneath it so the boxes stay aligned with or without a caption.
+
+Superseded: "Four per page in a two by two grid" as the only count. Superseded: "A landscape photograph is then rotated 90 degrees to fill its portrait frame", where "fill" was read as a crop. Superseded: "All frames stay identical in size" as one size for the whole section. Superseded: "The outline sits snug around the photograph. There is no white inside the outline", where that was read as a reason to crop the photograph or to abandon these boxes. The box is the size for the count. The photograph inside it is never cropped. An older rule that kept one fixed frame and left white beside the photograph is not brought back as a reason to crop.
 
 The photo number and every reference text sit in the caption bar. Nothing in this section places the number at the top left of the photograph.
 
 The photo grid is top-aligned at the normal content start. It is never centred vertically. A short page leaves its spare space below the grid. "Only the last photo page may end short" is superseded where it was read as a reason to centre a short grid or to push an area onto its own page.
 
-The section heading is "Work Photographs", as section 7 requires. Area sub-headings follow it, and areas flow on without each area starting a new page.
+The section heading is "Site Evidence Photos", as section 7 requires. Area sub-headings follow it, and areas flow on without each area starting a new page.
 
-The Work Photographs heading stays the same height and style as every other section bar: 36.65pt. It is not a separate photo heading.
+The Site Evidence Photos heading stays the same height and style as every other section bar: 36.65pt. It is not a separate photo heading.
 
 The area sub-heading is one slim style of about 20pt, used for every area. It does not change with where the area sits on the page. The sub-heading spans the full width, and that area's photographs start on the next row. A part-filled row stays part-filled. The sub-heading stays with at least the first row of its photographs and is never left alone at the foot of a page.
 
 Photo numbering continues across areas.
 
-All frames of one photos-per-page setting are one uniform size on every page. The size is derived from the content height so that the Work Photographs bar, one area sub-heading, and two full rows fit on one page. The clearance is the existing 14pt photo-page slack: a 2pt remainder drops the second row onto the next page. The image and frame figures are not hard-coded.
+Superseded: "All frames of one photos-per-page setting are one uniform size on every page. The size is derived from the content height so that the Work Photographs bar, one area sub-heading, and two full rows fit on one page. The clearance is the existing 14pt photo-page slack: a 2pt remainder drops the second row onto the next page. The image and frame figures are not hard-coded." The issued photo boxes are the four sizes stated above.
 
-Supporting Documents use that same frame size, the same grid, and the same snug outline. Numbering restarts at 1 in that section. Each caption is the document name followed by ": hard copy in site file".
+Each site evidence photo has a button that pulls it out of the area's normal grid, for greater detail. The user chooses 1 per page or 2 per page for that photo. A photo flagged 1 per page takes a page of its own, using the 1-per-page box. A photo flagged 2 per page pairs with the next photo flagged 2 per page, in order. The pair uses the 2-per-page box. If there is no partner, that photo is shown 1 per page instead. A flagged page keeps the photo's place in the order. The grid pages carry on around the flagged pages. Every photo that is not flagged keeps the frame of its work area.
+
+Supporting Documents uses those same boxes. The count is 1, 2, 4 or 6, set once for the diary, and the default is 4. Numbering restarts at 1 in that section. Each caption is the document name followed by ": hard copy in site file".
+
+Superseded: "Supporting Documents use that same frame size, the same grid, and the same snug outline", where that meant whatever frame the work photographs were using. Supporting Documents has its own count, chosen once for the diary, and uses the matching box from the sizes above.
 
 ## 9. Appendices and attendance register
-Appendices come before the work photographs. The register shows the full top of the sheet with all names, never cropped to one day's rows. It is embedded at source resolution and fills a full page. Its heading, caption and image stay together on one page; if they do not fit, the whole block moves to the next page. Appended scans carry the caption "Legal document - reproduced untouched."
+Appendices come before the site evidence photos. The attendance register comes before Site Evidence Photos. Supporting Documents also comes before Site Evidence Photos. The register shows the full top of the sheet with all names, never cropped to one day's rows. It is embedded at source resolution and fills a full page. Its heading, caption and image stay together on one page; if they do not fit, the whole block moves to the next page. Appended scans carry the caption "Legal document - reproduced untouched."
 
 ## 10. Declaration & signature
-One full-width table, identical in every report, never reshaped to fit around photographs. The section is titled "Declaration & signature". The declaration wraps as one paragraph across the full width. Declaration & signature is last and flows straight on after the final photograph, wherever it lands, leaving space below if that is how it falls.
+One full-width table, identical in every report, never reshaped to fit around photographs. The section is titled "Declaration & signature". The declaration wraps as one paragraph across the full width. Declaration & signature is last and flows straight on after the final site evidence photograph, wherever it lands, leaving space below if that is how it falls. Supporting Documents sits before the photographs, so the declaration does not follow that section.
 
 Superseded: "Author name, position or role, and date as rows. The signature image aligns with that block rather than floating at a different height." Measured on `reference-mansfield.pdf`, the sign-off is a header bar, then one bordered paragraph flush under it, then one table flush under the paragraph. Declaration & Signature is that one table. Author Name, Position / Role, Date and Signature are consecutive rows of the same table: the same full width, the same label column, the same borders, and no gap between rows. The signature image sits inside the value cell of the Signature row. The declaration paragraph is the bordered text body directly under the header, inside the same perimeter as those rows. The table is not reshaped around photographs.
 
@@ -155,3 +182,16 @@ The labour table carries a source line beside its heading, small, italic, grey, 
 A change to the issued PDF is not verified until it has been checked on a real diary, generated through the worker, exactly as the app produces it. A render from source with invented sample data proves nothing: it uses different content, different wrapping and possibly a different font.
 
 To verify: generate the PDF for a real report through the worker, extract the text of the affected pages, and confirm nothing is truncated. Never report a PDF fault fixed on the strength of a sample render.
+
+## Not yet built
+
+| Item |
+| --- |
+| The 2-per-page button. |
+| The supporting-documents count, and its storage. |
+| The per-photo option. |
+| Permit rows and permit photographs are not passed into the PDF. |
+| Toolbox talks and inspection sheets do not exist in the form or the data. |
+| Daily Site Checks and Site Records are not drawn by the PDF component. |
+| The section rename from Work Photographs to Site Evidence Photos. |
+| The move of Supporting Documents to before the photographs. |
