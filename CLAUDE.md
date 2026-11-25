@@ -39,24 +39,26 @@ Zlog is a site diary and reporting app for UK construction, part of the Zavek su
 
 ## PDF report rules
 
-Full rules are in `docs/ZLOG_PDF_DESIGN_RULES.md`, and branding rules are in `docs/contracts/REPORT_BRANDING_CONTRACT.md`. Read both before touching anything in the PDF. The key points:
+The two documents below are the source of truth. If anything in this file differs from them, the documents win. Read both in full before touching anything in the PDF, and do not rely on the short reminders here.
 
-- The header banner uses the reporting company's sampled brand colour exactly, any hue. With no branding, use `#6E6E6E`.
-- Table and section top lines use the exact brand colour, except pigeon grey `#E4E2DE` when the brand is red-dominant, lighter than luminance 0.30, or absent.
-- Red appears only in the header banner and logo.
-- Grid lines are neutral `#C6C7C8` at 0.8pt.
-- Branding comes only from the company issuing the report. Never from the end client.
-- Summary section: full-width "Site works achieved today" first. "Deliveries" and "Delays and issues" sit side by side. "Welfare" is full width if present. Blank boxes are left out. Older diaries with only prose print one "Summary" box.
-- Do not add colours, accents or decoration that are not in the rules.
+- `docs/ZLOG_PDF_DESIGN_RULES.md` (layout, colours, sections, photographs, declaration)
+- `docs/contracts/REPORT_BRANDING_CONTRACT.md` (branding)
+
+Short reminders only:
+
+- Branding comes only from the company issuing the report, never the end client.
+- The banner uses the sampled brand colour on every page, exactly as the documents define, including how red, white, silver and grey are handled. No branding gives `#6E6E6E`.
+- Red may appear only in the header banner area. Nowhere below it.
+- Never paint report chrome with Zlog orange `#FF5000` or diary violet `#8B5CF6`.
+- Do not add colours, accents or decoration that are not in the documents.
+- Photographs, permits, the attendance register, the Summary boxes and the closing Declaration and Signature block all follow the design rules document exactly.
 
 ## Report content rules
 
 - Follow every quantity with "nr" (for example "1 nr").
 - The subcontractors-on-site field counts subcontractors, not operatives. Operatives are on the attendance register.
-- Every report ends with a Sign Off box containing Jim's signature and a date.
-- Photographs are evidence: identical frames, shown whole, never cropped, about four per page, numbered and captioned.
-- Always include the attendance register photograph. Use only work photographs, plus the permit to work photograph when one applies.
-- Daily Site Checks and Site Records appear as set out in the PDF design rules.
+- Every report ends with Jim's signature and a date, in the form the design rules document sets out.
+- Photographs are evidence: identical frames, shown whole, never cropped, numbered and captioned, laid out as the design rules document says.
 - If Jim says to omit something from a report, do not assume it does not exist on site. Never turn an omission into "No".
 - The Visitors section is called "Visitors".
 
@@ -69,4 +71,4 @@ Zlog is confidential and is being set up as a company. Do not publish code, shar
 - The summary-box migration (`20261122120000_daily_reports_summary_boxes.sql`) must be applied to the live database before new Summary fields persist.
 - The attendance migration `20261010180000_report_attendance.sql` exists only in other working copies and is not committed anywhere.
 - The saved-diary viewer still uses the old summary layout.
-- A silent `#FF5000` default colour and the colour-sampling fallback for uploaded logos need review.
+- A silent `#FF5000` default colour (which the branding contract forbids) and the colour-sampling fallback for uploaded logos need review.
